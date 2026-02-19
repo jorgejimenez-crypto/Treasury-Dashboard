@@ -1,32 +1,24 @@
 ================================================
-AI BRIEFING SYSTEM — Quick Reference Card
-Production v3.2 — Feb 2026
+TREASURY INTELLIGENCE BRIEFING SYSTEM
+Quick Reference Card — Production v3.2
 ================================================
 
 INFRASTRUCTURE
   Droplet:   DigitalOcean (Ubuntu)
   n8n UI:    http://<YOUR_DROPLET_IP>:5678
 
-WORKFLOWS (4 total):
-  Equity Daily:      Mon-Fri 6:30 AM AST (10:30 UTC)
-  Equity Saturday:   Sat 7:00 AM AST (11:00 UTC)
-  Treasury Daily:    Mon-Fri 6:30 AM AST (10:30 UTC)
-  Treasury Saturday: Sat 7:00 AM AST (11:00 UTC)
+WORKFLOWS (2 total):
+  Daily:     Mon-Fri 6:30 AM AST (10:30 UTC)
+  Saturday:  Sat 7:00 AM AST (11:00 UTC)
 
-NODE MAP (same for all workflows):
+NODE MAP (same for both workflows):
   Schedule → Fetch Data → Code (Claude) → Process Response → Google Drive → Gmail
 
-EQUITY CODE FILES:
-  NODE1_fetch_market_data.js   → Fetch Market Data (both daily + saturday)
+CODE FILES:
+  NODE1_fetch_data.js          → Fetch Treasury Data (shared)
   NODE2_claude_daily.js        → Code node (daily only)
   NODE2_claude_saturday.js     → Code node (saturday only)
-  NODE3_process_response.js    → Process Response (both)
-
-TREASURY CODE FILES:
-  NODE1_fetch_data.js          → Fetch Treasury Data (both)
-  NODE2_claude_daily.js        → Code node (daily only)
-  NODE2_claude_saturday.js     → Code node (saturday only)
-  NODE3_process_response.js    → Process Response (both, with chart embed)
+  NODE3_process_response.js    → Process Response (shared, with chart embed)
 
 N8N EXPRESSIONS:
   Gmail Subject:    {{ $('Process Response').first().json.emailSubject }}
@@ -35,11 +27,10 @@ N8N EXPRESSIONS:
 
 MONTHLY COST:
   DigitalOcean:  $6
-  Claude API:    $8-15 (equity) + $8-15 (treasury)
+  Claude API:    $8-15
   Alpha Vantage: $0 (free tier)
-  Finnhub:       $0 (free tier)
   Google/Gmail:  $0
-  Total:         ~$22-36/mo
+  Total:         $14-21
 
 POST-MORTEM RULES (memorize these):
   1. ALWAYS use Code nodes for Claude API calls. Never HTTP Request.
@@ -57,4 +48,4 @@ TROUBLESHOOTING:
   AV yields N/A      → Free tier limit hit or holiday. Brief still generates.
   Web search fails   → Brief notes "data unavailable". Normal.
   Copy-paste breaks  → Retype the line. Check for curly quotes.
-  Windows error      → You double-clicked the .js file. Right-click → Open With → Notepad.
+  Windows error      → You double-clicked the .js file. Right-click → Notepad.
