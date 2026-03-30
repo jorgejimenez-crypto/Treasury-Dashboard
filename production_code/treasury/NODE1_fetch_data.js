@@ -1,6 +1,10 @@
 // ============================================
-// FETCH TREASURY DATA (Daily + Saturday)
-// n8n Code Node — Production v3.2
+// FETCH COMMODITY PULSE DATA (Daily + Saturday)
+// n8n Code Node — Production v4.0
+// Replaces treasury yield fetching with commodity
+// price data relevant to collateral & margin management.
+// Tickers: WTI, Brent, Natural Gas, Heating Oil, Copper
+// 5 API calls per run (was 7, now more reliable data)
 // ============================================
 
 var AV_KEY = 'YOUR_ALPHAVANTAGE_KEY_HERE';
@@ -8,25 +12,22 @@ var AV_KEY = 'YOUR_ALPHAVANTAGE_KEY_HERE';
 var today = new Date();
 var dateStr = today.toISOString().split('T')[0];
 var dayName = today.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Puerto_Rico' });
-
-var oneWeekAgo = new Date(today);
-oneWeekAgo.setDate(today.getDate() - 7);
-var oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
-
-var twoWeeksAgo = new Date(today);
-twoWeeksAgo.setDate(today.getDate() - 14);
-var twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
+var dateDisplay = dayName + ', ' + today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Puerto_Rico' });
 
 async function httpGet(url) {
-  return await this.helpers.httpRequest({ method: 'GET', url: url, json: true });
+  try {
+    return await this.helpers.httpRequest({ method: 'GET', url: url, json: true });
+  } catch (e) {
+    return null;
+  }
 }
 
-async function getTreasuryYield(maturity) {
+async function getCommodity(func) {
   try {
-    var url = 'https://www.alphavantage.co/query?function=TREASURY_YIELD&interval=daily&maturity=' + maturity + '&apikey=' + AV_KEY;
+    var url = 'https://www.alphavantage.co/query?function=' + func + '&interval=daily&apikey=' + AV_KEY;
     var data = await httpGet.call(this, url);
-    if (data && data.data && data.data.length > 0) {
-      return data.data.slice(0, 15);
+    if (data && data.data && data.data.length >= 2) {
+      return { latest: data.data[0], prior: data.data[1] };
     }
     return null;
   } catch (e) {
@@ -34,93 +35,78 @@ async function getTreasuryYield(maturity) {
   }
 }
 
-async function getFedFundsRate() {
-  try {
-    var url = 'https://www.alphavantage.co/query?function=FEDERAL_FUNDS_RATE&interval=daily&apikey=' + AV_KEY;
-    var data = await httpGet.call(this, url);
-    if (data && data.data && data.data.length > 0) {
-      return data.data[0];
-    }
-    return null;
-  } catch (e) {
-    return null;
+function formatCommodity(result, label, unit) {
+  if (!result || !result.latest || result.latest.value === '.' || result.latest.value === null) {
+    return { line: label + ': N/A', current: null, change: null, changePct: null, label: label, unit: unit };
   }
-}
-
-function findValueForDate(dataArray, targetDate) {
-  if (!dataArray || dataArray.length === 0) return 'N/A';
-  var exact = dataArray.find(function(d) { return d.date === targetDate; });
-  if (exact) return exact.value;
-  var target = new Date(targetDate);
-  var closest = null;
-  var closestDiff = Infinity;
-  for (var i = 0; i < dataArray.length; i++) {
-    var itemDate = new Date(dataArray[i].date);
-    var diff = Math.abs(target - itemDate);
-    if (itemDate <= target && diff < closestDiff) {
-      closestDiff = diff;
-      closest = dataArray[i];
-    }
+  var current = parseFloat(result.latest.value);
+  var prior = result.prior ? parseFloat(result.prior.value) : null;
+  var change = (prior !== null && !isNaN(prior)) ? (current - prior) : null;
+  var changePct = (change !== null && prior !== 0) ? ((change / prior) * 100) : null;
+  var sign = (change !== null && change >= 0) ? '+' : '';
+  var arrow = change > 0 ? 'UP' : change < 0 ? 'DOWN' : 'FLAT';
+  var line = label + ': ' + unit + current.toFixed(2);
+  if (change !== null && changePct !== null) {
+    line += '  (' + arrow + ' ' + sign + changePct.toFixed(1) + '% / ' + sign + unit + Math.abs(change).toFixed(2) + ' DoD)';
   }
-  return closest ? closest.value : 'N/A';
+  line += '  [as of ' + result.latest.date + ']';
+  return { line: line, current: current, prior: prior, change: change, changePct: changePct, label: label, unit: unit };
 }
 
-// Fetch all maturities
-var maturities = ['3month', '2year', '5year', '7year', '10year', '30year'];
-var yieldData = {};
-for (var i = 0; i < maturities.length; i++) {
-  yieldData[maturities[i]] = await getTreasuryYield.call(this, maturities[i]);
-}
-var fedFunds = await getFedFundsRate.call(this);
+// Fetch all 5 commodity tickers
+var rawWTI = await getCommodity.call(this, 'WTI');
+var rawBrent = await getCommodity.call(this, 'BRENT');
+var rawGas = await getCommodity.call(this, 'NATURAL_GAS');
+var rawHeatOil = await getCommodity.call(this, 'HEATING_OIL');
+var rawCopper = await getCommodity.call(this, 'COPPER');
 
-// Build yield table
-var marketData = '## Treasury Yields (Latest Available)\n\n';
-marketData += '| Maturity | Current | 1 Week Ago | 2 Weeks Ago |\n';
-marketData += '|----------|---------|------------|-------------|\n';
+var wti = formatCommodity(rawWTI, 'WTI Crude', '$');
+var brent = formatCommodity(rawBrent, 'Brent Crude', '$');
+var gas = formatCommodity(rawGas, 'Henry Hub Nat Gas', '$');
+var heatOil = formatCommodity(rawHeatOil, 'Heating Oil (ULSD)', '$');
+var copper = formatCommodity(rawCopper, 'Copper', '$');
 
-for (var j = 0; j < maturities.length; j++) {
-  var m = maturities[j];
-  var current = findValueForDate(yieldData[m], dateStr);
-  var weekAgo = findValueForDate(yieldData[m], oneWeekAgoStr);
-  var twoWeekAgo = findValueForDate(yieldData[m], twoWeeksAgoStr);
-  marketData += '| ' + m + ' | ' + current + '% | ' + weekAgo + '% | ' + twoWeekAgo + '% |\n';
-}
-
-if (fedFunds) {
-  marketData += '\nFed Funds Rate (effective): ' + fedFunds.value + '% (as of ' + fedFunds.date + ')\n';
+// WTI/Brent spread
+var spreadLine = '';
+if (wti.current !== null && brent.current !== null) {
+  var spread = wti.current - brent.current;
+  spreadLine = 'WTI/Brent Spread: ' + (spread >= 0 ? '+' : '') + '$' + spread.toFixed(2);
 }
 
-// Build chart data for QuickChart
-var chartLabels = [];
-var chartValues = [];
-var shortEnd = ['3month', '2year', '5year', '7year', '10year', '30year'];
-for (var k = 0; k < shortEnd.length; k++) {
-  chartLabels.push(shortEnd[k]);
-  chartValues.push(parseFloat(findValueForDate(yieldData[shortEnd[k]], dateStr)) || 0);
+// Automated collateral pressure signal
+var pressureSignals = [];
+if (wti.changePct !== null && Math.abs(wti.changePct) >= 2) {
+  pressureSignals.push('WTI ' + (wti.changePct > 0 ? 'up' : 'down') + ' ' + Math.abs(wti.changePct).toFixed(1) + '%');
+}
+if (gas.changePct !== null && Math.abs(gas.changePct) >= 3) {
+  pressureSignals.push('Nat Gas ' + (gas.changePct > 0 ? 'up' : 'down') + ' ' + Math.abs(gas.changePct).toFixed(1) + '%');
+}
+if (brent.changePct !== null && Math.abs(brent.changePct) >= 2) {
+  pressureSignals.push('Brent ' + (brent.changePct > 0 ? 'up' : 'down') + ' ' + Math.abs(brent.changePct).toFixed(1) + '%');
+}
+if (heatOil.changePct !== null && Math.abs(heatOil.changePct) >= 2) {
+  pressureSignals.push('Heating Oil ' + (heatOil.changePct > 0 ? 'up' : 'down') + ' ' + Math.abs(heatOil.changePct).toFixed(1) + '%');
 }
 
-var chartConfig = JSON.stringify({
-  type: 'line',
-  data: {
-    labels: chartLabels,
-    datasets: [{
-      label: 'Yield Curve (' + dateStr + ')',
-      data: chartValues,
-      borderColor: '#1f2937',
-      backgroundColor: 'rgba(31,41,55,0.1)',
-      fill: true,
-      tension: 0.3
-    }]
-  },
-  options: {
-    plugins: { title: { display: true, text: 'US Treasury Yield Curve' } },
-    scales: { y: { beginAtZero: false, title: { display: true, text: 'Yield (%)' } } }
-  }
-});
+var pressureAssessment = '';
+if (pressureSignals.length >= 2) {
+  pressureAssessment = 'ELEVATED MARGIN PRESSURE: ' + pressureSignals.join(', ') + '. Multiple books affected — collateral calls likely.';
+} else if (pressureSignals.length === 1) {
+  pressureAssessment = 'WATCH: ' + pressureSignals[0] + ' — monitor single-book margin exposure.';
+} else {
+  pressureAssessment = 'Commodity moves within normal range — no elevated collateral alert.';
+}
 
-var chartUrl = 'https://quickchart.io/chart?c=' + encodeURIComponent(chartConfig) + '&w=600&h=300';
-
-var dateDisplay = dayName + ', ' + today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Puerto_Rico' });
+// Build structured marketData block for Claude
+var marketData = '## Commodity Pulse — Collateral & Margin Monitor\n\n';
+marketData += wti.line + '\n';
+marketData += brent.line + '\n';
+if (spreadLine) { marketData += spreadLine + '\n'; }
+marketData += gas.line + '\n';
+marketData += heatOil.line + '\n';
+marketData += copper.line + '\n';
+marketData += '\n### Pre-computed Collateral Pressure Signal\n';
+marketData += pressureAssessment + '\n';
 
 return [{
   json: {
@@ -128,6 +114,6 @@ return [{
     dateDisplay: dateDisplay,
     dayOfWeek: dayName,
     marketData: marketData,
-    chartUrl: chartUrl
+    chartUrl: ''
   }
 }];
