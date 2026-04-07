@@ -904,11 +904,11 @@ var RSS2JSON_KEY = '';  // paste your free rss2json.com API key here (optional b
 var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json'
   + (RSS2JSON_KEY ? '?api_key=' + RSS2JSON_KEY + '&rss_url=' : '?rss_url=');
 var PREMIUM_FEEDS = [
-  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',         source: 'WSJ Markets',     tag: 'MARKETS' },
-  { url: 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',       source: 'WSJ Business',    tag: 'MARKETS' },
   { url: 'https://feeds.reuters.com/reuters/financialMarketsNews', source: 'Reuters Markets', tag: 'MARKETS' },
   { url: 'https://feeds.reuters.com/reuters/businessNews',         source: 'Reuters Business',tag: 'MARKETS' },
   { url: 'https://finance.yahoo.com/news/rssindex',               source: 'Yahoo Finance',   tag: 'MARKETS' },
+  { url: 'https://www.investing.com/rss/news_25.rss',             source: 'Investing.com',   tag: 'MARKETS' },
+  { url: 'https://www.marketwatch.com/rss/realtimeheadlines',     source: 'MarketWatch',     tag: 'MARKETS' },
 ];
 
 function classifyClientArticle(title, desc) {

@@ -90,13 +90,13 @@ var FOMC_2026 = [
 ];
 
 var RSS_FEEDS = [
-  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',    isGov: true  },
-  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',    isGov: true  },
-  { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',    isGov: true  },
-  { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',    isGov: true  },
-  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',          source: 'WSJ Markets',     tag: 'MARKETS',isGov: false },
-  { url: 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',        source: 'WSJ Business',    tag: 'MARKETS',isGov: false },
+  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',     isGov: true  },
+  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',     isGov: true  },
+  { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',     isGov: true  },
+  { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
+  { url: 'https://feeds.reuters.com/reuters/businessNews',           source: 'Reuters',         tag: 'MARKETS', isGov: false },
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS', isGov: false },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', source: 'CNBC Economy', tag: 'FED', isGov: false },
 ];
 
 var CORS = {
