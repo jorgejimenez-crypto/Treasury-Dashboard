@@ -1,0 +1,7 @@
+name = "treasury-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# Secrets (set via CLI, never in this file):
+#   npx wrangler secret put FRED_API_KEY
+#   npx wrangler secret put NEWSAPI_KEY    (optional — enhances news feed)

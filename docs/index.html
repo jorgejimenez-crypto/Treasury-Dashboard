@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Treasury Intelligence Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header id="header">
+    <div class="header-left">
+      <h1>Treasury Intelligence Dashboard</h1>
+      <div id="header-meta" class="header-meta">Loading...</div>
+    </div>
+    <div class="header-right">
+      <span id="market-status" class="market-badge">--</span>
+      <span id="fomc-badge" class="fomc-badge" title="Next FOMC meeting">--</span>
+      <button id="btn-refresh" class="btn-icon" title="Refresh now (R)">&#x21bb;</button>
+      <button id="btn-shortcuts" class="btn-icon" title="Keyboard shortcuts (?)">?</button>
+    </div>
+  </header>
+
+  <!-- ALERT BAR -->
+  <div id="alert-bar"></div>
+
+  <!-- SETUP BANNER -->
+  <div id="setup-banner" class="banner-warn" style="display:none;">
+    Worker URL not configured. Edit <code>WORKER_URL</code> in <code>app.js</code>.
+  </div>
+
+  <!-- LOADING STATE -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Fetching market data...</p>
+  </div>
+
+  <!-- MAIN DASHBOARD GRID -->
+  <main id="dashboard" style="display:none;">
+
+    <!-- Row 1: Rates focus -->
+    <section class="panel" id="panel-yields">
+      <h2>Treasury Yields</h2>
+      <div class="metrics-grid cols-2" id="yields-grid"></div>
+      <div class="panel-footer" id="yields-footer"></div>
+      <div class="chart-container">
+        <canvas id="yield-curve-canvas" height="160"></canvas>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-funding">
+      <h2>Funding & Liquidity</h2>
+      <div class="metrics-grid cols-2" id="funding-grid"></div>
+      <div class="panel-footer" id="funding-footer"></div>
+    </section>
+
+    <section class="panel" id="panel-risk">
+      <h2>Risk & Credit</h2>
+      <div class="metrics-grid cols-2" id="risk-grid"></div>
+      <div class="separator"></div>
+      <div class="metrics-grid cols-2" id="credit-grid"></div>
+    </section>
+
+    <!-- Row 2: Markets -->
+    <section class="panel" id="panel-equities">
+      <h2>Equity Indices</h2>
+      <div class="metrics-grid cols-2" id="equities-grid"></div>
+    </section>
+
+    <section class="panel" id="panel-commodities">
+      <h2>Commodities</h2>
+      <div class="metrics-grid cols-3" id="commodities-grid"></div>
+      <div class="panel-footer" id="commodities-footer"></div>
+    </section>
+
+    <section class="panel" id="panel-forex">
+      <h2>Forex</h2>
+      <div class="metrics-grid cols-1" id="forex-grid"></div>
+    </section>
+
+    <!-- Row 3: Context -->
+    <section class="panel" id="panel-macro">
+      <h2>Macro Indicators</h2>
+      <div class="metrics-grid cols-2" id="macro-grid"></div>
+    </section>
+
+    <section class="panel" id="panel-calendar">
+      <h2>Economic Calendar</h2>
+      <div id="calendar-content"></div>
+    </section>
+
+    <section class="panel" id="panel-news">
+      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+      <div id="news-content" class="news-feed"></div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer id="footer">
+    <p>This is not financial advice. Internal use only. Data: Yahoo Finance (15-min delayed), FRED (daily), NY Fed (daily). Press <kbd>?</kbd> for shortcuts.</p>
+  </footer>
+
+  <!-- KEYBOARD SHORTCUTS MODAL -->
+  <div id="shortcuts-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h3>Keyboard Shortcuts</h3>
+      <table class="shortcuts-table">
+        <tr><td><kbd>R</kbd></td><td>Refresh data</td></tr>
+        <tr><td><kbd>N</kbd></td><td>Toggle news panel</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Toggle calendar panel</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Show/hide shortcuts</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close modal</td></tr>
+        <tr><td><kbd>Ctrl+P</kbd></td><td>Print / export snapshot</td></tr>
+      </table>
+      <button id="modal-close" class="btn-close">Close</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

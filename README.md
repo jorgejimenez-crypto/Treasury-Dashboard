@@ -1,126 +1,140 @@
-# Treasury Intelligence Briefing System
+# Treasury Intelligence Dashboard
 
-Fully automated AI-powered treasury intelligence platform. Delivers daily briefs and weekly strategic memos via email, powered by Claude API + n8n automation on a DigitalOcean droplet.
+Professional-grade treasury monitoring dashboard for real-time financial markets, macroeconomic indicators, and economic news. Displays 40+ metrics across 9 panels with threshold alerts, yield curve visualization, and government news feeds. Static site on GitHub Pages, API proxy on Cloudflare Workers. Total cost: $0/month.
 
-## System Overview
+**[Live Dashboard](https://jorgejimenez-crypto.github.io/Treasury-Dashboard/)**
 
-| Workflow | Schedule | Output | Model |
-|----------|----------|--------|-------|
-| Daily Treasury Brief | Mon-Fri 6:30 AM AST (10:30 UTC) | ~600 word email | Claude Sonnet 4.5 |
-| Weekly Strategic Memo | Sat 7:00 AM AST (11:00 UTC) | ~1,400 word research memo | Claude Sonnet 4.5 |
+## What It Shows
 
-**Monthly cost: ~$14-21**
+| Panel | Data | Source |
+|-------|------|--------|
+| Treasury Yields | 2Y, 5Y, 10Y, 30Y + yield curve chart (3M-30Y) | FRED |
+| Funding & Liquidity | SOFR, EFFR, ON RRP, SOFR-EFFR spread | NY Fed, FRED |
+| Risk & Credit | VIX, DXY, IG OAS, HY OAS | Yahoo, FRED |
+| Equity Indices | S&P 500, Dow, Nasdaq, Russell 2000 | Yahoo |
+| Commodities | WTI, Brent, NatGas, Heating Oil, Copper, Gold | Yahoo |
+| Forex | EUR/USD, GBP/USD, USD/JPY | Yahoo |
+| Macro Indicators | Fed Funds, CPI, Core CPI, PPI, Unemployment, Claims, GDP, M2 | FRED |
+| Economic Calendar | FOMC dates, upcoming releases with consensus/prior | Static + FOMC |
+| News & Intelligence | Federal Reserve press releases, BLS data releases | RSS feeds |
+
+## Features
+
+- Dark terminal theme, dense information layout
+- Color-coded directional indicators on all metrics
+- Yield curve chart (Chart.js)
+- Threshold alerts: commodity shocks, VIX spikes, DXY breaks, 10Y level, credit widening
+- Collateral/margin pressure signal for energy commodities
+- FOMC countdown with blackout period awareness
+- Keyboard shortcuts (R=refresh, N=news, C=calendar, ?=help)
+- Collapsible panels
+- Responsive: desktop, tablet, mobile
+- Print/export view with light theme
+- Auto-refresh every 15 minutes
+
+## Prerequisites
+
+| Tool | Purpose |
+|------|---------|
+| [FRED API key](https://fred.stlouisfed.org/docs/api/api_key.html) (free) | Yields, macro data, credit spreads |
+| [Cloudflare account](https://dash.cloudflare.com/) (free) | Hosts the API proxy Worker |
+| [Node.js 18+](https://nodejs.org/) | Runs Wrangler CLI for Worker deployment |
+| [GitHub account](https://github.com/) | Hosts the static dashboard via Pages |
+
+Optional: [NewsAPI key](https://newsapi.org/) for enhanced news feed beyond government RSS.
+
+## Quickstart
+
+```bash
+# 1. Clone
+git clone https://github.com/jorgejimenez-crypto/Treasury-Dashboard.git
+cd Treasury-Dashboard
+
+# 2. Deploy the API proxy
+cd proxy && npm install -g wrangler && wrangler login && npx wrangler deploy
+
+# 3. Set secrets
+npx wrangler secret put FRED_API_KEY       # paste your FRED key
+npx wrangler secret put NEWSAPI_KEY        # optional
+
+# 4. Configure dashboard — edit docs/app.js line 14:
+#    var WORKER_URL = 'https://treasury-proxy.YOUR_SUBDOMAIN.workers.dev';
+
+# 5. Push and enable GitHub Pages (Settings > Pages > main branch > /docs)
+cd .. && git add -A && git commit -m "Configure worker URL" && git push
+```
+
+Dashboard is live at `https://YOUR_USERNAME.github.io/Treasury-Dashboard/`
 
 ## Architecture
 
 ```
-Schedule Trigger → Fetch Treasury Data (Alpha Vantage) → Claude API (with web search) → Process Response → Google Drive → Gmail
+Browser (GitHub Pages)  -->  Cloudflare Worker (proxy)  -->  Yahoo / FRED / NY Fed / RSS
+   static HTML/CSS/JS          hides FRED API key            free public APIs
 ```
 
-**Data sources:** Alpha Vantage (Treasury yields across 6 maturities, Fed Funds rate), QuickChart (yield curve visualization), Claude web search (real-time SOFR, ON RRP, SRP, FedWatch, Fed speakers, banking headlines)
+**Two endpoints:**
+- `GET /api/market-data` — 35 parallel API calls (15 Yahoo + 18 FRED + 2 NY Fed), cached 5 min
+- `GET /api/news` — Government RSS feeds + optional NewsAPI, cached 5 min
 
-## How It Works
+## Alert Thresholds
 
-### NODE1 — Fetch Treasury Data (shared by both workflows)
+| Trigger | Condition | Level |
+|---------|-----------|-------|
+| Commodity shock | Any energy commodity > 2% DoD | Yellow |
+| Multi-book pressure | 2+ energy commodities > 2% | Red |
+| VIX spike | VIX > 30 | Red |
+| VIX move | VIX DoD > 15% | Yellow |
+| Dollar break | DXY outside 99-105 | Yellow |
+| 10Y yield | 10Y > 5.0% | Red |
+| Credit widening | IG OAS > 150 bps | Yellow |
 
-Calls Alpha Vantage sequentially to pull yields for 3-month, 2-year, 5-year, 7-year, 10-year, and 30-year Treasuries plus the effective Fed Funds rate. Uses closest-business-day logic so holidays and weekends don't break lookups. Builds a yield curve chart URL via QuickChart for email embedding. Outputs structured JSON with current yields, 1-week-ago, and 2-week-ago comparisons.
+Edit thresholds in `docs/app.js` > `THRESHOLDS` object.
 
-### NODE2 — Claude API Call (daily and Saturday variants)
+## Data Sources & Costs
 
-**Daily variant** sends the yield data to Claude Sonnet 4.5 with a senior treasury strategist system prompt. Claude generates a brief covering: Rates Snapshot, Funding & Liquidity (SOFR, ON RRP, SRP), Fed Watch (FedWatch probabilities, speakers), Banking & Credit (FDIC, stress signals), and Day Ahead (releases, auctions). Web search enabled for real-time data. Timeout: 180s.
-
-**Saturday variant** uses a longer prompt requesting a 1,200-1,600 word memo with: Executive Summary, Rates & Fed Policy, Funding and Liquidity Deep Dive, Banking and Credit Intelligence, Short-End Yield Curve Analysis, Strategic Outlook (3-6 month forward), and Week Ahead Calendar. Max tokens: 5,000. Timeout: 240s.
-
-### NODE3 — Process Response (shared by both workflows)
-
-Converts Claude's Markdown to styled inline-CSS HTML for Gmail. Embeds the QuickChart yield curve image after the Funding section. Creates a `.md` binary for Google Drive archival.
-
-### Google Drive + Gmail (configured in n8n UI)
-
-Drive uploads the `.md` archive. Gmail sends the HTML email using n8n expressions.
+| Source | Data | Calls/Request | Key | Cost |
+|--------|------|---------------|-----|------|
+| Yahoo Finance | Equities, commodities, forex, DXY, VIX | 15 | No | Free |
+| FRED API | Yields (3M-30Y), ON RRP, credit spreads, macro | 18 | Yes | Free |
+| NY Fed API | SOFR, EFFR | 2 | No | Free |
+| Federal Reserve RSS | Press releases, FOMC statements | 1 | No | Free |
+| BLS RSS | Economic data releases | 1 | No | Free |
+| NewsAPI (optional) | Financial news headlines | 1 | Yes | Free tier |
+| **Total** | **40+ metrics** | **37-38** | | **$0/month** |
 
 ## Repo Structure
 
 ```
-├── production_code/
-│   └── treasury/
-│       ├── NODE1_fetch_data.js           # Alpha Vantage yield fetcher + QuickChart
-│       ├── NODE2_claude_daily.js         # Claude API — daily treasury brief
-│       ├── NODE2_claude_saturday.js      # Claude API — weekly strategic memo
-│       └── NODE3_process_response.js     # Markdown → HTML email + yield curve chart
-├── prompts/
-│   └── treasury/
-│       ├── daily_system_prompt.md        # Treasury strategist persona (daily)
-│       └── weekly_system_prompt.md       # Weekly memo spec
-├── docs/
-│   └── QUICK_REFERENCE.txt              # One-page deployment cheat sheet
+Treasury-Dashboard/
+├── docs/                  # GitHub Pages root
+│   ├── index.html         # Dashboard layout (9 panels + alerts + modals)
+│   ├── style.css          # Dark theme, responsive grid, print styles
+│   └── app.js             # Data fetching, rendering, charts, shortcuts
+├── proxy/                 # Cloudflare Worker
+│   ├── worker.js          # API proxy: Yahoo + FRED + NY Fed + RSS
+│   └── wrangler.toml      # Worker config
+├── .env.example           # All required keys with sign-up links
 ├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
-## Setup
+## Keyboard Shortcuts
 
-### Prerequisites
+| Key | Action |
+|-----|--------|
+| `R` | Refresh all data |
+| `N` | Toggle news panel |
+| `C` | Toggle calendar panel |
+| `?` | Show shortcuts |
+| `Esc` | Close modal |
+| `Ctrl+P` | Print / export |
 
-- DigitalOcean droplet (Ubuntu, $6/mo minimum)
-- n8n self-hosted on the droplet
-- API keys: Anthropic (Claude), Alpha Vantage (free tier)
-- Google Cloud project with Gmail + Drive APIs enabled
+## Economic Calendar
 
-### Deployment Steps
-
-1. **Replace API keys** in NODE1 and NODE2 files:
-   - `YOUR_ALPHAVANTAGE_KEY_HERE` → your Alpha Vantage key
-   - `YOUR_CLAUDE_API_KEY_HERE` → your Anthropic API key
-
-2. **Create 2 n8n workflows.** Each follows the same node chain:
-   - Schedule Trigger → Code (NODE1) → Code (NODE2) → Code (NODE3) → Google Drive → Gmail
-
-3. **Paste code** into each Code node:
-   - NODE1 and NODE3 are shared between daily and Saturday workflows
-   - NODE2 is different — daily gets `NODE2_claude_daily.js`, Saturday gets `NODE2_claude_saturday.js`
-
-4. **Configure Gmail node expressions:**
-   - Subject: `{{ $('Process Response').first().json.emailSubject }}`
-   - Message: `{{ $('Process Response').first().json.emailHtml }}`
-
-5. **Configure Google Drive node:**
-   - Binary field key: `data`
-
-6. **Set Code node timeouts:**
-   - Daily NODE2: 180 seconds
-   - Saturday NODE2: 240 seconds
-
-### Critical Rules (Post-Mortem Lessons)
-
-1. ALWAYS use Code nodes for Claude API calls — never HTTP Request nodes
-2. NEVER use template literals (backticks) in n8n code — copy-paste breaks them
-3. Right-click .js files → Open With → Notepad on Windows — never double-click
-4. After pasting API key, verify closing single-quote + semicolon
-5. Wait 60s between manual Claude node tests to avoid rate limits
-6. Binary field key = "data" (must match Google Drive config)
-7. Use explicit node refs: `$('Node Name').first().json.field`
-8. Use closest-business-day logic for all date-based API lookups
-9. Delete orphan nodes before adding replacements in n8n
-
-## Cost Breakdown
-
-| Service | Monthly Cost |
-|---------|-------------|
-| DigitalOcean droplet | $6 |
-| Claude API (Sonnet 4.5) | $8-15 |
-| Alpha Vantage | $0 (free tier, 25 calls/day) |
-| Google/Gmail | $0 |
-| **Total** | **$14-21** |
-
-Alpha Vantage free tier uses 6 calls per run. Both workflows on the same day = 12 calls, leaving 13 for manual testing.
-
-## Security Notes
-
-- All API keys replaced with placeholders (`YOUR_*_KEY_HERE`)
-- Keep this repo **private**
-- Rotate API keys periodically
+The calendar in `app.js` > `ECON_CALENDAR` is a static array of major US releases. FOMC dates are sourced from the Federal Reserve. Update the calendar quarterly for accuracy.
 
 ## License
 
-Private. Not for redistribution.
+[MIT](LICENSE)
