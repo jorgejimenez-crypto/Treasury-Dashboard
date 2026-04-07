@@ -697,11 +697,67 @@ main {
   font-size: 12px;
 }
 
-/* ---- Full-Width Panel ---- */
+/* ---- Full-Width / Span Panels ---- */
 
 .panel-full {
   grid-column: 1 / -1;
 }
+
+.panel-span-2 {
+  grid-column: span 2;
+}
+
+/* ---- Energy Movers ---- */
+
+.movers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mover-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.mover-name {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 80px;
+}
+
+.mover-price {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mover-change {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  min-width: 65px;
+  text-align: right;
+}
+
+.mover-bar {
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 2px;
+  max-width: 60px;
+  margin-left: auto;
+}
+
+.mover-up .mover-change { color: var(--green); }
+.mover-down .mover-change { color: var(--red); }
+.mover-up .mover-bar { background: var(--green); }
+.mover-down .mover-bar { background: var(--red); }
 
 /* ---- Live Streams ---- */
 
@@ -1023,6 +1079,9 @@ footer kbd {
   #panel-news {
     grid-column: span 2;
   }
+  .panel-span-2 {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1044,7 +1103,8 @@ footer kbd {
     grid-template-columns: 1fr;
   }
 
-  #panel-news {
+  #panel-news,
+  .panel-span-2 {
     grid-column: span 1;
   }
 

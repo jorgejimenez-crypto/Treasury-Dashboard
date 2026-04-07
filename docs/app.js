@@ -454,21 +454,31 @@ function renderYieldCurve(fred) {
   });
 }
 
+// Cache last known funding values so weekends/holidays don't show all N/A
+var lastKnownFunding = { sofr: null, effr: null };
+
 function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
   grid.innerHTML = '';
-  var sofr = nyfed.sofr;
-  var effr = nyfed.effr;
+
+  // Use live data if available, otherwise fall back to last known
+  var sofr = (nyfed.sofr && nyfed.sofr.rate != null) ? nyfed.sofr : lastKnownFunding.sofr;
+  var effr = (nyfed.effr && nyfed.effr.rate != null) ? nyfed.effr : lastKnownFunding.effr;
+
+  // Update cache when we get live data
+  if (nyfed.sofr && nyfed.sofr.rate != null) lastKnownFunding.sofr = nyfed.sofr;
+  if (nyfed.effr && nyfed.effr.rate != null) lastKnownFunding.effr = nyfed.effr;
+
   if (sofr && sofr.rate != null) {
     var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
     grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', volNote, sofr.date));
   } else {
-    grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
+    grid.appendChild(renderMetric('SOFR', 'N/A', 'Weekend/Holiday', ''));
   }
   if (effr && effr.rate != null) {
     grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', '', effr.date));
   } else {
-    grid.appendChild(renderMetric('EFFR', 'N/A', '', ''));
+    grid.appendChild(renderMetric('EFFR', 'N/A', 'Weekend/Holiday', ''));
   }
   var onrrp = fred.RRPONTSYD;
   if (onrrp && onrrp.current != null) {
@@ -477,13 +487,17 @@ function renderFunding(nyfed, fred) {
   } else {
     grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
   }
-  grid.appendChild(renderMetric(' ', ' ', '', '', {}));
+  // Fed Funds rate from macro cache (if available)
+  if (cachedFred && cachedFred.FEDFUNDS && cachedFred.FEDFUNDS !== undefined) {
+    // Skip — already shown in macro panel
+  }
+  grid.appendChild(renderMetric('Spread', '', '', '', {}));
   var footer = document.getElementById('funding-footer');
   if (sofr && effr && sofr.rate != null && effr.rate != null) {
     var spread = Math.round((sofr.rate - effr.rate) * 100);
     footer.textContent = 'SOFR-EFFR: ' + sign(spread) + spread + ' bps';
   } else {
-    footer.textContent = '';
+    footer.textContent = 'SOFR-EFFR: unavailable (weekend/holiday)';
   }
 }
 
@@ -831,6 +845,7 @@ function renderDashboard(data) {
   renderForex(data.yahoo);
   renderMacro(data.macro);
   renderCalendar(data.fomc);
+  renderMovers(data.yahoo);
 
   // Source attribution
   var yDate = data.fred.DGS10 ? data.fred.DGS10.date : null;
@@ -842,7 +857,8 @@ function renderDashboard(data) {
   addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
   addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
   addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
-  addSourceAttribution('panel-news', 'Federal Reserve RSS', null);
+  addSourceAttribution('panel-news', 'Fed / ECB / CNBC RSS', null);
+  addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'grid';
@@ -903,9 +919,10 @@ function tickerRefresh() {
       cachedYahoo = data.yahoo;
       if (data.fred) cachedFred = data.fred;
       renderTicker(data.yahoo);
-      // Also update commodity prices and risk (most volatile)
+      // Also update volatile panels on ticker refresh
       renderCommodities(data.yahoo);
       renderRisk(data.yahoo, cachedFred || {});
+      renderMovers(data.yahoo);
       // Reset backoff on success
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
     })
@@ -963,28 +980,25 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS (robust YouTube embeds)
+// LIVE CATALYSTS (YouTube channel playlist embeds)
 // ============================================
 
-// Channel-based live_stream URLs auto-resolve to the current live broadcast.
-// If a channel has no active stream the iframe shows YouTube's "offline" page
-// rather than "Video unavailable", which is a much better fallback.
-// We also wrap each slot with an error overlay that activates if the iframe
-// fails to load entirely (network error / blocked).
+// Strategy: Embed each channel's "uploads" playlist which always works
+// and shows the most recent video. The playlist URL format
+// /embed/videoseries?list=PLAYLIST_ID is permanent and never expires.
+// Every YouTube channel has an auto-generated uploads playlist:
+// channel UC... → uploads playlist UU... (replace UC with UU).
 var LIVE_STREAMS = [
   {
     label: 'Bloomberg TV',
-    // Official Bloomberg Television channel — 24/7 live stream
-    src: 'https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg&autoplay=0&mute=1',
-    fallback: 'https://www.youtube.com/embed?listType=user_uploads&list=Bloomberg&autoplay=0&mute=1',
-    link: 'https://www.youtube.com/@BloombergTelevision/streams'
+    // Bloomberg Television uploads playlist (UU replaces UC in channel ID)
+    src: 'https://www.youtube.com/embed/videoseries?list=UUIALMKvObZNtJ6AmdCLP7Lg&autoplay=0&mute=1',
+    link: 'https://www.youtube.com/@BloombergTelevision'
   },
   {
     label: 'Yahoo Finance',
-    // Yahoo Finance channel — frequent live streams
-    src: 'https://www.youtube.com/embed/live_stream?channel=UCEAZeUIeJs0IjQiqTCQoqmA&autoplay=0&mute=1',
-    fallback: 'https://www.youtube.com/embed?listType=user_uploads&list=YahooFinance&autoplay=0&mute=1',
-    link: 'https://www.youtube.com/@YahooFinance/streams'
+    src: 'https://www.youtube.com/embed/videoseries?list=UUEAZeUIeJs0IjQiqTCQoqmA&autoplay=0&mute=1',
+    link: 'https://www.youtube.com/@YahooFinance'
   }
 ];
 
@@ -998,41 +1012,82 @@ function initLiveStreams() {
     var slot = document.createElement('div');
     slot.className = 'live-stream-slot';
 
-    // Label with status dot
     var labelDiv = document.createElement('div');
     labelDiv.className = 'live-stream-label';
-    labelDiv.innerHTML = '<span class="live-dot"></span> ' + stream.label;
+    labelDiv.innerHTML = '<span class="live-dot"></span> ' + stream.label
+      + ' <a href="' + stream.link + '" target="_blank" rel="noopener" style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
+      + 'Open channel &#x2197;</a>';
 
-    // Iframe
     var iframe = document.createElement('iframe');
     iframe.src = stream.src;
-    iframe.title = stream.label + ' Live';
+    iframe.title = stream.label;
     iframe.setAttribute('allow', 'autoplay; encrypted-media');
     iframe.setAttribute('allowfullscreen', '');
     iframe.setAttribute('loading', 'lazy');
-    iframe.setAttribute('referrerpolicy', 'no-referrer');
-
-    // Fallback overlay (hidden by default, shown on iframe error)
-    var fallback = document.createElement('div');
-    fallback.className = 'live-stream-fallback';
-    fallback.innerHTML = '<div class="live-fallback-text">'
-      + 'No live stream right now'
-      + '<br><a href="' + stream.link + '" target="_blank" rel="noopener">Watch latest on YouTube</a>'
-      + '</div>';
-
-    // On iframe load error — show fallback
-    iframe.onerror = (function(fb, ifr, src2) {
-      return function() {
-        ifr.src = src2;
-        fb.style.display = 'none';
-      };
-    })(fallback, iframe, stream.fallback);
 
     slot.appendChild(labelDiv);
     slot.appendChild(iframe);
-    slot.appendChild(fallback);
     container.appendChild(slot);
   }
+}
+
+// ============================================
+// ENERGY MOVERS (sorted by % change)
+// ============================================
+
+var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'VIX', 'DXY'];
+var MOVERS_LABELS = {
+  WTI: 'WTI Crude', Brent: 'Brent', NatGas: 'Nat Gas', HeatOil: 'Heat Oil',
+  Copper: 'Copper', Gold: 'Gold', VIX: 'VIX', DXY: 'DXY'
+};
+
+function renderMovers(yahoo) {
+  var container = document.getElementById('movers-content');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Build sortable array of movers
+  var movers = [];
+  for (var i = 0; i < MOVERS_KEYS.length; i++) {
+    var k = MOVERS_KEYS[i];
+    var d = yahoo[k];
+    if (d && d.current != null && d.prior != null) {
+      var pct = pctChange(d.current, d.prior);
+      if (pct != null) {
+        movers.push({ key: k, price: d.current, pct: pct });
+      }
+    }
+  }
+
+  // Sort by absolute % change descending (biggest movers first)
+  movers.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
+
+  var list = document.createElement('div');
+  list.className = 'movers-list';
+
+  for (var j = 0; j < movers.length; j++) {
+    var m = movers[j];
+    var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
+    var prefix = isNonDollar ? '' : '$';
+    var cls = m.pct >= 0 ? 'mover-up' : 'mover-down';
+
+    var row = document.createElement('div');
+    row.className = 'mover-row ' + cls;
+    row.innerHTML = '<span class="mover-name">' + MOVERS_LABELS[m.key] + '</span>'
+      + '<span class="mover-price">' + prefix + m.price.toFixed(2) + '</span>'
+      + '<span class="mover-change">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
+
+    // Mini bar proportional to % move (max 60px at 5%)
+    var bar = document.createElement('div');
+    bar.className = 'mover-bar';
+    bar.style.width = Math.min(Math.abs(m.pct) / 5 * 60, 60) + 'px';
+    var changeCell = row.querySelector('.mover-change');
+    if (changeCell) changeCell.appendChild(bar);
+
+    list.appendChild(row);
+  }
+
+  container.appendChild(list);
 }
 
 // ============================================

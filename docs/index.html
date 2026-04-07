@@ -120,8 +120,13 @@
       <div class="metrics-grid cols-2" id="credit-grid"></div>
     </section>
 
-    <!-- Row 4 (full-width): Live Catalysts — auto-resolving channel streams -->
-    <section class="panel panel-full" id="panel-live">
+    <!-- Row 4: Market Movers (energy focus) + Live Catalysts -->
+    <section class="panel" id="panel-movers">
+      <h2>Energy Movers</h2>
+      <div id="movers-content"></div>
+    </section>
+
+    <section class="panel panel-span-2" id="panel-live">
       <h2>Live Catalysts</h2>
       <div class="live-streams" id="live-streams"></div>
     </section>
@@ -168,24 +173,47 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="app.js"></script>
 
-  <!-- TradingView Widget Script (loaded after app) -->
+  <!-- TradingView Widget — uses the symbol-overview widget (most reliable free embed) -->
   <script>
     (function() {
       var wrap = document.getElementById('tradingview-widget');
       if (!wrap) return;
+      // Create the TradingView container div the widget expects
+      var tvDiv = document.createElement('div');
+      tvDiv.className = 'tradingview-widget-container__widget';
+      wrap.appendChild(tvDiv);
       var s = document.createElement('script');
-      s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
+      s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
       s.async = true;
       s.textContent = JSON.stringify({
-        "symbol": "NYMEX:CL1!",
+        "symbols": [
+          ["WTI Crude", "NYMEX:CL1!|1D"],
+          ["Brent", "NYMEX:BZ1!|1D"],
+          ["Nat Gas", "NYMEX:NG1!|1D"],
+          ["Heating Oil", "NYMEX:HO1!|1D"]
+        ],
+        "chartOnly": false,
         "width": "100%",
-        "height": "180",
+        "height": 220,
         "locale": "en",
-        "dateRange": "1D",
         "colorTheme": "dark",
-        "isTransparent": true,
         "autosize": false,
-        "largeChartUrl": ""
+        "showVolume": false,
+        "showMA": false,
+        "hideDateRanges": false,
+        "hideMarketStatus": false,
+        "hideSymbolLogo": true,
+        "scalePosition": "right",
+        "scaleMode": "Normal",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, sans-serif",
+        "fontSize": "10",
+        "noTimeScale": false,
+        "valuesTracking": "1",
+        "changeMode": "price-and-percent",
+        "chartType": "area",
+        "lineWidth": 2,
+        "lineType": 0,
+        "dateRanges": ["1d|1", "1w|15", "1m|60", "3m|1D"]
       });
       wrap.appendChild(s);
     })();
