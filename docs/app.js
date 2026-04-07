@@ -38,8 +38,8 @@ var THRESHOLDS = {
 // Labels
 var EQUITY_KEYS  = ['SP500', 'DOW', 'NASDAQ', 'RUSSELL'];
 var EQUITY_LABELS = { SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSSELL: 'Russell 2000' };
-var COMMODITY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold'];
-var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry Hub', HeatOil: 'Heating Oil', Copper: 'Copper', Gold: 'Gold' };
+var COMMODITY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver'];
+var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry Hub', HeatOil: 'Heating Oil', Copper: 'Copper', Gold: 'Gold', Silver: 'Silver' };
 var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
 var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'USDCNH'];
 var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', USDCNH: 'USD/CNH' };
@@ -52,11 +52,11 @@ var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
 // Ticker symbols — descriptive labels with exchange symbols
-var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'VIX', 'DXY', 'SP500'];
+var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY', 'SP500'];
 var TICKER_LABELS = {
   WTI: 'WTI Crude (CL=F)', Brent: 'Brent Crude (BZ=F)', NatGas: 'Nat Gas (NG=F)',
   HeatOil: 'Heating Oil (HO=F)', Gold: 'Gold (GC=F)', VIX: 'CBOE VIX',
-  DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)'
+  DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)', Silver: 'Silver (SI=F)'
 };
 
 var MACRO_DISPLAY = [
@@ -334,7 +334,13 @@ function computeAlerts(data) {
   // Credit spreads
   var ig = data.fred && data.fred.BAMLC0A0CM;
   if (ig && ig.current != null && ig.current * 100 > THRESHOLDS.igOasWide) {
-    alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps — wider than ' + THRESHOLDS.igOasWide + ' bps' });
+    alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps -- wider than ' + THRESHOLDS.igOasWide + ' bps' });
+  }
+
+  // 10Y Breakeven inflation elevated
+  var tips = data.fred && data.fred.T10YIE;
+  if (tips && tips.current != null && tips.current > 2.8) {
+    alerts.push({ level: 'yellow', msg: '10Y Breakeven at ' + tips.current.toFixed(2) + '% -- elevated inflation expectations' });
   }
 
   return alerts;
@@ -543,6 +549,27 @@ function renderRisk(yahoo, fred) {
     creditGrid.appendChild(renderMetric('HY OAS', hyBps + ' bps', hyD, hy.date, { deltaNum: hyChg }));
   } else {
     creditGrid.appendChild(renderMetric('HY OAS', 'N/A', '', ''));
+  }
+  // TIPS Breakeven Inflation (10Y and 5Y) -- forward inflation expectations
+  var tipsSep = document.createElement('div');
+  tipsSep.className = 'separator';
+  tipsSep.style.gridColumn = '1 / -1';
+  creditGrid.appendChild(tipsSep);
+  var t10 = fred.T10YIE;
+  if (t10 && t10.current != null) {
+    var t10Chg = t10.prior != null ? t10.current - t10.prior : null;
+    var t10D = t10Chg != null ? sign(t10Chg) + t10Chg.toFixed(2) + ' pp' : '';
+    creditGrid.appendChild(renderMetric('10Y Breakeven', t10.current.toFixed(2) + '%', t10D, t10.date, { deltaNum: t10Chg, sm: true }));
+  } else {
+    creditGrid.appendChild(renderMetric('10Y Breakeven', 'N/A', '', ''));
+  }
+  var t5 = fred.T5YIE;
+  if (t5 && t5.current != null) {
+    var t5Chg = t5.prior != null ? t5.current - t5.prior : null;
+    var t5D = t5Chg != null ? sign(t5Chg) + t5Chg.toFixed(2) + ' pp' : '';
+    creditGrid.appendChild(renderMetric('5Y Breakeven', t5.current.toFixed(2) + '%', t5D, t5.date, { deltaNum: t5Chg, sm: true }));
+  } else {
+    creditGrid.appendChild(renderMetric('5Y Breakeven', 'N/A', '', ''));
   }
 }
 
@@ -896,11 +923,18 @@ function fetchData() {
 }
 
 // Premium RSS feeds fetched client-side via rss2json.com (free, 10K req/day)
+// PREMIUM_FEEDS: fetched client-side via rss2json.com (CORS proxy).
+// Register free account at rss2json.com and paste your key below to avoid shared rate limits.
+// Anonymous key shares a 10K/day limit with all users -- a personal key gives you your own 10K.
+var RSS2JSON_KEY = '';  // paste your free rss2json.com API key here (optional but recommended)
+// RSS2JSON_BASE: CORS proxy for RSS feeds. api_key used when provided (personal 10K/day limit).
+var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json'
+  + (RSS2JSON_KEY ? '?api_key=' + RSS2JSON_KEY + '&rss_url=' : '?rss_url=');
 var PREMIUM_FEEDS = [
-  { url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml', source: 'WSJ', tag: 'MARKETS' },
-  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS' },
-  { url: 'https://feeds.marketwatch.com/marketwatch/topstories/', source: 'MarketWatch', tag: 'MARKETS' },
-  { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance', tag: 'MARKETS' },
+  { url: 'https://feeds.reuters.com/reuters/financialMarketsNews', source: 'Reuters Markets',  tag: 'MARKETS' },
+  { url: 'https://feeds.reuters.com/reuters/businessNews',         source: 'Reuters Business', tag: 'MARKETS' },
+  { url: 'https://finance.yahoo.com/news/rssindex',               source: 'Yahoo Finance',    tag: 'MARKETS' },
+  { url: 'https://www.ft.com/rss/home/us',                        source: 'Financial Times',  tag: 'MARKETS' },
 ];
 
 function fetchSingleFeed(feed) {
@@ -967,27 +1001,25 @@ function fetchNews() {
     });
 }
 
-// Smart ticker refresh: faster during market hours, with backoff on error
+// Smart ticker refresh -- hits lightweight /api/ticker endpoint (9 symbols only).
+// Full /api/market-data stays on the 15-min timer -- no FRED/NY Fed overhead every 10s.
 function tickerRefresh() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-  fetch(WORKER_URL + '/api/market-data')
+  fetch(WORKER_URL + '/api/ticker')
     .then(function(resp) {
       if (!resp.ok) throw new Error(resp.status);
       return resp.json();
     })
     .then(function(data) {
-      cachedYahoo = data.yahoo;
-      if (data.fred) cachedFred = data.fred;
-      renderTicker(data.yahoo);
-      // Also update volatile panels on ticker refresh
-      renderCommodities(data.yahoo);
-      renderRisk(data.yahoo, cachedFred || {});
-      renderMovers(data.yahoo);
-      // Reset backoff on success
+      // Merge ticker symbols into cached full dataset so other panels stay intact
+      cachedYahoo = Object.assign(cachedYahoo || {}, data.yahoo);
+      renderTicker(cachedYahoo);
+      renderCommodities(cachedYahoo);
+      renderRisk(cachedYahoo, cachedFred || {});
+      renderMovers(cachedYahoo);
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
     })
     .catch(function() {
-      // Exponential backoff: 10s → 15s → 30s → 60s max
       tickerBackoff = Math.min(tickerBackoff * 1.5, 60000);
     })
     .finally(function() {
@@ -1040,110 +1072,84 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS (auto-resolving latest video from channel RSS)
+// LIVE CATALYSTS
 // ============================================
+//
+// Strategy: Use YouTube's /live_stream?channel=CHANNEL_ID embed URL.
+// This always resolves to the channel's CURRENT live stream if one is active.
+// If the channel is not live, YouTube shows the channel page -- no broken embeds.
+// This eliminates rss2json dependency for live streams entirely.
+//
+// The animated live dot only pulses during market hours (isMarketOpen()).
+// "Open channel" link provides escape hatch to watch directly on YouTube.
 
-// Strategy: YouTube channel RSS feeds are public at a stable URL.
-// We fetch via rss2json.com (free proxy), extract the latest video ID,
-// and embed it. This ALWAYS works because it uses a real, current video ID.
-// If rss2json fails, we fall back to a static placeholder with channel link.
 var LIVE_CHANNELS = [
   {
     label: 'Bloomberg TV',
     channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
-    link: 'https://www.youtube.com/@BloombergTelevision/streams'
+    link: 'https://www.youtube.com/@BloombergTelevision/live'
   },
   {
     label: 'Yahoo Finance',
     channelId: 'UCEAZeUIeJs0IjQiqTCQoqmA',
-    link: 'https://www.youtube.com/@YahooFinance/streams'
+    link: 'https://www.youtube.com/@YahooFinance/live'
+  },
+  {
+    label: 'CNBC',
+    channelId: 'UCrp_UI8XtuYfpiqluWLD7Lw',
+    link: 'https://www.youtube.com/@CNBC/live'
   }
 ];
-
-var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
 function initLiveStreams() {
   var container = document.getElementById('live-streams');
   if (!container) return;
   container.innerHTML = '';
 
+  var live = isMarketOpen();
+
   for (var i = 0; i < LIVE_CHANNELS.length; i++) {
     var ch = LIVE_CHANNELS[i];
 
-    // Create slot immediately with placeholder
     var slot = document.createElement('div');
     slot.className = 'live-stream-slot';
-    slot.id = 'live-slot-' + i;
 
+    // Label bar with live indicator
     var labelDiv = document.createElement('div');
     labelDiv.className = 'live-stream-label';
-    labelDiv.innerHTML = '<span class="live-dot"></span> ' + ch.label
-      + ' <a href="' + ch.link + '" target="_blank" rel="noopener" '
-      + 'style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
-      + 'Open channel &#x2197;</a>';
+    labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
+      + ' ' + ch.label
+      + ' <a href="' + ch.link + '" target="_blank" rel="noopener"'
+      + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
+      + 'Open &#x2197;</a>';
 
-    // Start with a loading placeholder
-    var placeholder = document.createElement('div');
-    placeholder.className = 'live-stream-placeholder';
-    placeholder.innerHTML = '<div class="live-fallback-text">Loading latest video...</div>';
+    // Embed src: YouTube resolves /live_stream?channel=ID to the active live stream.
+    // autoplay=1&mute=1 is required by browser autoplay policy (muted autoplay allowed).
+    var embedSrc = 'https://www.youtube.com/embed/live_stream?channel='
+      + ch.channelId
+      + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+
+    var iframe = document.createElement('iframe');
+    iframe.src = embedSrc;
+    iframe.title = ch.label + ' Live';
+    iframe.loading = 'lazy';
+    iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
 
     slot.appendChild(labelDiv);
-    slot.appendChild(placeholder);
+    slot.appendChild(iframe);
     container.appendChild(slot);
-
-    // Fetch the channel's RSS to get latest video ID
-    loadChannelLatestVideo(ch, slot, placeholder);
   }
-}
-
-function loadChannelLatestVideo(channel, slot, placeholder) {
-  var rssUrl = 'https://www.youtube.com/feeds/videos.xml?channel_id=' + channel.channelId;
-  var apiUrl = RSS2JSON_BASE + encodeURIComponent(rssUrl);
-
-  fetch(apiUrl)
-    .then(function(resp) { return resp.json(); })
-    .then(function(data) {
-      if (data.status === 'ok' && data.items && data.items.length > 0) {
-        // Extract video ID from the link (youtube.com/watch?v=VIDEO_ID)
-        var link = data.items[0].link || '';
-        var match = link.match(/[?&]v=([^&]+)/);
-        var videoId = match ? match[1] : null;
-
-        if (videoId) {
-          var iframe = document.createElement('iframe');
-          iframe.src = 'https://www.youtube.com/embed/' + videoId
-            + '?autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-          iframe.title = channel.label;
-          iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-          iframe.setAttribute('allowfullscreen', '');
-          placeholder.replaceWith(iframe);
-          return;
-        }
-      }
-      // If parsing failed, show fallback
-      showStreamFallback(placeholder, channel);
-    })
-    .catch(function() {
-      showStreamFallback(placeholder, channel);
-    });
-}
-
-function showStreamFallback(placeholder, channel) {
-  placeholder.className = 'live-stream-placeholder';
-  placeholder.innerHTML = '<div class="live-fallback-text">'
-    + 'Latest video unavailable'
-    + '<br><a href="' + channel.link + '" target="_blank" rel="noopener">'
-    + 'Watch live on YouTube &#x2197;</a></div>';
 }
 
 // ============================================
 // ENERGY MOVERS (sorted by % change)
 // ============================================
 
-var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'VIX', 'DXY'];
+var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver', 'VIX', 'DXY'];
 var MOVERS_LABELS = {
   WTI: 'WTI Crude', Brent: 'Brent', NatGas: 'Nat Gas', HeatOil: 'Heat Oil',
-  Copper: 'Copper', Gold: 'Gold', VIX: 'VIX', DXY: 'DXY'
+  Copper: 'Copper', Gold: 'Gold', Silver: 'Silver', VIX: 'VIX', DXY: 'DXY'
 };
 
 function renderMovers(yahoo) {

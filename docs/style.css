@@ -61,11 +61,12 @@ body {
 
 .ticker-content {
   display: inline-block;
-  animation: ticker-scroll 30s linear infinite;
+  animation: ticker-scroll 40s linear infinite;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
-  padding-left: 100%;
+  /* No padding-left: content is duplicated in JS, -50% creates seamless loop */
+  white-space: nowrap;
 }
 
 .ticker-content:hover {
@@ -74,7 +75,7 @@ body {
 
 @keyframes ticker-scroll {
   0%   { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  100% { transform: translateX(-50%); }   /* -50% on doubled content = gapless loop */
 }
 
 .ticker-item {
@@ -300,6 +301,14 @@ main {
   grid-template-columns: repeat(3, 1fr);
   gap: var(--gap);
   margin-bottom: 16px;
+}
+
+/* At 3-col desktop: news spans 2 columns, live catalysts spans 2 columns */
+.panel-span-2 {
+  grid-column: span 2;
+}
+#panel-news {
+  grid-column: span 2;
 }
 
 /* ---- Panels ---- */
@@ -763,7 +772,7 @@ main {
 
 .live-streams {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);  /* 3 channels at desktop */
   gap: 8px;
 }
 
@@ -798,6 +807,13 @@ main {
   border-radius: 50%;
   background: var(--red);
   animation: live-pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* Market closed: static grey dot, no pulse */
+.live-dot.live-dot-off {
+  background: var(--text-dim);
+  animation: none;
 }
 
 @keyframes live-pulse {
@@ -1077,6 +1093,9 @@ footer kbd {
   .panel-span-2 {
     grid-column: span 2;
   }
+  .live-streams {
+    grid-template-columns: repeat(2, 1fr);  /* 2-col at tablet */
+  }
 }
 
 @media (max-width: 768px) {
@@ -1092,6 +1111,13 @@ footer kbd {
   .header-right {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  /* Larger touch targets on mobile (iOS min = 44px) */
+  .btn-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 15px;
   }
 
   main {
@@ -1112,7 +1138,7 @@ footer kbd {
   }
 
   .live-streams {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr;  /* stack vertically on mobile */
   }
 
   .notes-panel {
