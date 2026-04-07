@@ -102,6 +102,7 @@ var refreshTimer = null;
 var newsTimer = null;
 var tickerTimer = null;
 var cachedYahoo = null;
+var cachedFred = null;                   // preserved across ticker refreshes
 var tickerBackoff = TICKER_REFRESH_MS;   // exponential backoff tracker
 var fxConverterInitialized = false;      // track if event listeners are attached
 
@@ -814,8 +815,9 @@ function renderDashboard(data) {
     }
   }
 
-  // Cache for FX converter + ticker
+  // Cache for FX converter + ticker + risk panel preservation
   cachedYahoo = data.yahoo;
+  cachedFred = data.fred;
   cacheData('market', data);
 
   // Render all panels
@@ -899,10 +901,11 @@ function tickerRefresh() {
     })
     .then(function(data) {
       cachedYahoo = data.yahoo;
+      if (data.fred) cachedFred = data.fred;
       renderTicker(data.yahoo);
-      // Also update commodity prices (most volatile)
+      // Also update commodity prices and risk (most volatile)
       renderCommodities(data.yahoo);
-      renderRisk(data.yahoo, data.fred || {});
+      renderRisk(data.yahoo, cachedFred || {});
       // Reset backoff on success
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
     })
