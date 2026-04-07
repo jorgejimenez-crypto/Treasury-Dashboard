@@ -70,8 +70,9 @@ var FOMC_2026 = [
 ];
 
 var RSS_FEEDS = [
-  { url: 'https://www.federalreserve.gov/feeds/press_all.xml', source: 'Federal Reserve', tag: 'FED' },
-  { url: 'https://www.bls.gov/feed/bls_latest.rss', source: 'Bureau of Labor Statistics', tag: 'LABOR' },
+  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED' },
+  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml', source: 'Fed Banking', tag: 'FED' },
+  { url: 'https://www.federalreserve.gov/feeds/press_other.xml', source: 'Fed Other', tag: 'FED' },
 ];
 
 var CORS = {
