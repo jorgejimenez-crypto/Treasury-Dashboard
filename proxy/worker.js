@@ -90,10 +90,12 @@ var FOMC_2026 = [
 ];
 
 var RSS_FEEDS = [
-  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED', isGov: true },
-  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml', source: 'Fed Banking', tag: 'FED', isGov: true },
-  { url: 'https://www.federalreserve.gov/feeds/press_other.xml', source: 'Fed Other', tag: 'FED', isGov: true },
-  { url: 'https://www.ecb.europa.eu/rss/press.html', source: 'ECB', tag: 'FED', isGov: true },
+  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',    isGov: true  },
+  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',    isGov: true  },
+  { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',    isGov: true  },
+  { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',    isGov: true  },
+  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',          source: 'WSJ Markets',     tag: 'MARKETS',isGov: false },
+  { url: 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',        source: 'WSJ Business',    tag: 'MARKETS',isGov: false },
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS', isGov: false },
 ];
 
@@ -224,6 +226,33 @@ async function handleNews(env) {
       allItems = allItems.concat(naItems);
     } catch (e) { /* continue with RSS only */ }
   }
+
+  // Age filter: drop items older than 72 hours (covers weekends)
+  var cutoff = Date.now() - (72 * 60 * 60 * 1000);
+  allItems = allItems.filter(function(item) {
+    if (!item.date) return true;  // keep if no date (gov press releases sometimes lack dates)
+    var d = new Date(item.date);
+    return isNaN(d.getTime()) || d.getTime() >= cutoff;
+  });
+
+  // Relevance filter: non-gov items must match at least one financial keyword
+  var FIN_KEYWORDS = [
+    'fed','fomc','rate','yield','bond','treasury','inflation','cpi','pci','ppi',
+    'gdp','economy','economic','market','stock','equity','dollar','currency','forex',
+    'oil','crude','energy','commodity','gold','silver','copper','trade','tariff',
+    'bank','credit','debt','deficit','fiscal','monetary','employment','jobs','payroll',
+    'recession','growth','output','spending','budget','opec','ecb','boe','boj',
+    'interest','spread','liquidity','repo','sofr','effr','rrp','mbs','mortgage',
+    'earnings','revenue','profit','loss','quarter','annual','guidance'
+  ];
+  allItems = allItems.filter(function(item) {
+    if (item.isGov) return true;  // always keep gov sources (Fed, ECB)
+    var text = (item.title + ' ' + (item.summary || '')).toLowerCase();
+    for (var k = 0; k < FIN_KEYWORDS.length; k++) {
+      if (text.indexOf(FIN_KEYWORDS[k]) !== -1) return true;
+    }
+    return false;
+  });
 
   // Deduplicate by normalized title
   var seen = {};

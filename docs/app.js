@@ -904,11 +904,43 @@ var RSS2JSON_KEY = '';  // paste your free rss2json.com API key here (optional b
 var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json'
   + (RSS2JSON_KEY ? '?api_key=' + RSS2JSON_KEY + '&rss_url=' : '?rss_url=');
 var PREMIUM_FEEDS = [
-  { url: 'https://feeds.reuters.com/reuters/financialMarketsNews', source: 'Reuters Markets',  tag: 'MARKETS' },
-  { url: 'https://feeds.reuters.com/reuters/businessNews',         source: 'Reuters Business', tag: 'MARKETS' },
-  { url: 'https://finance.yahoo.com/news/rssindex',               source: 'Yahoo Finance',    tag: 'MARKETS' },
-  { url: 'https://www.ft.com/rss/home/us',                        source: 'Financial Times',  tag: 'MARKETS' },
+  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',         source: 'WSJ Markets',     tag: 'MARKETS' },
+  { url: 'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',       source: 'WSJ Business',    tag: 'MARKETS' },
+  { url: 'https://feeds.reuters.com/reuters/financialMarketsNews', source: 'Reuters Markets', tag: 'MARKETS' },
+  { url: 'https://feeds.reuters.com/reuters/businessNews',         source: 'Reuters Business',tag: 'MARKETS' },
+  { url: 'https://finance.yahoo.com/news/rssindex',               source: 'Yahoo Finance',   tag: 'MARKETS' },
 ];
+
+function classifyClientArticle(title, desc) {
+  var t = ((title || '') + ' ' + (desc || '')).toLowerCase();
+  if (/inflation|\bcpi\b|price index|\bpce\b|\bppi\b/.test(t)) return 'INFLATION';
+  if (/\bfomc\b|federal open market|interest rate|monetary policy|fed funds/.test(t)) return 'FED';
+  if (/employment|\bjobs\b|unemployment|payroll|\bicsa\b|jobless/.test(t)) return 'LABOR';
+  if (/\bgdp\b|gross domestic|economic growth/.test(t)) return 'GDP';
+  if (/treasury|\byield\b|\bbond\b|\bdgs\b|note auction/.test(t)) return 'RATES';
+  if (/\boil\b|crude|\benergy\b|opec|nat.?gas|heating oil/.test(t)) return 'COMMODITIES';
+  if (/\bdollar\b|currency|forex|yuan|euro|yen|sterling/.test(t)) return 'FX';
+  if (/credit spread|\boas\b|high.yield|investment.grade/.test(t)) return 'CREDIT';
+  if (/tariff|trade war|sanction|import|export duty/.test(t)) return 'MACRO';
+  return 'MARKETS';
+}
+
+// Financial relevance keywords — client-side filter matches worker filter
+var CLIENT_FIN_KEYWORDS = [
+  'fed','fomc','rate','yield','bond','treasury','inflation','cpi','ppi',
+  'gdp','economy','economic','market','stock','equity','dollar','currency',
+  'oil','crude','energy','commodity','gold','silver','trade','tariff',
+  'bank','credit','debt','fiscal','monetary','employment','jobs','payroll',
+  'recession','growth','earnings','revenue','opec','ecb','interest','spread'
+];
+
+function isFinanciallyRelevant(title, summary) {
+  var text = ((title || '') + ' ' + (summary || '')).toLowerCase();
+  for (var k = 0; k < CLIENT_FIN_KEYWORDS.length; k++) {
+    if (text.indexOf(CLIENT_FIN_KEYWORDS[k]) !== -1) return true;
+  }
+  return false;
+}
 
 function fetchSingleFeed(feed) {
   var apiUrl = RSS2JSON_BASE + encodeURIComponent(feed.url);
@@ -916,17 +948,31 @@ function fetchSingleFeed(feed) {
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
       if (data.status !== 'ok' || !data.items) return [];
-      return data.items.slice(0, 8).map(function(item) {
-        return {
-          title: item.title || '',
+      var cutoff = Date.now() - (72 * 60 * 60 * 1000);
+      var results = [];
+      for (var i = 0; i < data.items.length && results.length < 8; i++) {
+        var item = data.items[i];
+        var title = item.title || '';
+        var summary = (item.description || '').replace(/<[^>]*>/g, '').substring(0, 150);
+        var pubDate = item.pubDate || '';
+        // Age filter: skip if older than 72 hours
+        if (pubDate) {
+          var d = new Date(pubDate);
+          if (!isNaN(d.getTime()) && d.getTime() < cutoff) continue;
+        }
+        // Relevance filter: must contain a financial keyword
+        if (!isFinanciallyRelevant(title, summary)) continue;
+        results.push({
+          title: title,
           link: item.link || '',
-          date: item.pubDate || '',
-          summary: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 150),
+          date: pubDate,
+          summary: summary,
           source: feed.source,
-          tag: feed.tag,
+          tag: classifyClientArticle(title, summary),
           isGov: false
-        };
-      });
+        });
+      }
+      return results;
     })
     .catch(function() { return []; });
 }
@@ -951,6 +997,14 @@ function fetchNews() {
       for (var i = 0; i < results.length; i++) {
         allItems = allItems.concat(results[i]);
       }
+
+      // Age filter on worker items (72h) -- premium feeds already filtered in fetchSingleFeed
+      var cutoffMs = Date.now() - (72 * 60 * 60 * 1000);
+      allItems = allItems.filter(function(item) {
+        if (!item.date) return true;
+        var d = new Date(item.date);
+        return isNaN(d.getTime()) || d.getTime() >= cutoffMs;
+      });
 
       // Deduplicate by normalized title (first 50 chars)
       var seen = {};
