@@ -74,9 +74,11 @@ var FOMC_2026 = [
 ];
 
 var RSS_FEEDS = [
-  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED' },
-  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml', source: 'Fed Banking', tag: 'FED' },
-  { url: 'https://www.federalreserve.gov/feeds/press_other.xml', source: 'Fed Other', tag: 'FED' },
+  { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED', isGov: true },
+  { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml', source: 'Fed Banking', tag: 'FED', isGov: true },
+  { url: 'https://www.federalreserve.gov/feeds/press_other.xml', source: 'Fed Other', tag: 'FED', isGov: true },
+  { url: 'https://www.ecb.europa.eu/rss/press.html', source: 'ECB', tag: 'FED', isGov: true },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS', isGov: false },
 ];
 
 var CORS = {
@@ -112,7 +114,7 @@ function jsonResp(data, status) {
     status: status || 200,
     headers: Object.assign({}, CORS, {
       'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=300',
+      'Cache-Control': 'public, max-age=8',
     }),
   });
 }
@@ -170,9 +172,9 @@ async function handleMarketData(env) {
 async function handleNews(env) {
   var allItems = [];
 
-  // Government RSS feeds (free, no key)
+  // RSS feeds (free — Fed, ECB, CNBC)
   var rssResults = await Promise.all(RSS_FEEDS.map(function(feed) {
-    return fetchRSS(feed.url, feed.source, feed.tag);
+    return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
   }));
   for (var i = 0; i < rssResults.length; i++) {
     allItems = allItems.concat(rssResults[i]);
@@ -187,13 +189,24 @@ async function handleNews(env) {
     } catch (e) { /* continue with RSS only */ }
   }
 
-  // Sort by date descending, cap at 30
-  allItems.sort(function(a, b) {
+  // Deduplicate by normalized title
+  var seen = {};
+  var deduped = [];
+  for (var i = 0; i < allItems.length; i++) {
+    var normTitle = allItems[i].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 60);
+    if (!seen[normTitle]) {
+      seen[normTitle] = true;
+      deduped.push(allItems[i]);
+    }
+  }
+
+  // Sort by date descending, cap at 40
+  deduped.sort(function(a, b) {
     return new Date(b.date || 0) - new Date(a.date || 0);
   });
-  allItems = allItems.slice(0, 30);
+  deduped = deduped.slice(0, 40);
 
-  return jsonResp({ timestamp: new Date().toISOString(), items: allItems });
+  return jsonResp({ timestamp: new Date().toISOString(), items: deduped });
 }
 
 // ============================================
@@ -292,17 +305,17 @@ async function fetchAllNYFed() {
 // RSS FEED PARSING
 // ============================================
 
-async function fetchRSS(url, sourceName, tag) {
+async function fetchRSS(url, sourceName, tag, isGov) {
   try {
     var resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     var xml = await resp.text();
-    return parseRSS(xml, sourceName, tag);
+    return parseRSS(xml, sourceName, tag, isGov !== false);
   } catch (e) {
     return [];
   }
 }
 
-function parseRSS(xml, sourceName, tag) {
+function parseRSS(xml, sourceName, tag, isGov) {
   var items = [];
   var itemRegex = /<item>([\s\S]*?)<\/item>/gi;
   var match;
@@ -321,7 +334,7 @@ function parseRSS(xml, sourceName, tag) {
         summary: desc ? decodeEntities(desc).substring(0, 200) : '',
         source: sourceName,
         tag: autoTag,
-        isGov: true,
+        isGov: isGov,
       });
     }
   }
@@ -335,7 +348,9 @@ function classifyArticle(title, desc, defaultTag) {
   if (text.indexOf('fomc') !== -1 || text.indexOf('federal open market') !== -1 || text.indexOf('interest rate') !== -1 || text.indexOf('monetary policy') !== -1) return 'FED';
   if (text.indexOf('gdp') !== -1 || text.indexOf('gross domestic') !== -1) return 'GDP';
   if (text.indexOf('treasury') !== -1 || text.indexOf('yield') !== -1 || text.indexOf('bond') !== -1) return 'RATES';
-  if (text.indexOf('oil') !== -1 || text.indexOf('commodity') !== -1 || text.indexOf('crude') !== -1) return 'COMMODITIES';
+  if (text.indexOf('oil') !== -1 || text.indexOf('commodity') !== -1 || text.indexOf('crude') !== -1 || text.indexOf('energy') !== -1 || text.indexOf('opec') !== -1) return 'COMMODITIES';
+  if (text.indexOf('forex') !== -1 || text.indexOf('dollar') !== -1 || text.indexOf('currency') !== -1 || text.indexOf('yuan') !== -1) return 'FX';
+  if (text.indexOf('banking') !== -1 || text.indexOf('credit') !== -1) return 'CREDIT';
   return defaultTag;
 }
 

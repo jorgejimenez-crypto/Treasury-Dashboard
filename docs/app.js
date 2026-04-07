@@ -3,7 +3,13 @@
  *
  * Fetches market data + news from the Cloudflare Worker proxy,
  * computes alerts, renders all panels, manages yield curve chart.
- * Auto-refreshes every 15 minutes.
+ *
+ * REFRESH STRATEGY:
+ *   - Energy ticker: 10s during market hours, 60s overnight (via Worker fast endpoint)
+ *   - Full dashboard: 15 min (via Worker /api/market-data)
+ *   - News: 30 min (via Worker /api/news)
+ *   - localStorage cache: instant display on load, background refresh
+ *   - Exponential backoff on errors: 10s → 15s → 30s → 60s
  */
 
 // ============================================
@@ -12,8 +18,10 @@
 
 var WORKER_URL = 'https://treasury-proxy.treasurydashboard.workers.dev';
 
-var REFRESH_MS = 15 * 60 * 1000;
-var NEWS_REFRESH_MS = 30 * 60 * 1000;
+var REFRESH_MS = 15 * 60 * 1000;        // 15 min full dashboard
+var NEWS_REFRESH_MS = 30 * 60 * 1000;    // 30 min news
+var TICKER_REFRESH_MS = 10 * 1000;       // 10s energy ticker (market hours)
+var TICKER_REFRESH_SLOW = 60 * 1000;     // 60s ticker (off hours)
 
 var THRESHOLDS = {
   commodityPct: 2.0,
@@ -35,16 +43,17 @@ var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry 
 var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
 var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'USDCNH'];
 var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', USDCNH: 'USD/CNH' };
-// FX converter: map each currency to its "1 unit = X USD" factor
-// For XXX/USD pairs (EUR, GBP, AUD): toUSD = rate
-// For USD/XXX pairs (JPY, CAD, CHF, CNH): toUSD = 1/rate
 var FX_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH'];
 var FX_YAHOO_MAP = { EUR: 'EURUSD', GBP: 'GBPUSD', AUD: 'AUDUSD', JPY: 'USDJPY', CAD: 'USDCAD', CHF: 'USDCHF', CNH: 'USDCNH' };
-var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true }; // USD/XXX pairs
+var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true };
 var YIELD_KEYS = ['DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '30Y UST' };
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
+
+// Ticker symbols for the scrolling bar
+var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'VIX', 'DXY', 'SP500'];
+var TICKER_LABELS = { WTI: 'CL=F', Brent: 'BZ=F', NatGas: 'NG=F', HeatOil: 'HO=F', Gold: 'GC=F', VIX: 'VIX', DXY: 'DXY', SP500: 'SPX' };
 
 var MACRO_DISPLAY = [
   { id: 'FEDFUNDS',        label: 'Fed Funds',     suffix: '%',  dec: 2 },
@@ -57,8 +66,9 @@ var MACRO_DISPLAY = [
   { id: 'WM2NS',           label: 'M2 YoY',        suffix: '%',  dec: 1 },
 ];
 
-// Economic calendar — hardcoded major releases for near-term display
-// Update quarterly for accuracy
+// High-impact calendar events get urgency coloring
+var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
+
 var ECON_CALENDAR = [
   { date: '2026-04-06', time: '10:00', event: 'ISM Services PMI (Mar)', consensus: '54.8', prior: '56.1' },
   { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)', consensus: null, prior: null, fomc: true },
@@ -90,7 +100,10 @@ var ECON_CALENDAR = [
 var yieldCurveChart = null;
 var refreshTimer = null;
 var newsTimer = null;
-var cachedYahoo = null; // stored for FX converter access
+var tickerTimer = null;
+var cachedYahoo = null;
+var tickerBackoff = TICKER_REFRESH_MS;   // exponential backoff tracker
+var fxConverterInitialized = false;      // track if event listeners are attached
 
 // ============================================
 // HELPERS
@@ -131,23 +144,45 @@ function nowET() {
 function isMarketOpen() {
   var n = nowET();
   var day = n.getDay();
-  var h = n.getHours();
-  var m = n.getMinutes();
   if (day === 0 || day === 6) return false;
-  var mins = h * 60 + m;
-  return mins >= 570 && mins < 960; // 9:30 AM - 4:00 PM ET
+  var mins = n.getHours() * 60 + n.getMinutes();
+  return mins >= 570 && mins < 960;
 }
 
 function formatTime(dateStr) {
   try {
     var d = new Date(dateStr);
     if (isNaN(d)) return '';
-    var now = new Date();
-    var diff = now - d;
+    var diff = new Date() - d;
     if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
     if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch (e) { return ''; }
+}
+
+function isHighImpact(eventName) {
+  for (var i = 0; i < HIGH_IMPACT_KEYWORDS.length; i++) {
+    if (eventName.indexOf(HIGH_IMPACT_KEYWORDS[i]) !== -1) return true;
+  }
+  return false;
+}
+
+// ============================================
+// LOCALSTORAGE CACHE (instant load on refresh)
+// ============================================
+
+function cacheData(key, data) {
+  try { localStorage.setItem('td_' + key, JSON.stringify({ t: Date.now(), d: data })); } catch (e) {}
+}
+
+function getCachedData(key, maxAgeMs) {
+  try {
+    var raw = localStorage.getItem('td_' + key);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (Date.now() - parsed.t > (maxAgeMs || 300000)) return null;
+    return parsed.d;
+  } catch (e) { return null; }
 }
 
 // ============================================
@@ -192,17 +227,15 @@ function renderMetric(label, value, delta, dateStr, opts) {
 
 function addSourceAttribution(panelId, provider, lastDate) {
   var panel = document.getElementById(panelId);
-  // Remove existing source footer if any
+  if (!panel) return;
   var existing = panel.querySelector('.panel-source');
   if (existing) existing.remove();
-
   var div = document.createElement('div');
   div.className = 'panel-source';
   var provSpan = document.createElement('span');
   provSpan.className = 'panel-source-provider';
   provSpan.textContent = provider;
   div.appendChild(provSpan);
-
   if (lastDate) {
     var timeSpan = document.createElement('span');
     timeSpan.className = 'panel-source-time';
@@ -213,6 +246,34 @@ function addSourceAttribution(panelId, provider, lastDate) {
 }
 
 // ============================================
+// SCROLLING TICKER BAR
+// ============================================
+
+function renderTicker(yahoo) {
+  if (!yahoo) return;
+  var container = document.getElementById('ticker-content');
+  if (!container) return;
+  var html = '';
+  for (var i = 0; i < TICKER_SYMBOLS.length; i++) {
+    var key = TICKER_SYMBOLS[i];
+    var d = yahoo[key];
+    if (!d || d.current == null) continue;
+    var pct = pctChange(d.current, d.prior);
+    var cls = pct == null ? 'ticker-flat' : (pct >= 0 ? 'ticker-up' : 'ticker-down');
+    var pctStr = pct != null ? (' ' + sign(pct) + pct.toFixed(2) + '%') : '';
+    var dec = (key === 'VIX' || key === 'DXY') ? 2 : 2;
+    var prefix = (key === 'VIX' || key === 'DXY' || key === 'SP500') ? '' : '$';
+    html += '<span class="ticker-item">'
+      + '<span class="ticker-symbol">' + TICKER_LABELS[key] + '</span>'
+      + '<span class="ticker-price">' + prefix + d.current.toFixed(dec) + '</span>'
+      + '<span class="' + cls + '">' + pctStr + '</span>'
+      + '</span>';
+  }
+  // Duplicate content for seamless scroll loop
+  container.innerHTML = html + html;
+}
+
+// ============================================
 // ALERT COMPUTATION
 // ============================================
 
@@ -220,7 +281,7 @@ function computeAlerts(data) {
   var alerts = [];
   var yahoo = data.yahoo;
 
-  // Commodity pressure
+  // Commodity price surge detection (reframed from margin pressure)
   var signals = [];
   for (var i = 0; i < ENERGY_KEYS.length; i++) {
     var k = ENERGY_KEYS[i];
@@ -233,9 +294,9 @@ function computeAlerts(data) {
     }
   }
   if (signals.length >= THRESHOLDS.multiBooksMin) {
-    alerts.push({ level: 'red', msg: 'ELEVATED MARGIN PRESSURE: ' + signals.join(', ') + '. Multiple books affected.' });
+    alerts.push({ level: 'red', msg: 'COMMODITY SURGE: ' + signals.join(', ') + '. Broad-based input cost pressure.' });
   } else if (signals.length === 1) {
-    alerts.push({ level: 'yellow', msg: 'WATCH: ' + signals[0] + '. Monitor single-book exposure.' });
+    alerts.push({ level: 'yellow', msg: 'COMMODITY WATCH: ' + signals[0] + '. Rising input cost trend.' });
   }
 
   // VIX
@@ -308,8 +369,6 @@ function renderYields(fred) {
       grid.appendChild(renderMetric(YIELD_LABELS[sid], 'N/A', '', ''));
     }
   }
-
-  // 2s10s spread
   var footer = document.getElementById('yields-footer');
   var dgs2 = fred.DGS2;
   var dgs10 = fred.DGS10;
@@ -330,17 +389,14 @@ function renderYieldCurve(fred) {
     labels.push(CURVE_LABELS[i]);
     values.push(d && d.current != null ? d.current : null);
   }
-
   var canvas = document.getElementById('yield-curve-canvas');
   var ctx = canvas.getContext('2d');
-
   if (yieldCurveChart) {
     yieldCurveChart.data.labels = labels;
     yieldCurveChart.data.datasets[0].data = values;
     yieldCurveChart.update();
     return;
   }
-
   yieldCurveChart = new Chart(ctx, {
     type: 'line',
     plugins: [ChartDataLabels],
@@ -400,24 +456,19 @@ function renderYieldCurve(fred) {
 function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
   grid.innerHTML = '';
-
   var sofr = nyfed.sofr;
   var effr = nyfed.effr;
-
   if (sofr && sofr.rate != null) {
     var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
     grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', volNote, sofr.date));
   } else {
     grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
   }
-
   if (effr && effr.rate != null) {
     grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', '', effr.date));
   } else {
     grid.appendChild(renderMetric('EFFR', 'N/A', '', ''));
   }
-
-  // ON RRP
   var onrrp = fred.RRPONTSYD;
   if (onrrp && onrrp.current != null) {
     var valB = (onrrp.current / 1000).toFixed(1);
@@ -425,11 +476,7 @@ function renderFunding(nyfed, fred) {
   } else {
     grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
   }
-
-  // Fed Funds from macro (placeholder metric)
   grid.appendChild(renderMetric(' ', ' ', '', '', {}));
-
-  // Footer: SOFR-EFFR spread
   var footer = document.getElementById('funding-footer');
   if (sofr && effr && sofr.rate != null && effr.rate != null) {
     var spread = Math.round((sofr.rate - effr.rate) * 100);
@@ -442,8 +489,6 @@ function renderFunding(nyfed, fred) {
 function renderRisk(yahoo, fred) {
   var riskGrid = document.getElementById('risk-grid');
   riskGrid.innerHTML = '';
-
-  // DXY
   var dxy = yahoo.DXY;
   if (dxy && dxy.current != null) {
     var dpct = pctChange(dxy.current, dxy.prior);
@@ -452,8 +497,6 @@ function renderRisk(yahoo, fred) {
   } else {
     riskGrid.appendChild(renderMetric('DXY', 'N/A', '', ''));
   }
-
-  // VIX
   var vix = yahoo.VIX;
   if (vix && vix.current != null) {
     var vpct = pctChange(vix.current, vix.prior);
@@ -462,11 +505,8 @@ function renderRisk(yahoo, fred) {
   } else {
     riskGrid.appendChild(renderMetric('VIX', 'N/A', '', ''));
   }
-
-  // Credit spreads
   var creditGrid = document.getElementById('credit-grid');
   creditGrid.innerHTML = '';
-
   var ig = fred.BAMLC0A0CM;
   if (ig && ig.current != null) {
     var igBps = Math.round(ig.current * 100);
@@ -476,7 +516,6 @@ function renderRisk(yahoo, fred) {
   } else {
     creditGrid.appendChild(renderMetric('IG OAS', 'N/A', '', ''));
   }
-
   var hy = fred.BAMLH0A0HYM2;
   if (hy && hy.current != null) {
     var hyBps = Math.round(hy.current * 100);
@@ -502,8 +541,7 @@ function renderCommodities(yahoo) {
       grid.appendChild(renderMetric(COMMODITY_LABELS[k], 'N/A', '', ''));
     }
   }
-
-  // Footer: WTI/Brent spread + pressure
+  // Footer: WTI/Brent spread + commodity status (reframed from margin pressure)
   var footer = document.getElementById('commodities-footer');
   var txt = '';
   var wti = yahoo.WTI;
@@ -512,8 +550,6 @@ function renderCommodities(yahoo) {
     var spread = wti.current - brent.current;
     txt += 'WTI/Brent: ' + (spread >= 0 ? '+' : '') + '$' + spread.toFixed(2);
   }
-
-  // Pressure signal
   var sigs = [];
   for (var j = 0; j < ENERGY_KEYS.length; j++) {
     var ek = ENERGY_KEYS[j];
@@ -525,16 +561,14 @@ function renderCommodities(yahoo) {
       }
     }
   }
-  if (sigs.length >= 2) txt += (txt ? ' | ' : '') + 'ELEVATED: ' + sigs.join(', ');
+  if (sigs.length >= 2) txt += (txt ? ' | ' : '') + 'SURGE: ' + sigs.join(', ');
   else if (sigs.length === 1) txt += (txt ? ' | ' : '') + 'WATCH: ' + sigs[0];
-  else txt += (txt ? ' | ' : '') + 'Margin: normal';
-
+  else txt += (txt ? ' | ' : '') + 'Commodities: stable';
   footer.textContent = txt;
 }
 
 function fxDecimals(key) {
   if (key === 'USDJPY' || key === 'USDCNH') return 2;
-  if (key === 'USDCAD' || key === 'USDCHF') return 4;
   return 4;
 }
 
@@ -552,27 +586,27 @@ function renderForex(yahoo) {
       grid.appendChild(renderMetric(FOREX_LABELS[k], 'N/A', '', ''));
     }
   }
-  initFxConverter(yahoo);
+  initFxConverter();
 }
 
 // ============================================
-// FX CONVERTER
+// FX CONVERTER (FIXED: uses cachedYahoo, not stale closure)
 // ============================================
 
-function getToUSD(ccy, yahoo) {
+function getToUSD(ccy) {
   if (ccy === 'USD') return 1;
+  if (!cachedYahoo) return null;
   var key = FX_YAHOO_MAP[ccy];
-  if (!key || !yahoo[key] || yahoo[key].current == null) return null;
-  var rate = yahoo[key].current;
+  if (!key || !cachedYahoo[key] || cachedYahoo[key].current == null) return null;
+  var rate = cachedYahoo[key].current;
   return FX_INVERTED[ccy] ? 1 / rate : rate;
 }
 
-function initFxConverter(yahoo) {
+function initFxConverter() {
   var baseSelect = document.getElementById('fx-base');
   var quoteSelect = document.getElementById('fx-quote');
-
-  // Only populate dropdowns once
-  if (baseSelect.options.length <= 1) {
+  if (!fxConverterInitialized) {
+    fxConverterInitialized = true;
     baseSelect.innerHTML = '';
     quoteSelect.innerHTML = '';
     for (var i = 0; i < FX_CURRENCIES.length; i++) {
@@ -582,9 +616,8 @@ function initFxConverter(yahoo) {
     }
     baseSelect.value = 'USD';
     quoteSelect.value = 'EUR';
-
-    // Event listeners
-    var compute = function() { computeFxConversion(yahoo); };
+    // Event listeners use cachedYahoo (always fresh) via computeFxConversion()
+    var compute = function() { computeFxConversion(); };
     baseSelect.addEventListener('change', compute);
     quoteSelect.addEventListener('change', compute);
     document.getElementById('fx-amount').addEventListener('input', compute);
@@ -592,39 +625,34 @@ function initFxConverter(yahoo) {
       var tmp = baseSelect.value;
       baseSelect.value = quoteSelect.value;
       quoteSelect.value = tmp;
-      computeFxConversion(yahoo);
+      computeFxConversion();
     });
   }
-
-  // Recompute with latest rates
-  computeFxConversion(yahoo);
+  computeFxConversion();
 }
 
-function computeFxConversion(yahoo) {
+function computeFxConversion() {
   var amount = parseFloat(document.getElementById('fx-amount').value);
   var base = document.getElementById('fx-base').value;
   var quote = document.getElementById('fx-quote').value;
   var resultEl = document.getElementById('fx-result');
   var rateEl = document.getElementById('fx-rate-line');
-
   if (isNaN(amount) || base === quote) {
     resultEl.textContent = base === quote ? fmt(amount, 2, '') + ' ' + quote : '--';
     rateEl.textContent = base === quote ? '1:1' : '';
     return;
   }
-
-  var baseUSD = getToUSD(base, yahoo);
-  var quoteUSD = getToUSD(quote, yahoo);
+  var baseUSD = getToUSD(base);
+  var quoteUSD = getToUSD(quote);
   if (!baseUSD || !quoteUSD) {
     resultEl.textContent = 'Rate unavailable';
     rateEl.textContent = '';
     return;
   }
-
   var crossRate = baseUSD / quoteUSD;
   var result = amount * crossRate;
   resultEl.textContent = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
-  rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(crossRate > 10 ? 2 : 4) + ' ' + quote;
+  rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(crossRate > 10 ? 2 : 6) + ' ' + quote;
 }
 
 function renderMacro(macro) {
@@ -658,45 +686,35 @@ function renderMacro(macro) {
 function renderCalendar(fomc) {
   var container = document.getElementById('calendar-content');
   container.innerHTML = '';
-
   var todayStr = new Date().toISOString().split('T')[0];
-
-  // Filter upcoming events (today + next 30 days)
   var upcoming = [];
   for (var i = 0; i < ECON_CALENDAR.length; i++) {
     var ev = ECON_CALENDAR[i];
-    if (ev.date >= todayStr) {
-      upcoming.push(ev);
-    }
+    if (ev.date >= todayStr) upcoming.push(ev);
   }
   upcoming = upcoming.slice(0, 12);
-
   if (upcoming.length === 0) {
-    container.innerHTML = '<div class="news-empty">No upcoming events in calendar. Update ECON_CALENDAR in app.js.</div>';
+    container.innerHTML = '<div class="news-empty">No upcoming events. Update ECON_CALENDAR in app.js.</div>';
     return;
   }
-
   var table = document.createElement('table');
   table.className = 'cal-table';
-
   var thead = document.createElement('thead');
   thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th></tr>';
   table.appendChild(thead);
-
   var tbody = document.createElement('tbody');
   for (var j = 0; j < upcoming.length; j++) {
     var e = upcoming[j];
     var tr = document.createElement('tr');
     if (e.date === todayStr) tr.className = 'today';
-
+    // Color-code high-impact events
+    if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
     var d = new Date(e.date + 'T12:00:00');
     var dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
     if (e.time && e.time !== 'ALL') dateLabel += ' ' + e.time;
-
     var eventCell = e.event;
     if (e.fomc) eventCell = '<span class="cal-fomc">' + e.event + '</span>';
     if (e.date === todayStr) eventCell += ' <span class="cal-tag cal-tag-today">TODAY</span>';
-
     tr.innerHTML = '<td class="cal-date">' + dateLabel + '</td>'
       + '<td class="cal-event">' + eventCell + '</td>'
       + '<td class="cal-values">' + (e.consensus || '--') + '</td>'
@@ -705,8 +723,6 @@ function renderCalendar(fomc) {
   }
   table.appendChild(tbody);
   container.appendChild(table);
-
-  // FOMC countdown at bottom
   if (fomc && fomc.next) {
     var fomcDiv = document.createElement('div');
     fomcDiv.className = 'panel-footer';
@@ -719,27 +735,21 @@ function renderNews(items) {
   var container = document.getElementById('news-content');
   var countBadge = document.getElementById('news-count');
   container.innerHTML = '';
-
   if (!items || items.length === 0) {
-    container.innerHTML = '<div class="news-empty">No news available. News refreshes every 30 min.</div>';
+    container.innerHTML = '<div class="news-empty">No news available. Refreshes every 30 min.</div>';
     countBadge.textContent = '';
     return;
   }
-
   countBadge.textContent = items.length;
-
   for (var i = 0; i < items.length && i < 15; i++) {
     var item = items[i];
     var div = document.createElement('div');
     div.className = 'news-item';
-
     var tagSpan = document.createElement('span');
     tagSpan.className = 'news-tag news-tag-' + (item.tag || 'MARKETS');
     tagSpan.textContent = item.tag || 'NEWS';
-
     var body = document.createElement('div');
     body.className = 'news-body';
-
     var titleDiv = document.createElement('div');
     titleDiv.className = 'news-title';
     if (item.link) {
@@ -752,14 +762,12 @@ function renderNews(items) {
     } else {
       titleDiv.textContent = item.title;
     }
-
     var metaDiv = document.createElement('div');
     metaDiv.className = 'news-meta';
     var metaText = item.source || '';
     if (item.isGov) metaText = '<span class="news-gov">GOV</span> ' + metaText;
     if (item.date) metaText += ' · ' + formatTime(item.date);
     metaDiv.innerHTML = metaText;
-
     body.appendChild(titleDiv);
     body.appendChild(metaDiv);
     div.appendChild(tagSpan);
@@ -776,11 +784,9 @@ function renderDashboard(data) {
   var now = nowET();
   var dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   var timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
+  var refreshLabel = isMarketOpen() ? 'Ticker: 10s' : 'Ticker: 60s';
+  document.getElementById('header-meta').textContent = dateStr + '  |  Last refresh: ' + timeStr + '  |  ' + refreshLabel + '  |  Full: 15 min';
 
-  // Header
-  document.getElementById('header-meta').textContent = dateStr + '  |  Last refresh: ' + timeStr + '  |  Auto-refresh: 15 min';
-
-  // Market status
   var statusEl = document.getElementById('market-status');
   if (isMarketOpen()) {
     statusEl.textContent = 'MARKET OPEN';
@@ -790,7 +796,6 @@ function renderDashboard(data) {
     statusEl.className = 'market-badge closed';
   }
 
-  // FOMC badge
   var fomcEl = document.getElementById('fomc-badge');
   if (data.fomc && data.fomc.next) {
     fomcEl.textContent = 'FOMC: ' + data.fomc.daysAway + 'd';
@@ -798,7 +803,6 @@ function renderDashboard(data) {
     fomcEl.className = data.fomc.daysAway <= 7 ? 'fomc-badge imminent' : 'fomc-badge';
   }
 
-  // Alerts
   var alertBar = document.getElementById('alert-bar');
   alertBar.innerHTML = '';
   var alerts = computeAlerts(data);
@@ -810,10 +814,12 @@ function renderDashboard(data) {
     }
   }
 
-  // Cache yahoo for FX converter
+  // Cache for FX converter + ticker
   cachedYahoo = data.yahoo;
+  cacheData('market', data);
 
   // Render all panels
+  renderTicker(data.yahoo);
   renderYields(data.fred);
   renderYieldCurve(data.fred);
   renderFunding(data.nyfed, data.fred);
@@ -824,7 +830,7 @@ function renderDashboard(data) {
   renderMacro(data.macro);
   renderCalendar(data.fomc);
 
-  // Source attribution per panel
+  // Source attribution
   var yDate = data.fred.DGS10 ? data.fred.DGS10.date : null;
   addSourceAttribution('panel-yields', 'FRED', yDate);
   addSourceAttribution('panel-funding', 'NY Fed / FRED', data.nyfed.sofr ? data.nyfed.sofr.date : null);
@@ -836,13 +842,12 @@ function renderDashboard(data) {
   addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
   addSourceAttribution('panel-news', 'Federal Reserve RSS', null);
 
-  // Show dashboard
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'grid';
 }
 
 // ============================================
-// DATA FETCHING
+// DATA FETCHING (with localStorage cache + backoff)
 // ============================================
 
 function fetchData() {
@@ -851,13 +856,13 @@ function fetchData() {
     document.getElementById('setup-banner').style.display = 'block';
     return;
   }
-
   fetch(WORKER_URL + '/api/market-data')
     .then(function(resp) {
       if (!resp.ok) throw new Error('Worker returned ' + resp.status);
       return resp.json();
     })
     .then(function(data) {
+      tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
       renderDashboard(data);
     })
     .catch(function(err) {
@@ -870,19 +875,88 @@ function fetchData() {
 
 function fetchNews() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-
   fetch(WORKER_URL + '/api/news')
     .then(function(resp) {
       if (!resp.ok) throw new Error('News fetch failed');
       return resp.json();
     })
     .then(function(data) {
+      cacheData('news', data.items);
       renderNews(data.items);
     })
     .catch(function() {
-      // News is optional — don't block dashboard
       renderNews([]);
     });
+}
+
+// Smart ticker refresh: faster during market hours, with backoff on error
+function tickerRefresh() {
+  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
+  fetch(WORKER_URL + '/api/market-data')
+    .then(function(resp) {
+      if (!resp.ok) throw new Error(resp.status);
+      return resp.json();
+    })
+    .then(function(data) {
+      cachedYahoo = data.yahoo;
+      renderTicker(data.yahoo);
+      // Also update commodity prices (most volatile)
+      renderCommodities(data.yahoo);
+      renderRisk(data.yahoo, data.fred || {});
+      // Reset backoff on success
+      tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
+    })
+    .catch(function() {
+      // Exponential backoff: 10s → 15s → 30s → 60s max
+      tickerBackoff = Math.min(tickerBackoff * 1.5, 60000);
+    })
+    .finally(function() {
+      clearTimeout(tickerTimer);
+      tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
+    });
+}
+
+// ============================================
+// QUICK NOTES (localStorage trading journal)
+// ============================================
+
+function initNotes() {
+  var panel = document.getElementById('notes-panel');
+  var textarea = document.getElementById('notes-text');
+  var savedMsg = document.getElementById('notes-saved');
+
+  // Load saved notes
+  var saved = localStorage.getItem('td_notes') || '';
+  textarea.value = saved;
+
+  // Auto-save on input
+  var saveTimeout = null;
+  textarea.addEventListener('input', function() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(function() {
+      localStorage.setItem('td_notes', textarea.value);
+      savedMsg.textContent = 'Saved';
+      setTimeout(function() { savedMsg.textContent = ''; }, 1500);
+    }, 500);
+  });
+
+  // Close button
+  document.getElementById('notes-close').addEventListener('click', function() {
+    panel.style.display = 'none';
+  });
+
+  // Clear button
+  document.getElementById('notes-clear').addEventListener('click', function() {
+    if (confirm('Clear all notes?')) {
+      textarea.value = '';
+      localStorage.removeItem('td_notes');
+    }
+  });
+
+  // Toggle button in header
+  document.getElementById('btn-notes').addEventListener('click', function() {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  });
 }
 
 // ============================================
@@ -891,64 +965,71 @@ function fetchNews() {
 
 function initShortcuts() {
   document.addEventListener('keydown', function(e) {
-    // Don't trigger if typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      if (e.key === 'Escape') {
+        document.getElementById('notes-panel').style.display = 'none';
+        e.target.blur();
+      }
+      return;
+    }
 
     var modal = document.getElementById('shortcuts-modal');
 
     if (e.key === 'Escape') {
       modal.style.display = 'none';
+      document.getElementById('notes-panel').style.display = 'none';
       return;
     }
-
     if (e.key === '?' || e.key === '/') {
       e.preventDefault();
       modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
       return;
     }
-
     if (e.key === 'r' || e.key === 'R') {
       e.preventDefault();
       fetchData();
       fetchNews();
       return;
     }
-
     if (e.key === 'n' || e.key === 'N') {
       e.preventDefault();
-      var news = document.getElementById('panel-news');
-      news.classList.toggle('collapsed');
+      document.getElementById('panel-news').classList.toggle('collapsed');
       return;
     }
-
     if (e.key === 'c' || e.key === 'C') {
       e.preventDefault();
-      var cal = document.getElementById('panel-calendar');
-      cal.classList.toggle('collapsed');
+      document.getElementById('panel-calendar').classList.toggle('collapsed');
+      return;
+    }
+    if (e.key === 'j' || e.key === 'J') {
+      e.preventDefault();
+      var np = document.getElementById('notes-panel');
+      np.style.display = np.style.display === 'none' ? 'block' : 'none';
+      if (np.style.display === 'block') document.getElementById('notes-text').focus();
+      return;
+    }
+    if (e.key === 'l' || e.key === 'L') {
+      e.preventDefault();
+      document.getElementById('panel-live').classList.toggle('collapsed');
       return;
     }
   });
 
-  // Button handlers
   document.getElementById('btn-refresh').addEventListener('click', function() {
     fetchData();
     fetchNews();
   });
-
   document.getElementById('btn-shortcuts').addEventListener('click', function() {
     var modal = document.getElementById('shortcuts-modal');
     modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
   });
-
   document.getElementById('modal-close').addEventListener('click', function() {
     document.getElementById('shortcuts-modal').style.display = 'none';
   });
-
   document.getElementById('shortcuts-modal').addEventListener('click', function(e) {
     if (e.target === this) this.style.display = 'none';
   });
 
-  // Panel collapse toggle
   var panels = document.querySelectorAll('.panel h2');
   for (var i = 0; i < panels.length; i++) {
     panels[i].addEventListener('click', function() {
@@ -961,8 +1042,27 @@ function initShortcuts() {
 // INIT
 // ============================================
 
+// 1. Show cached data instantly if available
+var cachedMarket = getCachedData('market', 600000); // 10 min cache
+if (cachedMarket) {
+  try { renderDashboard(cachedMarket); } catch (e) {}
+}
+var cachedNews = getCachedData('news', 3600000); // 1 hr cache
+if (cachedNews) {
+  try { renderNews(cachedNews); } catch (e) {}
+}
+
+// 2. Background fresh fetch
 fetchData();
 fetchNews();
+
+// 3. Set up refresh timers
 refreshTimer = setInterval(fetchData, REFRESH_MS);
 newsTimer = setInterval(fetchNews, NEWS_REFRESH_MS);
+
+// 4. Start smart ticker refresh (10s during market hours)
+tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
+
+// 5. Init interactive features
 initShortcuts();
+initNotes();
