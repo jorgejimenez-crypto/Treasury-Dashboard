@@ -51,9 +51,13 @@ var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '3
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
-// Ticker symbols for the scrolling bar
+// Ticker symbols — descriptive labels with exchange symbols
 var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'VIX', 'DXY', 'SP500'];
-var TICKER_LABELS = { WTI: 'CL=F', Brent: 'BZ=F', NatGas: 'NG=F', HeatOil: 'HO=F', Gold: 'GC=F', VIX: 'VIX', DXY: 'DXY', SP500: 'SPX' };
+var TICKER_LABELS = {
+  WTI: 'WTI Crude (CL=F)', Brent: 'Brent Crude (BZ=F)', NatGas: 'Nat Gas (NG=F)',
+  HeatOil: 'Heating Oil (HO=F)', Gold: 'Gold (GC=F)', VIX: 'CBOE VIX',
+  DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)'
+};
 
 var MACRO_DISPLAY = [
   { id: 'FEDFUNDS',        label: 'Fed Funds',     suffix: '%',  dec: 2 },
@@ -891,19 +895,75 @@ function fetchData() {
     });
 }
 
+// Premium RSS feeds fetched client-side via rss2json.com (free, 10K req/day)
+var PREMIUM_FEEDS = [
+  { url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml', source: 'WSJ', tag: 'MARKETS' },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS' },
+  { url: 'https://feeds.marketwatch.com/marketwatch/topstories/', source: 'MarketWatch', tag: 'MARKETS' },
+  { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance', tag: 'MARKETS' },
+];
+
+function fetchSingleFeed(feed) {
+  var apiUrl = RSS2JSON_BASE + encodeURIComponent(feed.url);
+  return fetch(apiUrl)
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status !== 'ok' || !data.items) return [];
+      return data.items.slice(0, 8).map(function(item) {
+        return {
+          title: item.title || '',
+          link: item.link || '',
+          date: item.pubDate || '',
+          summary: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 150),
+          source: feed.source,
+          tag: feed.tag,
+          isGov: false
+        };
+      });
+    })
+    .catch(function() { return []; });
+}
+
 function fetchNews() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-  fetch(WORKER_URL + '/api/news')
+
+  // Fetch Worker news (Fed/ECB/CNBC RSS) + premium feeds in parallel
+  var workerPromise = fetch(WORKER_URL + '/api/news')
     .then(function(resp) {
-      if (!resp.ok) throw new Error('News fetch failed');
+      if (!resp.ok) throw new Error('Worker news failed');
       return resp.json();
     })
-    .then(function(data) {
-      cacheData('news', data.items);
-      renderNews(data.items);
-    })
-    .catch(function() {
-      renderNews([]);
+    .then(function(data) { return data.items || []; })
+    .catch(function() { return []; });
+
+  var premiumPromises = PREMIUM_FEEDS.map(fetchSingleFeed);
+
+  Promise.all([workerPromise].concat(premiumPromises))
+    .then(function(results) {
+      var allItems = [];
+      for (var i = 0; i < results.length; i++) {
+        allItems = allItems.concat(results[i]);
+      }
+
+      // Deduplicate by normalized title (first 50 chars)
+      var seen = {};
+      var deduped = [];
+      for (var j = 0; j < allItems.length; j++) {
+        var norm = allItems[j].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
+        if (norm && !seen[norm]) {
+          seen[norm] = true;
+          deduped.push(allItems[j]);
+        }
+      }
+
+      // Sort by date descending
+      deduped.sort(function(a, b) {
+        return new Date(b.date || 0) - new Date(a.date || 0);
+      });
+
+      deduped = deduped.slice(0, 40);
+      cacheData('news', deduped);
+      renderNews(deduped);
     });
 }
 
@@ -980,55 +1040,100 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS (YouTube channel playlist embeds)
+// LIVE CATALYSTS (auto-resolving latest video from channel RSS)
 // ============================================
 
-// Strategy: Embed each channel's "uploads" playlist which always works
-// and shows the most recent video. The playlist URL format
-// /embed/videoseries?list=PLAYLIST_ID is permanent and never expires.
-// Every YouTube channel has an auto-generated uploads playlist:
-// channel UC... → uploads playlist UU... (replace UC with UU).
-var LIVE_STREAMS = [
+// Strategy: YouTube channel RSS feeds are public at a stable URL.
+// We fetch via rss2json.com (free proxy), extract the latest video ID,
+// and embed it. This ALWAYS works because it uses a real, current video ID.
+// If rss2json fails, we fall back to a static placeholder with channel link.
+var LIVE_CHANNELS = [
   {
     label: 'Bloomberg TV',
-    // Bloomberg Television uploads playlist (UU replaces UC in channel ID)
-    src: 'https://www.youtube.com/embed/videoseries?list=UUIALMKvObZNtJ6AmdCLP7Lg&autoplay=0&mute=1',
-    link: 'https://www.youtube.com/@BloombergTelevision'
+    channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
+    link: 'https://www.youtube.com/@BloombergTelevision/streams'
   },
   {
     label: 'Yahoo Finance',
-    src: 'https://www.youtube.com/embed/videoseries?list=UUEAZeUIeJs0IjQiqTCQoqmA&autoplay=0&mute=1',
-    link: 'https://www.youtube.com/@YahooFinance'
+    channelId: 'UCEAZeUIeJs0IjQiqTCQoqmA',
+    link: 'https://www.youtube.com/@YahooFinance/streams'
   }
 ];
+
+var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
 function initLiveStreams() {
   var container = document.getElementById('live-streams');
   if (!container) return;
   container.innerHTML = '';
 
-  for (var i = 0; i < LIVE_STREAMS.length; i++) {
-    var stream = LIVE_STREAMS[i];
+  for (var i = 0; i < LIVE_CHANNELS.length; i++) {
+    var ch = LIVE_CHANNELS[i];
+
+    // Create slot immediately with placeholder
     var slot = document.createElement('div');
     slot.className = 'live-stream-slot';
+    slot.id = 'live-slot-' + i;
 
     var labelDiv = document.createElement('div');
     labelDiv.className = 'live-stream-label';
-    labelDiv.innerHTML = '<span class="live-dot"></span> ' + stream.label
-      + ' <a href="' + stream.link + '" target="_blank" rel="noopener" style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
+    labelDiv.innerHTML = '<span class="live-dot"></span> ' + ch.label
+      + ' <a href="' + ch.link + '" target="_blank" rel="noopener" '
+      + 'style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
       + 'Open channel &#x2197;</a>';
 
-    var iframe = document.createElement('iframe');
-    iframe.src = stream.src;
-    iframe.title = stream.label;
-    iframe.setAttribute('allow', 'autoplay; encrypted-media');
-    iframe.setAttribute('allowfullscreen', '');
-    iframe.setAttribute('loading', 'lazy');
+    // Start with a loading placeholder
+    var placeholder = document.createElement('div');
+    placeholder.className = 'live-stream-placeholder';
+    placeholder.innerHTML = '<div class="live-fallback-text">Loading latest video...</div>';
 
     slot.appendChild(labelDiv);
-    slot.appendChild(iframe);
+    slot.appendChild(placeholder);
     container.appendChild(slot);
+
+    // Fetch the channel's RSS to get latest video ID
+    loadChannelLatestVideo(ch, slot, placeholder);
   }
+}
+
+function loadChannelLatestVideo(channel, slot, placeholder) {
+  var rssUrl = 'https://www.youtube.com/feeds/videos.xml?channel_id=' + channel.channelId;
+  var apiUrl = RSS2JSON_BASE + encodeURIComponent(rssUrl);
+
+  fetch(apiUrl)
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === 'ok' && data.items && data.items.length > 0) {
+        // Extract video ID from the link (youtube.com/watch?v=VIDEO_ID)
+        var link = data.items[0].link || '';
+        var match = link.match(/[?&]v=([^&]+)/);
+        var videoId = match ? match[1] : null;
+
+        if (videoId) {
+          var iframe = document.createElement('iframe');
+          iframe.src = 'https://www.youtube.com/embed/' + videoId
+            + '?autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+          iframe.title = channel.label;
+          iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+          iframe.setAttribute('allowfullscreen', '');
+          placeholder.replaceWith(iframe);
+          return;
+        }
+      }
+      // If parsing failed, show fallback
+      showStreamFallback(placeholder, channel);
+    })
+    .catch(function() {
+      showStreamFallback(placeholder, channel);
+    });
+}
+
+function showStreamFallback(placeholder, channel) {
+  placeholder.className = 'live-stream-placeholder';
+  placeholder.innerHTML = '<div class="live-fallback-text">'
+    + 'Latest video unavailable'
+    + '<br><a href="' + channel.link + '" target="_blank" rel="noopener">'
+    + 'Watch live on YouTube &#x2197;</a></div>';
 }
 
 // ============================================

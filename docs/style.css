@@ -805,20 +805,15 @@ main {
   50% { opacity: 0.3; }
 }
 
-.live-stream-fallback {
-  display: none;
-  position: absolute;
-  inset: 0;
-  top: 22px;
+.live-stream-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
   background: var(--bg-card-alt);
   border: 1px solid var(--border);
   border-radius: 4px;
+  display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.live-stream-fallback.visible {
-  display: flex;
 }
 
 .live-fallback-text {
