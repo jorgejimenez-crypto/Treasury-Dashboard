@@ -305,11 +305,7 @@ main {
   margin-bottom: 16px;
 }
 
-/* At 3-col desktop: Live Catalysts spans 2 of 3 columns */
-/* News does NOT span at desktop (3-col); it only spans at 1200px breakpoint (2-col) */
-.panel-span-2 {
-  grid-column: span 2;
-}
+/* .panel-span-2 applies only at <=1200px breakpoint (see media queries below) */
 
 /* ---- Panels ---- */
 
@@ -772,7 +768,7 @@ main {
 
 .live-streams {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);  /* 3 channels at desktop */
+  grid-template-columns: 1fr;  /* single channel (Bloomberg) */
   gap: 8px;
 }
 
@@ -1093,9 +1089,7 @@ footer kbd {
   .panel-span-2 {
     grid-column: span 2;
   }
-  .live-streams {
-    grid-template-columns: repeat(2, 1fr);  /* 2-col at tablet */
-  }
+
 }
 
 @media (max-width: 768px) {
@@ -1137,9 +1131,7 @@ footer kbd {
     font-size: 15px;
   }
 
-  .live-streams {
-    grid-template-columns: 1fr;  /* stack vertically on mobile */
-  }
+
 
   .notes-panel {
     width: calc(100% - 24px);

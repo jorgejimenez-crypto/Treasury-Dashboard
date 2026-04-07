@@ -57,18 +57,16 @@ var TICKER_SYMBOLS_WORKER = [
 ];
 
 var FRED_MARKET = [
-  { id: 'DGS3MO',       label: '3M UST',        extra: '' },
-  { id: 'DGS6MO',       label: '6M UST',        extra: '' },
-  { id: 'DGS1',         label: '1Y UST',        extra: '' },
-  { id: 'DGS2',         label: '2Y UST',        extra: '' },
-  { id: 'DGS5',         label: '5Y UST',        extra: '' },
-  { id: 'DGS10',        label: '10Y UST',       extra: '' },
-  { id: 'DGS30',        label: '30Y UST',       extra: '' },
-  { id: 'RRPONTSYD',    label: 'ON RRP',        extra: '' },
-  { id: 'BAMLC0A0CM',   label: 'IG OAS',        extra: '' },
-  { id: 'BAMLH0A0HYM2', label: 'HY OAS',        extra: '' },
-  { id: 'T10YIE',       label: '10Y Breakeven', extra: '' },
-  { id: 'T5YIE',        label: '5Y Breakeven',  extra: '' },
+  { id: 'DGS3MO',       label: '3M UST',  extra: '' },
+  { id: 'DGS6MO',       label: '6M UST',  extra: '' },
+  { id: 'DGS1',         label: '1Y UST',  extra: '' },
+  { id: 'DGS2',         label: '2Y UST',  extra: '' },
+  { id: 'DGS5',         label: '5Y UST',  extra: '' },
+  { id: 'DGS10',        label: '10Y UST', extra: '' },
+  { id: 'DGS30',        label: '30Y UST', extra: '' },
+  { id: 'RRPONTSYD',    label: 'ON RRP',  extra: '' },
+  { id: 'BAMLC0A0CM',   label: 'IG OAS',  extra: '' },
+  { id: 'BAMLH0A0HYM2', label: 'HY OAS',  extra: '' },
 ];
 
 var FRED_MACRO = [

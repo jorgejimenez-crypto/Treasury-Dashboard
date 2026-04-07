@@ -337,12 +337,6 @@ function computeAlerts(data) {
     alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps -- wider than ' + THRESHOLDS.igOasWide + ' bps' });
   }
 
-  // 10Y Breakeven inflation elevated
-  var tips = data.fred && data.fred.T10YIE;
-  if (tips && tips.current != null && tips.current > 2.8) {
-    alerts.push({ level: 'yellow', msg: '10Y Breakeven at ' + tips.current.toFixed(2) + '% -- elevated inflation expectations' });
-  }
-
   return alerts;
 }
 
@@ -549,27 +543,6 @@ function renderRisk(yahoo, fred) {
     creditGrid.appendChild(renderMetric('HY OAS', hyBps + ' bps', hyD, hy.date, { deltaNum: hyChg }));
   } else {
     creditGrid.appendChild(renderMetric('HY OAS', 'N/A', '', ''));
-  }
-  // TIPS Breakeven Inflation (10Y and 5Y) -- forward inflation expectations
-  var tipsSep = document.createElement('div');
-  tipsSep.className = 'separator';
-  tipsSep.style.gridColumn = '1 / -1';
-  creditGrid.appendChild(tipsSep);
-  var t10 = fred.T10YIE;
-  if (t10 && t10.current != null) {
-    var t10Chg = t10.prior != null ? t10.current - t10.prior : null;
-    var t10D = t10Chg != null ? sign(t10Chg) + t10Chg.toFixed(2) + ' pp' : '';
-    creditGrid.appendChild(renderMetric('10Y Breakeven', t10.current.toFixed(2) + '%', t10D, t10.date, { deltaNum: t10Chg, sm: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('10Y Breakeven', 'N/A', '', ''));
-  }
-  var t5 = fred.T5YIE;
-  if (t5 && t5.current != null) {
-    var t5Chg = t5.prior != null ? t5.current - t5.prior : null;
-    var t5D = t5Chg != null ? sign(t5Chg) + t5Chg.toFixed(2) + ' pp' : '';
-    creditGrid.appendChild(renderMetric('5Y Breakeven', t5.current.toFixed(2) + '%', t5D, t5.date, { deltaNum: t5Chg, sm: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('5Y Breakeven', 'N/A', '', ''));
   }
 }
 
@@ -1088,16 +1061,6 @@ var LIVE_CHANNELS = [
     label: 'Bloomberg TV',
     channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
     link: 'https://www.youtube.com/@BloombergTelevision/live'
-  },
-  {
-    label: 'Yahoo Finance',
-    channelId: 'UCEAZeUIeJs0IjQiqTCQoqmA',
-    link: 'https://www.youtube.com/@YahooFinance/live'
-  },
-  {
-    label: 'CNBC',
-    channelId: 'UCrp_UI8XtuYfpiqluWLD7Lw',
-    link: 'https://www.youtube.com/@CNBC/live'
   }
 ];
 
