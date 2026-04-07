@@ -61,12 +61,14 @@ body {
 
 .ticker-content {
   display: inline-block;
-  animation: ticker-scroll 40s linear infinite;
+  animation: ticker-scroll 45s linear infinite;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
-  /* No padding-left: content is duplicated in JS, -50% creates seamless loop */
   white-space: nowrap;
+  /* padding-left pushes content off-screen right on first entry;
+     -50% translate on doubled content = seamless gapless loop */
+  padding-left: 100%;
 }
 
 .ticker-content:hover {
@@ -75,7 +77,7 @@ body {
 
 @keyframes ticker-scroll {
   0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }   /* -50% on doubled content = gapless loop */
+  100% { transform: translateX(-50%); }  /* -50% on (padding + doubled content) = seamless */
 }
 
 .ticker-item {
@@ -303,11 +305,9 @@ main {
   margin-bottom: 16px;
 }
 
-/* At 3-col desktop: news spans 2 columns, live catalysts spans 2 columns */
+/* At 3-col desktop: Live Catalysts spans 2 of 3 columns */
+/* News does NOT span at desktop (3-col); it only spans at 1200px breakpoint (2-col) */
 .panel-span-2 {
-  grid-column: span 2;
-}
-#panel-news {
   grid-column: span 2;
 }
 
