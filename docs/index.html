@@ -38,16 +38,63 @@
   </div>
 
   <!-- MAIN DASHBOARD GRID -->
+  <!-- Layout: Events → Interpretation → Reaction → Cross-asset signals -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Row 1: Rates focus -->
+    <!-- Row 1: Catalysts + Context + Rates backdrop -->
+    <section class="panel" id="panel-calendar">
+      <h2>Economic Calendar</h2>
+      <div id="calendar-content"></div>
+    </section>
+
+    <section class="panel" id="panel-news">
+      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+      <div id="news-content" class="news-feed"></div>
+    </section>
+
     <section class="panel" id="panel-yields">
       <h2>Treasury Yields</h2>
       <div class="metrics-grid cols-2" id="yields-grid"></div>
       <div class="panel-footer" id="yields-footer"></div>
       <div class="chart-container">
-        <canvas id="yield-curve-canvas" height="160"></canvas>
+        <canvas id="yield-curve-canvas" height="180"></canvas>
       </div>
+    </section>
+
+    <!-- Row 2: Cross-asset signals -->
+    <section class="panel" id="panel-commodities">
+      <h2>Commodities</h2>
+      <div class="metrics-grid cols-3" id="commodities-grid"></div>
+      <div class="panel-footer" id="commodities-footer"></div>
+    </section>
+
+    <section class="panel" id="panel-equities">
+      <h2>Equity Indices</h2>
+      <div class="metrics-grid cols-2" id="equities-grid"></div>
+    </section>
+
+    <section class="panel" id="panel-forex">
+      <h2>Forex</h2>
+      <div class="metrics-grid cols-2" id="forex-grid"></div>
+      <div class="separator"></div>
+      <div class="fx-converter" id="fx-converter">
+        <div class="fx-converter-header">FX Converter</div>
+        <div class="fx-converter-row">
+          <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
+          <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
+          <span class="fx-arrow">&#x2192;</span>
+          <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
+          <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
+        </div>
+        <div class="fx-result" id="fx-result">--</div>
+        <div class="fx-rate-line" id="fx-rate-line"></div>
+      </div>
+    </section>
+
+    <!-- Row 3: Macro + Funding + Risk -->
+    <section class="panel" id="panel-macro">
+      <h2>Macro Indicators</h2>
+      <div class="metrics-grid cols-2" id="macro-grid"></div>
     </section>
 
     <section class="panel" id="panel-funding">
@@ -61,39 +108,6 @@
       <div class="metrics-grid cols-2" id="risk-grid"></div>
       <div class="separator"></div>
       <div class="metrics-grid cols-2" id="credit-grid"></div>
-    </section>
-
-    <!-- Row 2: Markets -->
-    <section class="panel" id="panel-equities">
-      <h2>Equity Indices</h2>
-      <div class="metrics-grid cols-2" id="equities-grid"></div>
-    </section>
-
-    <section class="panel" id="panel-commodities">
-      <h2>Commodities</h2>
-      <div class="metrics-grid cols-3" id="commodities-grid"></div>
-      <div class="panel-footer" id="commodities-footer"></div>
-    </section>
-
-    <section class="panel" id="panel-forex">
-      <h2>Forex</h2>
-      <div class="metrics-grid cols-1" id="forex-grid"></div>
-    </section>
-
-    <!-- Row 3: Context -->
-    <section class="panel" id="panel-macro">
-      <h2>Macro Indicators</h2>
-      <div class="metrics-grid cols-2" id="macro-grid"></div>
-    </section>
-
-    <section class="panel" id="panel-calendar">
-      <h2>Economic Calendar</h2>
-      <div id="calendar-content"></div>
-    </section>
-
-    <section class="panel" id="panel-news">
-      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
-      <div id="news-content" class="news-feed"></div>
     </section>
 
   </main>
@@ -120,6 +134,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

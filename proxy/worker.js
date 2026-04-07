@@ -34,6 +34,10 @@ var YAHOO_SYMBOLS = [
   { key: 'EURUSD',  symbol: 'EURUSD%3DX', group: 'forex' },
   { key: 'GBPUSD',  symbol: 'GBPUSD%3DX', group: 'forex' },
   { key: 'USDJPY',  symbol: 'JPY%3DX',    group: 'forex' },
+  { key: 'AUDUSD',  symbol: 'AUDUSD%3DX', group: 'forex' },
+  { key: 'USDCAD',  symbol: 'USDCAD%3DX', group: 'forex' },
+  { key: 'USDCHF',  symbol: 'USDCHF%3DX', group: 'forex' },
+  { key: 'USDCNH',  symbol: 'USDCNH%3DX', group: 'forex' },
   // Risk indicators
   { key: 'DXY',     symbol: 'DX-Y.NYB',   group: 'risk' },
   { key: 'VIX',     symbol: '%5EVIX',     group: 'risk' },

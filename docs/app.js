@@ -33,8 +33,14 @@ var EQUITY_LABELS = { SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSS
 var COMMODITY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold'];
 var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry Hub', HeatOil: 'Heating Oil', Copper: 'Copper', Gold: 'Gold' };
 var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
-var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY'];
-var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY' };
+var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'USDCNH'];
+var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', USDCNH: 'USD/CNH' };
+// FX converter: map each currency to its "1 unit = X USD" factor
+// For XXX/USD pairs (EUR, GBP, AUD): toUSD = rate
+// For USD/XXX pairs (JPY, CAD, CHF, CNH): toUSD = 1/rate
+var FX_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH'];
+var FX_YAHOO_MAP = { EUR: 'EURUSD', GBP: 'GBPUSD', AUD: 'AUDUSD', JPY: 'USDJPY', CAD: 'USDCAD', CHF: 'USDCHF', CNH: 'USDCNH' };
+var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true }; // USD/XXX pairs
 var YIELD_KEYS = ['DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '30Y UST' };
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
@@ -84,6 +90,7 @@ var ECON_CALENDAR = [
 var yieldCurveChart = null;
 var refreshTimer = null;
 var newsTimer = null;
+var cachedYahoo = null; // stored for FX converter access
 
 // ============================================
 // HELPERS
@@ -177,6 +184,32 @@ function renderMetric(label, value, delta, dateStr, opts) {
   }
 
   return div;
+}
+
+// ============================================
+// SOURCE ATTRIBUTION
+// ============================================
+
+function addSourceAttribution(panelId, provider, lastDate) {
+  var panel = document.getElementById(panelId);
+  // Remove existing source footer if any
+  var existing = panel.querySelector('.panel-source');
+  if (existing) existing.remove();
+
+  var div = document.createElement('div');
+  div.className = 'panel-source';
+  var provSpan = document.createElement('span');
+  provSpan.className = 'panel-source-provider';
+  provSpan.textContent = provider;
+  div.appendChild(provSpan);
+
+  if (lastDate) {
+    var timeSpan = document.createElement('span');
+    timeSpan.className = 'panel-source-time';
+    timeSpan.textContent = 'As of ' + lastDate;
+    div.appendChild(timeSpan);
+  }
+  panel.appendChild(div);
 }
 
 // ============================================
@@ -310,6 +343,7 @@ function renderYieldCurve(fred) {
 
   yieldCurveChart = new Chart(ctx, {
     type: 'line',
+    plugins: [ChartDataLabels],
     data: {
       labels: labels,
       datasets: [{
@@ -318,7 +352,7 @@ function renderYieldCurve(fred) {
         backgroundColor: 'rgba(59, 130, 246, 0.08)',
         fill: true,
         tension: 0.3,
-        pointRadius: 4,
+        pointRadius: 5,
         pointBackgroundColor: '#3b82f6',
         pointBorderColor: '#0a0e14',
         pointBorderWidth: 2,
@@ -328,12 +362,21 @@ function renderYieldCurve(fred) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { top: 20 } },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
             label: function(ctx) { return ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) + '%' : 'N/A'; }
           }
+        },
+        datalabels: {
+          color: '#e6edf3',
+          anchor: 'end',
+          align: 'top',
+          offset: 2,
+          font: { size: 10, family: 'Consolas, monospace', weight: '600' },
+          formatter: function(value) { return value != null ? value.toFixed(2) + '%' : ''; }
         }
       },
       scales: {
@@ -489,6 +532,12 @@ function renderCommodities(yahoo) {
   footer.textContent = txt;
 }
 
+function fxDecimals(key) {
+  if (key === 'USDJPY' || key === 'USDCNH') return 2;
+  if (key === 'USDCAD' || key === 'USDCHF') return 4;
+  return 4;
+}
+
 function renderForex(yahoo) {
   var grid = document.getElementById('forex-grid');
   grid.innerHTML = '';
@@ -498,12 +547,84 @@ function renderForex(yahoo) {
     if (d && d.current != null) {
       var pct = pctChange(d.current, d.prior);
       var delta = pct != null ? sign(pct) + pct.toFixed(2) + '%' : '';
-      var dec = k === 'USDJPY' ? 2 : 4;
-      grid.appendChild(renderMetric(FOREX_LABELS[k], d.current.toFixed(dec), delta, d.date, { deltaNum: pct }));
+      grid.appendChild(renderMetric(FOREX_LABELS[k], d.current.toFixed(fxDecimals(k)), delta, d.date, { deltaNum: pct, sm: true }));
     } else {
       grid.appendChild(renderMetric(FOREX_LABELS[k], 'N/A', '', ''));
     }
   }
+  initFxConverter(yahoo);
+}
+
+// ============================================
+// FX CONVERTER
+// ============================================
+
+function getToUSD(ccy, yahoo) {
+  if (ccy === 'USD') return 1;
+  var key = FX_YAHOO_MAP[ccy];
+  if (!key || !yahoo[key] || yahoo[key].current == null) return null;
+  var rate = yahoo[key].current;
+  return FX_INVERTED[ccy] ? 1 / rate : rate;
+}
+
+function initFxConverter(yahoo) {
+  var baseSelect = document.getElementById('fx-base');
+  var quoteSelect = document.getElementById('fx-quote');
+
+  // Only populate dropdowns once
+  if (baseSelect.options.length <= 1) {
+    baseSelect.innerHTML = '';
+    quoteSelect.innerHTML = '';
+    for (var i = 0; i < FX_CURRENCIES.length; i++) {
+      var c = FX_CURRENCIES[i];
+      baseSelect.appendChild(new Option(c, c));
+      quoteSelect.appendChild(new Option(c, c));
+    }
+    baseSelect.value = 'USD';
+    quoteSelect.value = 'EUR';
+
+    // Event listeners
+    var compute = function() { computeFxConversion(yahoo); };
+    baseSelect.addEventListener('change', compute);
+    quoteSelect.addEventListener('change', compute);
+    document.getElementById('fx-amount').addEventListener('input', compute);
+    document.getElementById('fx-swap').addEventListener('click', function() {
+      var tmp = baseSelect.value;
+      baseSelect.value = quoteSelect.value;
+      quoteSelect.value = tmp;
+      computeFxConversion(yahoo);
+    });
+  }
+
+  // Recompute with latest rates
+  computeFxConversion(yahoo);
+}
+
+function computeFxConversion(yahoo) {
+  var amount = parseFloat(document.getElementById('fx-amount').value);
+  var base = document.getElementById('fx-base').value;
+  var quote = document.getElementById('fx-quote').value;
+  var resultEl = document.getElementById('fx-result');
+  var rateEl = document.getElementById('fx-rate-line');
+
+  if (isNaN(amount) || base === quote) {
+    resultEl.textContent = base === quote ? fmt(amount, 2, '') + ' ' + quote : '--';
+    rateEl.textContent = base === quote ? '1:1' : '';
+    return;
+  }
+
+  var baseUSD = getToUSD(base, yahoo);
+  var quoteUSD = getToUSD(quote, yahoo);
+  if (!baseUSD || !quoteUSD) {
+    resultEl.textContent = 'Rate unavailable';
+    rateEl.textContent = '';
+    return;
+  }
+
+  var crossRate = baseUSD / quoteUSD;
+  var result = amount * crossRate;
+  resultEl.textContent = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
+  rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(crossRate > 10 ? 2 : 4) + ' ' + quote;
 }
 
 function renderMacro(macro) {
@@ -689,6 +810,9 @@ function renderDashboard(data) {
     }
   }
 
+  // Cache yahoo for FX converter
+  cachedYahoo = data.yahoo;
+
   // Render all panels
   renderYields(data.fred);
   renderYieldCurve(data.fred);
@@ -699,6 +823,18 @@ function renderDashboard(data) {
   renderForex(data.yahoo);
   renderMacro(data.macro);
   renderCalendar(data.fomc);
+
+  // Source attribution per panel
+  var yDate = data.fred.DGS10 ? data.fred.DGS10.date : null;
+  addSourceAttribution('panel-yields', 'FRED', yDate);
+  addSourceAttribution('panel-funding', 'NY Fed / FRED', data.nyfed.sofr ? data.nyfed.sofr.date : null);
+  addSourceAttribution('panel-risk', 'Yahoo / FRED', data.yahoo.VIX ? data.yahoo.VIX.date : null);
+  addSourceAttribution('panel-equities', 'Yahoo Finance', data.yahoo.SP500 ? data.yahoo.SP500.date : null);
+  addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
+  addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
+  addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
+  addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
+  addSourceAttribution('panel-news', 'Federal Reserve RSS', null);
 
   // Show dashboard
   document.getElementById('loading').style.display = 'none';
