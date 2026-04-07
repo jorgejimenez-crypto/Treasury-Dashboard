@@ -963,6 +963,79 @@ function initNotes() {
 }
 
 // ============================================
+// LIVE CATALYSTS (robust YouTube embeds)
+// ============================================
+
+// Channel-based live_stream URLs auto-resolve to the current live broadcast.
+// If a channel has no active stream the iframe shows YouTube's "offline" page
+// rather than "Video unavailable", which is a much better fallback.
+// We also wrap each slot with an error overlay that activates if the iframe
+// fails to load entirely (network error / blocked).
+var LIVE_STREAMS = [
+  {
+    label: 'Bloomberg TV',
+    // Official Bloomberg Television channel — 24/7 live stream
+    src: 'https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg&autoplay=0&mute=1',
+    fallback: 'https://www.youtube.com/embed?listType=user_uploads&list=Bloomberg&autoplay=0&mute=1',
+    link: 'https://www.youtube.com/@BloombergTelevision/streams'
+  },
+  {
+    label: 'Yahoo Finance',
+    // Yahoo Finance channel — frequent live streams
+    src: 'https://www.youtube.com/embed/live_stream?channel=UCEAZeUIeJs0IjQiqTCQoqmA&autoplay=0&mute=1',
+    fallback: 'https://www.youtube.com/embed?listType=user_uploads&list=YahooFinance&autoplay=0&mute=1',
+    link: 'https://www.youtube.com/@YahooFinance/streams'
+  }
+];
+
+function initLiveStreams() {
+  var container = document.getElementById('live-streams');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (var i = 0; i < LIVE_STREAMS.length; i++) {
+    var stream = LIVE_STREAMS[i];
+    var slot = document.createElement('div');
+    slot.className = 'live-stream-slot';
+
+    // Label with status dot
+    var labelDiv = document.createElement('div');
+    labelDiv.className = 'live-stream-label';
+    labelDiv.innerHTML = '<span class="live-dot"></span> ' + stream.label;
+
+    // Iframe
+    var iframe = document.createElement('iframe');
+    iframe.src = stream.src;
+    iframe.title = stream.label + ' Live';
+    iframe.setAttribute('allow', 'autoplay; encrypted-media');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.setAttribute('loading', 'lazy');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+
+    // Fallback overlay (hidden by default, shown on iframe error)
+    var fallback = document.createElement('div');
+    fallback.className = 'live-stream-fallback';
+    fallback.innerHTML = '<div class="live-fallback-text">'
+      + 'No live stream right now'
+      + '<br><a href="' + stream.link + '" target="_blank" rel="noopener">Watch latest on YouTube</a>'
+      + '</div>';
+
+    // On iframe load error — show fallback
+    iframe.onerror = (function(fb, ifr, src2) {
+      return function() {
+        ifr.src = src2;
+        fb.style.display = 'none';
+      };
+    })(fallback, iframe, stream.fallback);
+
+    slot.appendChild(labelDiv);
+    slot.appendChild(iframe);
+    slot.appendChild(fallback);
+    container.appendChild(slot);
+  }
+}
+
+// ============================================
 // KEYBOARD SHORTCUTS
 // ============================================
 
@@ -1069,3 +1142,4 @@ tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
 // 5. Init interactive features
 initShortcuts();
 initNotes();
+initLiveStreams();

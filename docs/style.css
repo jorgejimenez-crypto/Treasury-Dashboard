@@ -730,6 +730,56 @@ main {
   letter-spacing: 0.3px;
   margin-bottom: 4px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.live-stream-fallback {
+  display: none;
+  position: absolute;
+  inset: 0;
+  top: 22px;
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.live-stream-fallback.visible {
+  display: flex;
+}
+
+.live-fallback-text {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.live-fallback-text a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.live-fallback-text a:hover {
+  text-decoration: underline;
 }
 
 /* ---- Quick Notes Panel ---- */
