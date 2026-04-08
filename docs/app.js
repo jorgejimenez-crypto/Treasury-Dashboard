@@ -287,6 +287,14 @@ function renderMetric(label, value, delta, dateStr, opts) {
   val.textContent = value;
   div.appendChild(val);
 
+  if (opts.stale) {
+    var badge = document.createElement('span');
+    badge.className = 'stale-badge';
+    badge.textContent = 'stale';
+    val.appendChild(document.createTextNode(' '));
+    val.appendChild(badge);
+  }
+
   if (delta != null && delta !== '') {
     var del = document.createElement('div');
     del.className = 'metric-delta ' + deltaClass(opts.deltaNum);
@@ -433,16 +441,32 @@ function computeAlerts(data) {
 function renderYields(fred) {
   var grid = document.getElementById('yields-grid');
   grid.innerHTML = '';
+  var anyLive = false;
   for (var i = 0; i < YIELD_KEYS.length; i++) {
     var sid = YIELD_KEYS[i];
     var d = fred[sid];
     if (d && d.current != null) {
+      anyLive = true;
       var bps = bpsChange(d.current, d.prior);
       var delta = bps != null ? sign(bps) + bps + ' bps' : '';
       grid.appendChild(renderMetric(YIELD_LABELS[sid], d.current.toFixed(2) + '%', delta, d.date, { deltaNum: bps }));
+    } else if (lastKnownYields && lastKnownYields[sid]) {
+      var cached = lastKnownYields[sid];
+      grid.appendChild(renderMetric(YIELD_LABELS[sid], cached.value, '', cached.date, { stale: true }));
     } else {
       grid.appendChild(renderMetric(YIELD_LABELS[sid], 'N/A', '', ''));
     }
+  }
+  // Save live data for next time
+  if (anyLive) {
+    var snapshot = {};
+    for (var j = 0; j < YIELD_KEYS.length; j++) {
+      var s2 = YIELD_KEYS[j];
+      var d2 = fred[s2];
+      if (d2 && d2.current != null) snapshot[s2] = { value: d2.current.toFixed(2) + '%', date: d2.date };
+    }
+    lastKnownYields = snapshot;
+    saveLastKnown('yields', snapshot);
   }
   var footer = document.getElementById('yields-footer');
   var dgs2 = fred.DGS2;
@@ -551,8 +575,23 @@ function renderYieldCurve(fred) {
   }
 }
 
-// Cache last known funding values so weekends/holidays don't show all N/A
+// Cache last known values so FRED outages/weekends don't show all N/A.
+// Persisted to localStorage so they survive page reloads.
 var lastKnownFunding = { sofr: null, effr: null };
+
+function loadLastKnown(key) {
+  try {
+    var raw = localStorage.getItem('td_lk_' + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function saveLastKnown(key, data) {
+  try { localStorage.setItem('td_lk_' + key, JSON.stringify(data)); } catch (e) {}
+}
+
+var lastKnownYields = loadLastKnown('yields');
+var lastKnownMacro  = loadLastKnown('macro');
+var lastKnownCredit = loadLastKnown('credit');
 
 function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
@@ -614,23 +653,37 @@ function renderRisk(yahoo, fred) {
   }
   var creditGrid = document.getElementById('credit-grid');
   creditGrid.innerHTML = '';
+  var anyCreditLive = false;
   var ig = fred.BAMLC0A0CM;
   if (ig && ig.current != null) {
+    anyCreditLive = true;
     var igBps = Math.round(ig.current * 100);
     var igChg = ig.prior != null ? Math.round((ig.current - ig.prior) * 100) : null;
     var igD = igChg != null ? sign(igChg) + igChg + ' bps' : '';
     creditGrid.appendChild(renderMetric('IG OAS', igBps + ' bps', igD, ig.date, { deltaNum: igChg }));
+  } else if (lastKnownCredit && lastKnownCredit.ig) {
+    creditGrid.appendChild(renderMetric('IG OAS', lastKnownCredit.ig.value, '', lastKnownCredit.ig.date, { stale: true }));
   } else {
     creditGrid.appendChild(renderMetric('IG OAS', 'N/A', '', ''));
   }
   var hy = fred.BAMLH0A0HYM2;
   if (hy && hy.current != null) {
+    anyCreditLive = true;
     var hyBps = Math.round(hy.current * 100);
     var hyChg = hy.prior != null ? Math.round((hy.current - hy.prior) * 100) : null;
     var hyD = hyChg != null ? sign(hyChg) + hyChg + ' bps' : '';
     creditGrid.appendChild(renderMetric('HY OAS', hyBps + ' bps', hyD, hy.date, { deltaNum: hyChg }));
+  } else if (lastKnownCredit && lastKnownCredit.hy) {
+    creditGrid.appendChild(renderMetric('HY OAS', lastKnownCredit.hy.value, '', lastKnownCredit.hy.date, { stale: true }));
   } else {
     creditGrid.appendChild(renderMetric('HY OAS', 'N/A', '', ''));
+  }
+  if (anyCreditLive) {
+    var snap = {};
+    if (ig && ig.current != null) snap.ig = { value: Math.round(ig.current * 100) + ' bps', date: ig.date };
+    if (hy && hy.current != null) snap.hy = { value: Math.round(hy.current * 100) + ' bps', date: hy.date };
+    lastKnownCredit = snap;
+    saveLastKnown('credit', snap);
   }
 }
 
@@ -765,10 +818,12 @@ function computeFxConversion() {
 function renderMacro(macro) {
   var grid = document.getElementById('macro-grid');
   grid.innerHTML = '';
+  var anyLive = false;
   for (var i = 0; i < MACRO_DISPLAY.length; i++) {
     var m = MACRO_DISPLAY[i];
     var d = macro[m.id];
     if (d && d.current != null) {
+      anyLive = true;
       var val = m.divideBy ? d.current / m.divideBy : d.current;
       var valStr = val.toFixed(m.dec) + m.suffix;
       var priorVal = d.prior != null ? (m.divideBy ? d.prior / m.divideBy : d.prior) : null;
@@ -784,9 +839,25 @@ function renderMacro(macro) {
         }
       }
       grid.appendChild(renderMetric(m.label, valStr, delta, d.date, { deltaNum: deltaNum, sm: true }));
+    } else if (lastKnownMacro && lastKnownMacro[m.id]) {
+      var cached = lastKnownMacro[m.id];
+      grid.appendChild(renderMetric(m.label, cached.value, '', cached.date, { sm: true, stale: true }));
     } else {
       grid.appendChild(renderMetric(m.label, 'N/A', '', ''));
     }
+  }
+  if (anyLive) {
+    var snapshot = {};
+    for (var j = 0; j < MACRO_DISPLAY.length; j++) {
+      var m2 = MACRO_DISPLAY[j];
+      var d2 = macro[m2.id];
+      if (d2 && d2.current != null) {
+        var v2 = m2.divideBy ? d2.current / m2.divideBy : d2.current;
+        snapshot[m2.id] = { value: v2.toFixed(m2.dec) + m2.suffix, date: d2.date };
+      }
+    }
+    lastKnownMacro = snapshot;
+    saveLastKnown('macro', snapshot);
   }
 }
 
@@ -1180,10 +1251,8 @@ function initNotes() {
 // autoplay=1&mute=1 is required by browser autoplay policy.
 
 var LIVE_CHANNELS = [
-  { id: 'bloomberg', label: 'Bloomberg',     channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
-  { id: 'yahoo',     label: 'Yahoo Finance', channelId: 'UCEAZeUIeJs0IjQiqTCQoqmA', link: 'https://www.youtube.com/@YahooFinance/live' },
-  { id: 'cnbc',      label: 'CNBC',          channelId: 'UCvJJ_dzjViJCoLf5uKUTwoA', link: 'https://www.youtube.com/@CNBC/live' },
-  { id: 'fox',       label: 'Fox Business',  channelId: 'UCceHTOQ2VVRlK0TAauKGHoQ', link: 'https://www.youtube.com/@FoxBusiness/live' },
+  { id: 'bloomberg', label: 'Bloomberg',  channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
+  { id: 'cnbc',      label: 'CNBC',       channelId: 'UCvJJ_dzjViJCoLf5uKUTwoA', link: 'https://www.youtube.com/@CNBC/live' },
 ];
 
 var activeChannelIdx = 0;
