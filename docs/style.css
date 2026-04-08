@@ -289,13 +289,12 @@ header {
   font-size: 13px;
 }
 
-/* ---- Main Grid — Energy-first layout ----
+/* ---- Main Grid — Top-3-first collaborative layout ----
    Row 0: Movers strip (full width)
-   Row 1: Commodities wide (2 cols) | Live (1 col)
-   Row 2: Macro | Funding | Risk  (3 equal cols)
-   Row 3: Calendar | News wide (2 cols)
-   Row 4: Yields | Forex wide (2 cols)
-   Row 5: Heatmap (full width)
+   Row 1: Macro | Calendar | News     ← TOP 3
+   Row 2: Yields | Commodities (×2)   ← Yields moved up
+   Row 3: Funding | Risk | Live       ← Dual-screen live
+   Row 4: Forex (full width)          ← Upgraded converter
 */
 
 main {
@@ -305,20 +304,11 @@ main {
   margin-bottom: 8px;
 }
 
-/* Commodities spans 2 of 3 columns — highest visual priority */
-.panel-commodities-wide {
-  grid-column: span 2;
-}
+/* Commodities spans 2 of 3 cols in Row 2 */
+.panel-commodities-wide { grid-column: span 2; }
 
-/* News spans 2 of 3 columns */
-.panel-news-wide {
-  grid-column: span 2;
-}
-
-/* Forex spans 2 of 3 columns (lower-priority row) */
-.panel-yields-wide {
-  grid-column: span 2;
-}
+/* Forex is full width in Row 4 */
+#panel-forex { grid-column: 1 / -1; }
 
 
 /* ---- Panels ---- */
@@ -395,21 +385,7 @@ main {
 
 /* ---- FX Converter ---- */
 
-.fx-converter {
-  padding: 8px;
-  background: var(--bg-card-alt);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
-.fx-converter-header {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  margin-bottom: 6px;
-}
+/* fx-converter replaced by upgraded version below */
 
 .fx-converter-row {
   display: flex;
@@ -458,20 +434,7 @@ main {
   flex-shrink: 0;
 }
 
-.fx-result {
-  margin-top: 6px;
-  font-size: 16px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  color: var(--text);
-}
-
-.fx-rate-line {
-  font-size: 10px;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  margin-top: 2px;
-}
+/* fx-result/rate-line replaced by upgraded version */
 
 /* ---- Chart Container ---- */
 
@@ -758,29 +721,7 @@ main {
 .mover-chip.chip-up   .mover-chip-pct { color: var(--green); }
 .mover-chip.chip-down .mover-chip-pct { color: var(--red);   }
 
-/* ---- S&P 500 Heatmap ---- */
-
-#panel-heatmap {
-  grid-column: 1 / -1;
-}
-
-#heatmap-content {
-  min-height: 400px;
-  overflow: hidden;
-  border-radius: 4px;
-}
-
-#heatmap-content .tradingview-widget-container {
-  height: 400px;
-}
-
-.heatmap-timestamp {
-  font-size: 9px;
-  color: var(--text-dim);
-  text-align: right;
-  padding: 4px 0 0;
-  font-family: var(--font-mono);
-}
+/* S&P 500 Heatmap removed — not used */
 
 /* ---- Calendar (custom table) ---- */
 
@@ -901,9 +842,9 @@ main {
 /* ---- Live Streams (Bloomberg only) ---- */
 
 .live-streams {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .live-stream-slot {
@@ -1164,7 +1105,6 @@ footer kbd {
   footer kbd { display: none; }
   .news-feed { max-height: none; overflow: visible; }
   #calendar-content { display: none; }
-  #panel-heatmap { display: none; }
 }
 
 /* ---- Responsive ---- */
@@ -1173,11 +1113,12 @@ footer kbd {
   main {
     grid-template-columns: repeat(2, 1fr);
   }
-  /* On 2-col: wide panels still span 2 */
-  .panel-commodities-wide,
-  .panel-news-wide,
-  .panel-yields-wide {
+  /* On 2-col: commodities still spans 2 */
+  .panel-commodities-wide {
     grid-column: span 2;
+  }
+  #panel-forex {
+    grid-column: 1 / -1;
   }
   /* cols-4 falls back to cols-2 at tablet */
   .cols-4 {
@@ -1211,13 +1152,21 @@ footer kbd {
     grid-template-columns: 1fr;
   }
 
-  .panel-commodities-wide,
-  .panel-news-wide,
-  .panel-yields-wide {
+  .panel-commodities-wide {
     grid-column: span 1;
+  }
+  #panel-forex {
+    grid-column: 1 / -1;
   }
   .cols-4 {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .forex-layout {
+    grid-template-columns: 1fr;
+  }
+  .fx-converter {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .cols-3 {
@@ -1240,11 +1189,6 @@ footer kbd {
     margin: 0 -8px 8px;
   }
 
-  #heatmap-content,
-  #heatmap-content .tradingview-widget-container {
-    height: 300px;
-    min-height: 300px;
-  }
 
   #calendar-content {
     max-height: 280px;
@@ -1441,3 +1385,130 @@ body.density-compact .metric {
 #panel-macro .metric-value {
   font-size: 15px;
 }
+
+/* ---- Forex panel layout (full-width row) ---- */
+
+.forex-layout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .forex-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Upgraded FX Converter ---- */
+
+.fx-converter {
+  min-width: 280px;
+  max-width: 340px;
+  padding: 10px 12px;
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.fx-converter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+
+/* Preset amount buttons */
+.fx-presets {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.fx-preset-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+  font-weight: 600;
+}
+
+.fx-preset-btn:hover {
+  border-color: var(--border-light);
+  color: var(--text);
+}
+
+.fx-preset-btn.active {
+  background: var(--blue-bg);
+  border-color: rgba(59,130,246,0.5);
+  color: var(--blue);
+}
+
+/* Result block */
+.fx-result-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.fx-result {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  transition: color 0.2s;
+}
+
+.fx-result.fx-result-flash {
+  animation: fx-flash 0.35s ease-out;
+}
+
+@keyframes fx-flash {
+  0%   { color: var(--blue); }
+  100% { color: var(--text); }
+}
+
+.fx-rate-line {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}
+
+.fx-reverse-rate {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.fx-rate-trend {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.trend-up   { color: var(--green); }
+.trend-down { color: var(--red);   }
+.trend-flat { color: var(--text-dim); }
+
+/* ---- Calendar Actual Results column ---- */
+
+.cal-actual { font-weight: 700; font-family: var(--font-mono); }
+.cal-actual-beat    { color: var(--green); }
+.cal-actual-miss    { color: var(--red);   }
+.cal-actual-pending { color: var(--text-dim); font-style: italic; }

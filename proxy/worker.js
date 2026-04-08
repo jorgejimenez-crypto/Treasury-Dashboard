@@ -360,12 +360,13 @@ async function fetchFREDSeries(series, apiKey) {
         current: parseFloat(obs[0].value),
         prior: obs.length >= 2 ? parseFloat(obs[1].value) : null,
         t2:    obs.length >= 3 ? parseFloat(obs[2].value) : null,
+        t3:    obs.length >= 4 ? parseFloat(obs[3].value) : null,
         date: obs[0].date,
         label: series.label,
       };
     }
   } catch (e) { /* fall through */ }
-  return { id: series.id, current: null, prior: null, t2: null, date: null, label: series.label };
+  return { id: series.id, current: null, prior: null, t2: null, t3: null, date: null, label: series.label };
 }
 
 async function fetchAllFRED(seriesList, apiKey) {

@@ -9,12 +9,12 @@
 </head>
 <body>
 
-  <!-- SCROLLING ENERGY + EQUITY TICKER BAR -->
+  <!-- SCROLLING TICKER BAR -->
   <div id="ticker-bar" class="ticker-bar">
     <div id="ticker-content" class="ticker-content">Loading ticker...</div>
   </div>
 
-  <!-- TOP BAR — tightened, description removed -->
+  <!-- HEADER -->
   <header id="header">
     <div class="header-left">
       <h1>Treasury Intelligence Dashboard</h1>
@@ -30,83 +30,47 @@
     </div>
   </header>
 
-  <!-- ALERT BAR -->
   <div id="alert-bar" role="status" aria-live="polite"></div>
-
-  <!-- SETUP BANNER -->
   <div id="setup-banner" class="banner-warn" style="display:none;">
     Worker URL not configured. Edit <code>WORKER_URL</code> in <code>app.js</code>.
   </div>
-
-  <!-- LOADING STATE -->
   <div id="loading" class="loading">
     <div class="spinner"></div>
     <p>Fetching market data...</p>
   </div>
 
   <!-- MAIN DASHBOARD GRID
-       New layout priority (energy-first, macro-dense):
-       Row 0: Movers strip (full width — always visible, no header)
-       Row 1: Commodities (col 1-2, wide) | Live Catalysts (col 3)
-       Row 2: Macro | Funding | Risk & Credit
-       Row 3: Calendar | News (span 2)
-       Row 4: Yields | Forex
-       Row 5: Heatmap (full width)
+    Row 0: Movers strip (full width)
+    Row 1: Macro | Calendar | News          ← TOP 3 PRIORITIES
+    Row 2: Yields | Commodities (span 2)    ← Yields moved up
+    Row 3: Funding | Risk & Credit | Live   ← Dual-screen live
+    Row 4: Forex (full width)               ← Upgraded converter
   -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Row 0: Energy Movers strip (no header — strip speaks for itself) -->
+    <!-- Row 0: Movers Strip -->
     <section class="panel panel-full panel-strip" id="panel-movers" aria-label="Energy Movers">
       <div id="movers-content"></div>
     </section>
 
-    <!-- Row 1: Commodities (wide, high priority) + Bloomberg Live -->
-    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
-      <h2>Commodities</h2>
-      <div class="metrics-grid cols-4" id="commodities-grid"></div>
-      <div class="panel-footer" id="commodities-footer"></div>
-      <div class="chart-container" id="tv-chart-wrap">
-        <div id="tradingview-widget"></div>
-      </div>
-    </section>
-
-    <section class="panel" id="panel-live" aria-label="Live Catalysts">
-      <h2>Live Catalysts</h2>
-      <div class="live-streams" id="live-streams"></div>
-    </section>
-
-    <!-- Row 2: Macro + Funding + Risk (high-signal density row) -->
+    <!-- Row 1: Top 3 — Macro · Calendar · News -->
     <section class="panel" id="panel-macro" aria-label="Macro Indicators">
       <h2>Macro Indicators</h2>
       <div class="metrics-grid cols-2" id="macro-grid"></div>
     </section>
 
-    <section class="panel" id="panel-funding" aria-label="Funding and Liquidity">
-      <h2>Funding & Liquidity</h2>
-      <div class="metrics-grid cols-2" id="funding-grid"></div>
-      <div class="panel-footer" id="funding-footer"></div>
-    </section>
-
-    <section class="panel" id="panel-risk" aria-label="Risk and Credit">
-      <h2>Risk & Credit</h2>
-      <div class="metrics-grid cols-2" id="risk-grid"></div>
-      <div class="separator"></div>
-      <div class="metrics-grid cols-2" id="credit-grid"></div>
-    </section>
-
-    <!-- Row 3: Calendar + News (news wider) -->
     <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
       <h2>Economic Calendar</h2>
       <div id="calendar-content"></div>
       <div class="panel-footer" id="calendar-fomc-footer"></div>
     </section>
 
-    <section class="panel panel-news-wide" id="panel-news" aria-label="News and Intelligence">
-      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+    <section class="panel" id="panel-news" aria-label="News and Intelligence">
+      <h2>News &amp; Intelligence <span id="news-count" class="badge"></span></h2>
       <div id="news-content" class="news-feed"></div>
     </section>
 
-    <!-- Row 4: Yields + Forex (supporting data, lower priority) -->
+    <!-- Row 2: Yields + Commodities (wide) -->
     <section class="panel" id="panel-yields" aria-label="Treasury Yields">
       <h2>Treasury Yields</h2>
       <div class="metrics-grid cols-2" id="yields-grid"></div>
@@ -116,38 +80,73 @@
       </div>
     </section>
 
-    <section class="panel panel-yields-wide" id="panel-forex" aria-label="Forex">
-      <h2>Forex</h2>
-      <div class="metrics-grid cols-4" id="forex-grid"></div>
-      <div class="separator"></div>
-      <div class="fx-converter" id="fx-converter">
-        <div class="fx-converter-header">FX Converter</div>
-        <div class="fx-converter-row">
-          <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
-          <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
-          <span class="fx-arrow">&#x2192;</span>
-          <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
-          <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
-        </div>
-        <div class="fx-result" id="fx-result">--</div>
-        <div class="fx-rate-line" id="fx-rate-line"></div>
+    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
+      <h2>Commodities</h2>
+      <div class="metrics-grid cols-4" id="commodities-grid"></div>
+      <div class="panel-footer" id="commodities-footer"></div>
+      <div class="chart-container" id="tv-chart-wrap">
+        <div id="tradingview-widget"></div>
       </div>
     </section>
 
-    <!-- Row 5: Heatmap (full width) -->
-    <section class="panel panel-full" id="panel-heatmap" aria-label="S&amp;P 500 Heatmap">
-      <h2>S&amp;P 500 Heatmap</h2>
-      <div id="heatmap-content" class="tv-widget-container"></div>
+    <!-- Row 3: Funding · Risk & Credit · Live Catalysts (dual-screen) -->
+    <section class="panel" id="panel-funding" aria-label="Funding and Liquidity">
+      <h2>Funding &amp; Liquidity</h2>
+      <div class="metrics-grid cols-2" id="funding-grid"></div>
+      <div class="panel-footer" id="funding-footer"></div>
+    </section>
+
+    <section class="panel" id="panel-risk" aria-label="Risk and Credit">
+      <h2>Risk &amp; Credit</h2>
+      <div class="metrics-grid cols-2" id="risk-grid"></div>
+      <div class="separator"></div>
+      <div class="metrics-grid cols-2" id="credit-grid"></div>
+    </section>
+
+    <section class="panel" id="panel-live" aria-label="Live Catalysts">
+      <h2>Live Catalysts</h2>
+      <div class="live-streams" id="live-streams"></div>
+    </section>
+
+    <!-- Row 4: Forex — full width, upgraded converter -->
+    <section class="panel panel-full" id="panel-forex" aria-label="Forex">
+      <h2>Forex</h2>
+      <div class="forex-layout">
+        <div class="metrics-grid cols-4" id="forex-grid"></div>
+        <div class="fx-converter" id="fx-converter">
+          <div class="fx-converter-header">
+            <span>FX Converter</span>
+            <span id="fx-rate-trend" class="fx-rate-trend"></span>
+          </div>
+          <div class="fx-presets" id="fx-presets">
+            <button class="fx-preset-btn" data-amount="100000">100K</button>
+            <button class="fx-preset-btn" data-amount="500000">500K</button>
+            <button class="fx-preset-btn active" data-amount="1000000">1M</button>
+            <button class="fx-preset-btn" data-amount="5000000">5M</button>
+            <button class="fx-preset-btn" data-amount="10000000">10M</button>
+          </div>
+          <div class="fx-converter-row">
+            <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
+            <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
+            <span class="fx-arrow">&#x21c4;</span>
+            <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
+            <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
+          </div>
+          <div class="fx-result-block">
+            <div class="fx-result" id="fx-result">--</div>
+            <div class="fx-rate-line" id="fx-rate-line"></div>
+            <div class="fx-reverse-rate" id="fx-reverse-rate"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
   </main>
 
-  <!-- FOOTER -->
   <footer id="footer">
     <p>Not financial advice. Internal use only. Data: Yahoo Finance (15-min delayed), FRED (daily), NY Fed (daily). Press <kbd>?</kbd> for shortcuts.</p>
   </footer>
 
-  <!-- QUICK NOTES -->
   <div id="notes-panel" class="notes-panel" style="display:none;">
     <div class="notes-header">
       <span>Quick Notes</span>
@@ -160,7 +159,6 @@
     </div>
   </div>
 
-  <!-- KEYBOARD SHORTCUTS MODAL -->
   <div id="shortcuts-modal" class="modal-overlay" style="display:none;">
     <div class="modal-content">
       <h3>Keyboard Shortcuts</h3>

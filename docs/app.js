@@ -86,31 +86,36 @@ function isMediumImpact(eventName) {
   return false;
 }
 
+// ECON_CALENDAR — update 'actual' and 'actualBeat' as results print:
+//   actual: '3.2%'    — the printed number
+//   actualBeat: true  — green (beat/in-line)  |  false — red (miss)
+//   actualBeat: null  — no coloring (not yet released)
 var ECON_CALENDAR = [
-  { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)', consensus: null,    prior: null,          fomc: true },
-  { date: '2026-04-09', time: '08:30', event: 'Core PCE Price Index YoY (Feb)', consensus: '2.7%', prior: '2.6%' },
-  { date: '2026-04-09', time: '08:30', event: 'Initial Jobless Claims',          consensus: '225K', prior: '219K' },
-  { date: '2026-04-10', time: '08:30', event: 'CPI MoM (Mar)',                   consensus: '+0.3%', prior: '+0.2%' },
-  { date: '2026-04-10', time: '08:30', event: 'CPI YoY (Mar)',                   consensus: '3.2%', prior: '2.8%' },
-  { date: '2026-04-10', time: '10:00', event: 'UMich Consumer Sentiment (Apr Prelim)', consensus: null, prior: null },
-  { date: '2026-04-17', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null },
-  { date: '2026-04-17', time: '08:30', event: 'Retail Sales (Mar)',              consensus: null,    prior: null },
-  { date: '2026-04-24', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null },
-  { date: '2026-04-24', time: '08:30', event: 'Durable Goods Orders (Mar)',      consensus: null,    prior: null },
-  { date: '2026-04-29', time: 'ALL',   event: 'FOMC Meeting Begins',             consensus: null,    prior: null,  fomc: true },
-  { date: '2026-04-30', time: '08:30', event: 'GDP Advance (Q1)',                consensus: null,    prior: null },
-  { date: '2026-04-30', time: '14:00', event: 'FOMC Decision',                  consensus: 'Hold',  prior: '4.25-4.50%', fomc: true },
-  { date: '2026-05-01', time: '08:30', event: 'Nonfarm Payrolls (Apr)',          consensus: null,    prior: null },
-  { date: '2026-05-01', time: '10:00', event: 'ISM Manufacturing PMI (Apr)',     consensus: null,    prior: null },
-  { date: '2026-05-13', time: '08:30', event: 'CPI (Apr)',                       consensus: null,    prior: null },
-  { date: '2026-05-14', time: '08:30', event: 'PPI (Apr)',                       consensus: null,    prior: null },
-  { date: '2026-05-29', time: '08:30', event: 'GDP 2nd Estimate (Q1)',           consensus: null,    prior: null },
-  { date: '2026-05-29', time: '08:30', event: 'PCE Price Index (Apr)',           consensus: null,    prior: null },
-  { date: '2026-06-18', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
-  { date: '2026-07-30', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
-  { date: '2026-09-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
-  { date: '2026-11-05', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
-  { date: '2026-12-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+  // TO ADD ACTUAL RESULTS: set actual:'2.8%' and actualBeat:true (green) or false (red)
+  { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)',        consensus: null,    prior: null,          fomc: true,  actual: null, actualBeat: null },
+  { date: '2026-04-09', time: '08:30', event: 'Core PCE Price Index YoY (Feb)', consensus: '2.7%',  prior: '2.6%',                     actual: null, actualBeat: null },
+  { date: '2026-04-09', time: '08:30', event: 'Initial Jobless Claims',          consensus: '225K',  prior: '219K',                     actual: null, actualBeat: null },
+  { date: '2026-04-10', time: '08:30', event: 'CPI MoM (Mar)',                   consensus: '+0.3%', prior: '+0.2%',                    actual: null, actualBeat: null },
+  { date: '2026-04-10', time: '08:30', event: 'CPI YoY (Mar)',                   consensus: '3.2%',  prior: '2.8%',                     actual: null, actualBeat: null },
+  { date: '2026-04-10', time: '10:00', event: 'UMich Consumer Sentiment (Apr)', consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-17', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-17', time: '08:30', event: 'Retail Sales (Mar)',              consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-24', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-24', time: '08:30', event: 'Durable Goods Orders (Mar)',      consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-29', time: 'ALL',   event: 'FOMC Meeting Begins',             consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
+  { date: '2026-04-30', time: '08:30', event: 'GDP Advance (Q1)',                consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-04-30', time: '14:00', event: 'FOMC Decision',                  consensus: 'Hold',  prior: '4.25-4.50%', fomc: true,    actual: null, actualBeat: null },
+  { date: '2026-05-01', time: '08:30', event: 'Nonfarm Payrolls (Apr)',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-05-01', time: '10:00', event: 'ISM Manufacturing PMI (Apr)',     consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-05-13', time: '08:30', event: 'CPI (Apr)',                       consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-05-14', time: '08:30', event: 'PPI (Apr)',                       consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-05-29', time: '08:30', event: 'GDP 2nd Estimate (Q1)',           consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-05-29', time: '08:30', event: 'PCE Price Index (Apr)',           consensus: null,    prior: null,                        actual: null, actualBeat: null },
+  { date: '2026-06-18', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
+  { date: '2026-07-30', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
+  { date: '2026-09-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
+  { date: '2026-11-05', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
+  { date: '2026-12-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
 ];
 
 // ============================================
@@ -506,13 +511,14 @@ function renderYields(fred) {
 }
 
 function renderYieldCurve(fred) {
-  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [];
+  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [], valuesT3 = [];
   for (var i = 0; i < CURVE_KEYS.length; i++) {
     var d = fred[CURVE_KEYS[i]];
     labels.push(CURVE_LABELS[i]);
     valuesT.push(d && d.current != null ? d.current : null);
     valuesT1.push(d && d.prior   != null ? d.prior   : null);
     valuesT2.push(d && d.t2      != null ? d.t2      : null);
+    valuesT3.push(d && d.t3      != null ? d.t3      : null);
   }
   var canvas = document.getElementById('yield-curve-canvas');
   var ctx = canvas.getContext('2d');
@@ -522,8 +528,8 @@ function renderYieldCurve(fred) {
       label: 'Today',
       data: valuesT,
       borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.08)',
-      fill: true, tension: 0.3, pointRadius: 5,
+      backgroundColor: 'rgba(59,130,246,0.07)',
+      fill: true, tension: 0.3, pointRadius: 4,
       pointBackgroundColor: '#3b82f6',
       pointBorderColor: '#0a0e14',
       pointBorderWidth: 2,
@@ -539,19 +545,28 @@ function renderYieldCurve(fred) {
     {
       label: 'T-1',
       data: valuesT1,
-      borderColor: '#64748b',
+      borderColor: '#6366f1',
       backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 3,
-      borderDash: [4, 3], borderWidth: 1.5,
+      fill: false, tension: 0.3, pointRadius: 2,
+      borderDash: [5, 3], borderWidth: 1.5,
       datalabels: { display: false }
     },
     {
       label: 'T-2',
       data: valuesT2,
+      borderColor: '#64748b',
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3, pointRadius: 2,
+      borderDash: [3, 4], borderWidth: 1.5,
+      datalabels: { display: false }
+    },
+    {
+      label: 'T-3',
+      data: valuesT3,
       borderColor: '#374151',
       backgroundColor: 'transparent',
       fill: false, tension: 0.3, pointRadius: 2,
-      borderDash: [2, 4], borderWidth: 1,
+      borderDash: [2, 5], borderWidth: 1,
       datalabels: { display: false }
     }
   ];
@@ -594,8 +609,9 @@ function renderYieldCurve(fred) {
     legendDiv.className = 'yield-curve-legend';
     legendDiv.innerHTML =
       '<span><span class="ycl-swatch" style="background:#3b82f6"></span>Today</span>' +
-      '<span><span class="ycl-swatch" style="background:#64748b;height:2px;border-style:dashed"></span>T-1</span>' +
-      '<span><span class="ycl-swatch" style="background:#374151;height:1px;border-style:dashed"></span>T-2</span>';
+      '<span><span class="ycl-swatch" style="background:#6366f1;border-style:dashed"></span>T-1</span>' +
+      '<span><span class="ycl-swatch" style="background:#64748b;border-style:dashed"></span>T-2</span>' +
+      '<span><span class="ycl-swatch" style="background:#374151;border-style:dashed"></span>T-3</span>';
     canvas.parentElement.parentElement.appendChild(legendDiv);
   }
 }
@@ -801,8 +817,9 @@ function getToUSD(ccy) {
 }
 
 function initFxConverter() {
-  var baseSelect = document.getElementById('fx-base');
+  var baseSelect  = document.getElementById('fx-base');
   var quoteSelect = document.getElementById('fx-quote');
+  var amountInput = document.getElementById('fx-amount');
   if (!fxConverterInitialized) {
     fxConverterInitialized = true;
     baseSelect.innerHTML = '';
@@ -812,19 +829,34 @@ function initFxConverter() {
       baseSelect.appendChild(new Option(c, c));
       quoteSelect.appendChild(new Option(c, c));
     }
-    baseSelect.value = 'USD';
+    baseSelect.value  = 'USD';
     quoteSelect.value = 'EUR';
-    // Event listeners use cachedYahoo (always fresh) via computeFxConversion()
+
     var compute = function() { computeFxConversion(); };
     baseSelect.addEventListener('change', compute);
     quoteSelect.addEventListener('change', compute);
-    document.getElementById('fx-amount').addEventListener('input', compute);
+    amountInput.addEventListener('input', compute);
+
     document.getElementById('fx-swap').addEventListener('click', function() {
       var tmp = baseSelect.value;
-      baseSelect.value = quoteSelect.value;
+      baseSelect.value  = quoteSelect.value;
       quoteSelect.value = tmp;
       computeFxConversion();
     });
+
+    // Preset amount buttons
+    var presetBtns = document.querySelectorAll('.fx-preset-btn');
+    for (var j = 0; j < presetBtns.length; j++) {
+      (function(btn) {
+        btn.addEventListener('click', function() {
+          amountInput.value = btn.getAttribute('data-amount');
+          // Active state
+          for (var k = 0; k < presetBtns.length; k++) presetBtns[k].classList.remove('active');
+          btn.classList.add('active');
+          computeFxConversion();
+        });
+      })(presetBtns[j]);
+    }
   }
   computeFxConversion();
 }
@@ -833,24 +865,74 @@ function computeFxConversion() {
   var amount = parseFloat(document.getElementById('fx-amount').value);
   var base = document.getElementById('fx-base').value;
   var quote = document.getElementById('fx-quote').value;
-  var resultEl = document.getElementById('fx-result');
-  var rateEl = document.getElementById('fx-rate-line');
+  var resultEl   = document.getElementById('fx-result');
+  var rateEl     = document.getElementById('fx-rate-line');
+  var reverseEl  = document.getElementById('fx-reverse-rate');
+  var trendEl    = document.getElementById('fx-rate-trend');
+
+  if (!resultEl) return;
+
   if (isNaN(amount) || base === quote) {
     resultEl.textContent = base === quote ? fmt(amount, 2, '') + ' ' + quote : '--';
-    rateEl.textContent = base === quote ? '1:1' : '';
+    if (rateEl)    rateEl.textContent = '';
+    if (reverseEl) reverseEl.textContent = '';
+    if (trendEl)   trendEl.textContent = '';
     return;
   }
-  var baseUSD = getToUSD(base);
+  var baseUSD  = getToUSD(base);
   var quoteUSD = getToUSD(quote);
   if (!baseUSD || !quoteUSD) {
     resultEl.textContent = 'Rate unavailable';
-    rateEl.textContent = '';
+    if (rateEl)    rateEl.textContent = '';
+    if (reverseEl) reverseEl.textContent = '';
+    if (trendEl)   trendEl.textContent = '';
     return;
   }
-  var crossRate = baseUSD / quoteUSD;
+  var crossRate    = baseUSD / quoteUSD;
+  var crossRateRev = 1 / crossRate;
   var result = amount * crossRate;
-  resultEl.textContent = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
-  rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(crossRate > 10 ? 2 : 6) + ' ' + quote;
+
+  // Main result — animated via CSS class toggle
+  var newText = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
+  if (resultEl.textContent !== newText) {
+    resultEl.classList.remove('fx-result-flash');
+    void resultEl.offsetWidth; // force reflow
+    resultEl.classList.add('fx-result-flash');
+    resultEl.textContent = newText;
+  }
+
+  // Forward rate line
+  var dec = crossRate > 10 ? 2 : 4;
+  if (rateEl) rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(dec) + ' ' + quote;
+
+  // Reverse rate line
+  var decRev = crossRateRev > 10 ? 2 : 4;
+  if (reverseEl) reverseEl.textContent = '1 ' + quote + ' = ' + crossRateRev.toFixed(decRev) + ' ' + base;
+
+  // Trend vs yesterday (rate change direction)
+  if (trendEl && cachedYahoo) {
+    // Try to find prior rate for this pair
+    var baseUSDPrior  = getToUSDPrior(base);
+    var quoteUSDPrior = getToUSDPrior(quote);
+    if (baseUSDPrior && quoteUSDPrior) {
+      var priorCross = baseUSDPrior / quoteUSDPrior;
+      var pct = ((crossRate - priorCross) / priorCross) * 100;
+      var sign = pct >= 0 ? '+' : '';
+      trendEl.textContent = sign + pct.toFixed(2) + '% vs prev';
+      trendEl.className = 'fx-rate-trend ' + (pct > 0 ? 'trend-up' : pct < 0 ? 'trend-down' : 'trend-flat');
+    } else {
+      trendEl.textContent = '';
+    }
+  }
+}
+
+function getToUSDPrior(ccy) {
+  if (ccy === 'USD') return 1;
+  if (!cachedYahoo) return null;
+  var key = FX_YAHOO_MAP[ccy];
+  if (!key || !cachedYahoo[key] || cachedYahoo[key].prior == null) return null;
+  var rate = cachedYahoo[key].prior;
+  return FX_INVERTED[ccy] ? 1 / rate : rate;
 }
 
 function renderMacro(macro) {
@@ -935,7 +1017,7 @@ function renderCalendar(fomc) {
   var table = document.createElement('table');
   table.className = 'cal-table';
   var thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th></tr>';
+  thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th><th>Actual</th></tr>';
   table.appendChild(thead);
   var tbody = document.createElement('tbody');
 
@@ -954,10 +1036,17 @@ function renderCalendar(fomc) {
     if (e.fomc) eventCell = '<span class="cal-fomc">' + e.event + '</span>';
     if (e.date === todayStr) eventCell += ' <span class="cal-tag cal-tag-today">TODAY</span>';
 
+    var actualCell = '--';
+    if (e.actual != null) {
+      var actualClass = e.actualBeat === true  ? 'cal-actual-beat' :
+                        e.actualBeat === false ? 'cal-actual-miss' : 'cal-actual-pending';
+      actualCell = '<span class="' + actualClass + '">' + e.actual + '</span>';
+    }
     tr.innerHTML = '<td class="cal-date">' + dateLabel + '</td>'
       + '<td class="cal-event">' + eventCell + '</td>'
       + '<td class="cal-values">' + (e.consensus || '--') + '</td>'
-      + '<td class="cal-values">' + (e.prior    || '--') + '</td>';
+      + '<td class="cal-values">' + (e.prior    || '--') + '</td>'
+      + '<td class="cal-values cal-actual">' + actualCell + '</td>';
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
@@ -1176,7 +1265,6 @@ function renderDashboard(data) {
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
   initTradingView();
-  lazyLoadHeatmap();
 
   // Clear error states on successful render
   var allPanels = document.querySelectorAll('.panel-error');
@@ -1323,8 +1411,13 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS — Bloomberg TV only
+// LIVE CATALYSTS — Bloomberg TV + CNBC (dual-screen, stacked)
 // ============================================
+
+var LIVE_CHANNELS = [
+  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
+  { label: 'CNBC',         channelId: 'UCrp_UI8XtuYfpiqluWLD7Lw', link: 'https://www.youtube.com/@CNBC/live' }
+];
 
 function initLiveStreams() {
   var container = document.getElementById('live-streams');
@@ -1333,27 +1426,31 @@ function initLiveStreams() {
 
   var live = isMarketOpen();
 
-  var slot = document.createElement('div');
-  slot.className = 'live-stream-slot';
+  for (var i = 0; i < LIVE_CHANNELS.length; i++) {
+    var ch = LIVE_CHANNELS[i];
 
-  var labelDiv = document.createElement('div');
-  labelDiv.className = 'live-stream-label';
-  labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
-    + ' Bloomberg TV'
-    + ' <a href="https://www.youtube.com/@BloombergTelevision/live" target="_blank" rel="noopener"'
-    + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>';
+    var slot = document.createElement('div');
+    slot.className = 'live-stream-slot';
 
-  var iframe = document.createElement('iframe');
-  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
-    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-  iframe.title = 'Bloomberg TV Live';
-  iframe.loading = 'lazy';
-  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-  iframe.setAttribute('allowfullscreen', '');
+    var labelDiv = document.createElement('div');
+    labelDiv.className = 'live-stream-label';
+    labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
+      + ' ' + ch.label
+      + ' <a href="' + ch.link + '" target="_blank" rel="noopener"'
+      + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>';
 
-  slot.appendChild(labelDiv);
-  slot.appendChild(iframe);
-  container.appendChild(slot);
+    var iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
+      + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+    iframe.title = ch.label + ' Live';
+    iframe.loading = 'lazy';
+    iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+
+    slot.appendChild(labelDiv);
+    slot.appendChild(iframe);
+    container.appendChild(slot);
+  }
 }
 
 // ============================================
