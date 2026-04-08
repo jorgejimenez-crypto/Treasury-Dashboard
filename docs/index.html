@@ -14,11 +14,10 @@
     <div id="ticker-content" class="ticker-content">Loading ticker...</div>
   </div>
 
-  <!-- TOP BAR -->
+  <!-- TOP BAR — tightened, description removed -->
   <header id="header">
     <div class="header-left">
       <h1>Treasury Intelligence Dashboard</h1>
-      <div class="dashboard-desc">Real-time rates, macro indicators, and cross-asset signals for treasury operations. Panels auto-refresh every 15 minutes; energy ticker refreshes every 10 seconds during market hours.</div>
       <div id="header-meta" class="header-meta">Loading...</div>
     </div>
     <div class="header-right">
@@ -45,25 +44,30 @@
     <p>Fetching market data...</p>
   </div>
 
-  <!-- MAIN DASHBOARD GRID -->
+  <!-- MAIN DASHBOARD GRID
+       New layout priority (energy-first, macro-dense):
+       Row 0: Movers strip (full width — always visible, no header)
+       Row 1: Commodities (col 1-2, wide) | Live Catalysts (col 3)
+       Row 2: Macro | Funding | Risk & Credit
+       Row 3: Calendar | News (span 2)
+       Row 4: Yields | Forex
+       Row 5: Heatmap (full width)
+  -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Compact strip: Energy Movers -->
-    <section class="panel panel-full panel-compact" id="panel-movers" aria-label="Energy Movers">
-      <h2>Energy Movers</h2>
+    <!-- Row 0: Energy Movers strip (no header — strip speaks for itself) -->
+    <section class="panel panel-full panel-strip" id="panel-movers" aria-label="Energy Movers">
       <div id="movers-content"></div>
     </section>
 
-    <!-- Row 1: Calendar + News + Live -->
-    <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
-      <h2>Economic Calendar</h2>
-      <div id="calendar-content"></div>
-      <div class="panel-footer" id="calendar-fomc-footer"></div>
-    </section>
-
-    <section class="panel" id="panel-news" aria-label="News and Intelligence">
-      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
-      <div id="news-content" class="news-feed"></div>
+    <!-- Row 1: Commodities (wide, high priority) + Bloomberg Live -->
+    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
+      <h2>Commodities</h2>
+      <div class="metrics-grid cols-4" id="commodities-grid"></div>
+      <div class="panel-footer" id="commodities-footer"></div>
+      <div class="chart-container" id="tv-chart-wrap">
+        <div id="tradingview-widget"></div>
+      </div>
     </section>
 
     <section class="panel" id="panel-live" aria-label="Live Catalysts">
@@ -71,44 +75,7 @@
       <div class="live-streams" id="live-streams"></div>
     </section>
 
-    <!-- Row 2: Forex + Yields + Commodities -->
-    <section class="panel" id="panel-forex" aria-label="Forex">
-      <h2>Forex</h2>
-      <div class="metrics-grid cols-2" id="forex-grid"></div>
-      <div class="separator"></div>
-      <div class="fx-converter" id="fx-converter">
-        <div class="fx-converter-header">FX Converter</div>
-        <div class="fx-converter-row">
-          <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
-          <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
-          <span class="fx-arrow">&#x2192;</span>
-          <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
-          <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
-        </div>
-        <div class="fx-result" id="fx-result">--</div>
-        <div class="fx-rate-line" id="fx-rate-line"></div>
-      </div>
-    </section>
-
-    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
-      <h2>Treasury Yields</h2>
-      <div class="metrics-grid cols-2" id="yields-grid"></div>
-      <div class="panel-footer" id="yields-footer"></div>
-      <div class="chart-container">
-        <canvas id="yield-curve-canvas" height="180"></canvas>
-      </div>
-    </section>
-
-    <section class="panel" id="panel-commodities" aria-label="Commodities">
-      <h2>Commodities</h2>
-      <div class="metrics-grid cols-3" id="commodities-grid"></div>
-      <div class="panel-footer" id="commodities-footer"></div>
-      <div class="chart-container" id="tv-chart-wrap">
-        <div id="tradingview-widget"></div>
-      </div>
-    </section>
-
-    <!-- Row 3: Macro + Funding + Risk -->
+    <!-- Row 2: Macro + Funding + Risk (high-signal density row) -->
     <section class="panel" id="panel-macro" aria-label="Macro Indicators">
       <h2>Macro Indicators</h2>
       <div class="metrics-grid cols-2" id="macro-grid"></div>
@@ -127,9 +94,49 @@
       <div class="metrics-grid cols-2" id="credit-grid"></div>
     </section>
 
-    <!-- Row 4: Market Heatmap (full width) -->
-    <section class="panel panel-full" id="panel-heatmap" aria-label="S&P 500 Heatmap">
-      <h2>S&P 500 Heatmap</h2>
+    <!-- Row 3: Calendar + News (news wider) -->
+    <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
+      <h2>Economic Calendar</h2>
+      <div id="calendar-content"></div>
+      <div class="panel-footer" id="calendar-fomc-footer"></div>
+    </section>
+
+    <section class="panel panel-news-wide" id="panel-news" aria-label="News and Intelligence">
+      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+      <div id="news-content" class="news-feed"></div>
+    </section>
+
+    <!-- Row 4: Yields + Forex (supporting data, lower priority) -->
+    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
+      <h2>Treasury Yields</h2>
+      <div class="metrics-grid cols-2" id="yields-grid"></div>
+      <div class="panel-footer" id="yields-footer"></div>
+      <div class="chart-container">
+        <canvas id="yield-curve-canvas" height="160"></canvas>
+      </div>
+    </section>
+
+    <section class="panel panel-yields-wide" id="panel-forex" aria-label="Forex">
+      <h2>Forex</h2>
+      <div class="metrics-grid cols-4" id="forex-grid"></div>
+      <div class="separator"></div>
+      <div class="fx-converter" id="fx-converter">
+        <div class="fx-converter-header">FX Converter</div>
+        <div class="fx-converter-row">
+          <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
+          <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
+          <span class="fx-arrow">&#x2192;</span>
+          <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
+          <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
+        </div>
+        <div class="fx-result" id="fx-result">--</div>
+        <div class="fx-rate-line" id="fx-rate-line"></div>
+      </div>
+    </section>
+
+    <!-- Row 5: Heatmap (full width) -->
+    <section class="panel panel-full" id="panel-heatmap" aria-label="S&amp;P 500 Heatmap">
+      <h2>S&amp;P 500 Heatmap</h2>
       <div id="heatmap-content" class="tv-widget-container"></div>
     </section>
 
@@ -137,10 +144,10 @@
 
   <!-- FOOTER -->
   <footer id="footer">
-    <p>This is not financial advice. Internal use only. Data: Yahoo Finance (15-min delayed), FRED (daily), NY Fed (daily). Press <kbd>?</kbd> for shortcuts.</p>
+    <p>Not financial advice. Internal use only. Data: Yahoo Finance (15-min delayed), FRED (daily), NY Fed (daily). Press <kbd>?</kbd> for shortcuts.</p>
   </footer>
 
-  <!-- QUICK NOTES / TRADING JOURNAL (collapsible, localStorage) -->
+  <!-- QUICK NOTES -->
   <div id="notes-panel" class="notes-panel" style="display:none;">
     <div class="notes-header">
       <span>Quick Notes</span>
