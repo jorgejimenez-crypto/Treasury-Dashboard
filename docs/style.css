@@ -47,59 +47,6 @@ body {
   line-height: 1.4;
 }
 
-/* ---- Scrolling Ticker Bar ---- */
-
-.ticker-bar {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
-  padding: 5px 0;
-  margin: 0 -16px 10px;
-  overflow: hidden;
-  white-space: nowrap;
-  position: relative;
-}
-
-.ticker-content {
-  display: inline-block;
-  animation: ticker-scroll 45s linear infinite;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  /* padding-left pushes content off-screen right on first entry;
-     -50% translate on doubled content = seamless gapless loop */
-  padding-left: 100%;
-}
-
-.ticker-content:hover {
-  animation-play-state: paused;
-}
-
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }  /* -50% on (padding + doubled content) = seamless */
-}
-
-.ticker-item {
-  display: inline-block;
-  margin-right: 32px;
-}
-
-.ticker-symbol {
-  color: var(--text);
-  font-weight: 600;
-  margin-right: 4px;
-}
-
-.ticker-price {
-  color: var(--text);
-  margin-right: 4px;
-}
-
-.ticker-up { color: var(--green); }
-.ticker-down { color: var(--red); }
-.ticker-flat { color: var(--text-dim); }
-
 /* ---- TradingView Ticker Tape ---- */
 
 .tv-ticker-tape {
@@ -766,6 +713,14 @@ main {
   height: 400px;
 }
 
+.heatmap-timestamp {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-align: right;
+  padding: 4px 0 0;
+  font-family: var(--font-mono);
+}
+
 /* ---- Calendar widget ---- */
 
 #calendar-content {
@@ -794,41 +749,7 @@ main {
   max-height: 36px;
 }
 
-/* ---- Live Streams (multi-channel tabbed) ---- */
-
-.live-channel-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-
-.live-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 6px 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: color 0.15s, border-color 0.15s;
-  font-family: var(--font);
-}
-
-.live-tab:hover {
-  color: var(--text-muted);
-}
-
-.live-tab.live-tab-active {
-  color: var(--text);
-  border-bottom-color: var(--blue);
-}
+/* ---- Live Streams (Bloomberg only) ---- */
 
 .live-streams {
   display: grid;
@@ -1106,7 +1027,6 @@ footer kbd {
   header { border-bottom: 2px solid #111; }
   .header-right { display: none; }
   .dashboard-desc { display: none; }
-  .ticker-bar { display: none; }
   .tv-ticker-tape { display: none; }
   #alert-bar { break-inside: avoid; }
   .panel { border: 1px solid #ccc; break-inside: avoid; }
@@ -1181,21 +1101,8 @@ footer kbd {
     bottom: 12px;
   }
 
-  .ticker-bar {
-    margin: 0 -8px 8px;
-  }
-
   .tv-ticker-tape {
     margin: 0 -8px;
-  }
-
-  .live-channel-tabs {
-    flex-wrap: wrap;
-  }
-
-  .live-tab {
-    font-size: 9px;
-    padding: 5px 7px;
   }
 
   #heatmap-content,

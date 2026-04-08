@@ -49,12 +49,7 @@ var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '3
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
-// Custom ticker — energy + risk focus only (equities/gold/FX handled by TV Ticker Tape)
-var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'VIX', 'DXY'];
-var TICKER_LABELS = {
-  WTI: 'WTI Crude (CL=F)', Brent: 'Brent (BZ=F)', NatGas: 'Nat Gas (NG=F)',
-  HeatOil: 'Heat Oil (HO=F)', VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)'
-};
+// Custom scrolling ticker removed — TV Ticker Tape handles all symbols.
 
 var MACRO_DISPLAY = [
   { id: 'FEDFUNDS',        label: 'Fed Funds',     suffix: '%',  dec: 2 },
@@ -82,54 +77,23 @@ function initTradingView() {
   if (!wrap) return;
   tvInitialized = true;
 
-  var container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-  container.style.height = '300px';
-  container.style.width = '100%';
-
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  container.appendChild(inner);
-
-  var config = {
-    symbols: [
-      ['WTI Crude', 'NYMEX:CL1!|1D'],
-      ['Brent',     'NYMEX:BZ1!|1D'],
-      ['Nat Gas',   'NYMEX:NG1!|1D'],
-      ['Heat Oil',  'NYMEX:HO1!|1D']
-    ],
-    chartOnly: false,
-    width: '100%',
-    height: 300,
-    locale: 'en',
-    colorTheme: 'dark',
-    autosize: false,
-    showVolume: false,
-    hideDateRanges: false,
-    hideMarketStatus: false,
-    hideSymbolLogo: true,
-    scalePosition: 'right',
-    scaleMode: 'Normal',
-    fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
-    fontSize: '10',
-    noTimeScale: false,
-    valuesTracking: '1',
-    changeMode: 'price-and-percent',
-    chartType: 'area',
-    lineWidth: 2,
-    lineType: 0,
-    dateRanges: ['1d|1', '1w|15', '1m|60', '3m|1D']
-  };
-
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  container.appendChild(script);
-
+  // Use TradingView Advanced Chart iframe — more reliable than script-injected widget
   wrap.innerHTML = '';
-  wrap.appendChild(container);
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://s.tradingview.com/widgetembed/?hideideas=1&overrides=&'
+    + 'enabled_features=&disabled_features=&locale=en'
+    + '#{"symbol":"NYMEX:CL1!","interval":"D","timezone":"America/New_York",'
+    + '"theme":"dark","style":"3","withdateranges":true,"hide_side_toolbar":true,'
+    + '"allow_symbol_change":true,"watchlist":["NYMEX:CL1!","NYMEX:BZ1!","NYMEX:NG1!","NYMEX:HO1!"],'
+    + '"details":true,"calendar":false,"width":"100%","height":"350"}';
+  iframe.style.width = '100%';
+  iframe.style.height = '350px';
+  iframe.style.border = 'none';
+  iframe.style.borderRadius = '4px';
+  iframe.loading = 'lazy';
+  iframe.setAttribute('allowtransparency', 'true');
+  iframe.setAttribute('allowfullscreen', '');
+  wrap.appendChild(iframe);
 }
 
 // ============================================
@@ -336,34 +300,6 @@ function addSourceAttribution(panelId, provider, lastDate) {
   panel.appendChild(div);
 }
 
-// ============================================
-// SCROLLING TICKER BAR
-// ============================================
-
-function renderTicker(yahoo) {
-  if (!yahoo) return;
-  var container = document.getElementById('ticker-content');
-  if (!container) return;
-  var html = '';
-  for (var i = 0; i < TICKER_SYMBOLS.length; i++) {
-    var key = TICKER_SYMBOLS[i];
-    var d = yahoo[key];
-    if (!d || d.current == null) continue;
-    var pct = pctChange(d.current, d.prior);
-    var cls = pct == null ? 'ticker-flat' : (pct >= 0 ? 'ticker-up' : 'ticker-down');
-    var pctStr = pct != null ? (' ' + sign(pct) + pct.toFixed(2) + '%') : '';
-    var dec = 2;
-    var isIndex = ['VIX', 'DXY', 'SP500', 'DOW', 'NASDAQ', 'RUSSELL'].indexOf(key) !== -1;
-    var prefix = isIndex ? '' : '$';
-    html += '<span class="ticker-item">'
-      + '<span class="ticker-symbol">' + TICKER_LABELS[key] + '</span>'
-      + '<span class="ticker-price">' + prefix + d.current.toFixed(dec) + '</span>'
-      + '<span class="' + cls + '">' + pctStr + '</span>'
-      + '</span>';
-  }
-  // Duplicate content for seamless scroll loop
-  container.innerHTML = html + html;
-}
 
 // ============================================
 // ALERT COMPUTATION
@@ -920,14 +856,13 @@ function renderCalendarFooter(fomc) {
 // ============================================
 // Full-width panel, lazy-loaded via IntersectionObserver for performance.
 
-var tvHeatmapInitialized = false;
+var tvHeatmapLoaded = false;
 
 function initTVHeatmap() {
-  if (tvHeatmapInitialized) return;
   var container = document.getElementById('heatmap-content');
   if (!container) return;
-  tvHeatmapInitialized = true;
 
+  // Clear and rebuild — TV heatmap widgets don't auto-refresh; must re-inject script
   container.innerHTML = '';
   var widgetDiv = document.createElement('div');
   widgetDiv.className = 'tradingview-widget-container';
@@ -963,24 +898,36 @@ function initTVHeatmap() {
   widgetDiv.appendChild(script);
 
   container.appendChild(widgetDiv);
+
+  // Timestamp label
+  var ts = document.createElement('div');
+  ts.className = 'heatmap-timestamp';
+  var now = new Date();
+  ts.textContent = 'Updated ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  container.appendChild(ts);
+  tvHeatmapLoaded = true;
 }
 
 // Lazy-load heatmap when panel scrolls into view
 function lazyLoadHeatmap() {
   var panel = document.getElementById('panel-heatmap');
-  if (!panel || tvHeatmapInitialized) return;
+  if (!panel) return;
 
-  if ('IntersectionObserver' in window) {
-    var observer = new IntersectionObserver(function(entries) {
-      if (entries[0].isIntersecting) {
-        initTVHeatmap();
-        observer.disconnect();
-      }
-    }, { rootMargin: '200px' });
-    observer.observe(panel);
+  if (!tvHeatmapLoaded) {
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting) {
+          initTVHeatmap();
+          observer.disconnect();
+        }
+      }, { rootMargin: '200px' });
+      observer.observe(panel);
+    } else {
+      setTimeout(initTVHeatmap, 2000);
+    }
   } else {
-    // Fallback: init after short delay
-    setTimeout(initTVHeatmap, 2000);
+    // Already loaded once — refresh the widget by rebuilding it
+    initTVHeatmap();
   }
 }
 
@@ -1085,7 +1032,6 @@ function renderDashboard(data) {
   cacheData('market', data);
 
   // Render all panels
-  renderTicker(data.yahoo);
   renderYields(data.fred);
   renderYieldCurve(data.fred);
   renderFunding(data.nyfed, data.fred);
@@ -1184,7 +1130,6 @@ function tickerRefresh() {
     .then(function(data) {
       // Merge ticker symbols into cached full dataset so other panels stay intact
       cachedYahoo = Object.assign(cachedYahoo || {}, data.yahoo);
-      renderTicker(cachedYahoo);
       renderCommodities(cachedYahoo);
       renderRisk(cachedYahoo, cachedFred || {});
       renderMovers(cachedYahoo);
@@ -1243,98 +1188,37 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS — Multi-channel tabbed streams
+// LIVE CATALYSTS — Bloomberg TV only
 // ============================================
-//
-// Strategy: Use YouTube's /live_stream?channel=CHANNEL_ID embed URL.
-// Only the active tab loads an iframe (lazy). Switching tabs swaps the iframe src.
-// autoplay=1&mute=1 is required by browser autoplay policy.
-
-var LIVE_CHANNELS = [
-  { id: 'bloomberg', label: 'Bloomberg',  channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
-  { id: 'cnbc',      label: 'CNBC',       channelId: 'UCvJJ_dzjViJCoLf5uKUTwoA', link: 'https://www.youtube.com/@CNBC/live' },
-];
-
-var activeChannelIdx = 0;
-
-function buildEmbedSrc(ch) {
-  return 'https://www.youtube.com/embed/live_stream?channel='
-    + ch.channelId + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-}
 
 function initLiveStreams() {
-  var tabsContainer = document.getElementById('live-channel-tabs');
-  var streamContainer = document.getElementById('live-streams');
-  if (!tabsContainer || !streamContainer) return;
+  var container = document.getElementById('live-streams');
+  if (!container) return;
+  container.innerHTML = '';
 
   var live = isMarketOpen();
 
-  // Build tabs
-  tabsContainer.innerHTML = '';
-  for (var i = 0; i < LIVE_CHANNELS.length; i++) {
-    var btn = document.createElement('button');
-    btn.className = 'live-tab' + (i === 0 ? ' live-tab-active' : '');
-    btn.setAttribute('data-idx', i);
-    btn.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span> ' + LIVE_CHANNELS[i].label;
-    btn.addEventListener('click', function() {
-      var idx = parseInt(this.getAttribute('data-idx'));
-      switchChannel(idx);
-    });
-    tabsContainer.appendChild(btn);
-  }
-
-  // Build stream slot (single iframe, swapped on tab click)
-  streamContainer.innerHTML = '';
   var slot = document.createElement('div');
   slot.className = 'live-stream-slot';
-  slot.id = 'live-stream-active';
 
-  var linkDiv = document.createElement('div');
-  linkDiv.className = 'live-stream-link';
-  linkDiv.id = 'live-stream-link';
-  slot.appendChild(linkDiv);
+  var labelDiv = document.createElement('div');
+  labelDiv.className = 'live-stream-label';
+  labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
+    + ' Bloomberg TV'
+    + ' <a href="https://www.youtube.com/@BloombergTelevision/live" target="_blank" rel="noopener"'
+    + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>';
 
   var iframe = document.createElement('iframe');
-  iframe.id = 'live-stream-iframe';
-  iframe.title = LIVE_CHANNELS[0].label + ' Live';
+  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
+    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  iframe.title = 'Bloomberg TV Live';
   iframe.loading = 'lazy';
   iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
   iframe.setAttribute('allowfullscreen', '');
-  iframe.src = buildEmbedSrc(LIVE_CHANNELS[0]);
+
+  slot.appendChild(labelDiv);
   slot.appendChild(iframe);
-
-  streamContainer.appendChild(slot);
-  updateStreamLink(0);
-}
-
-function switchChannel(idx) {
-  if (idx === activeChannelIdx) return;
-  activeChannelIdx = idx;
-  var ch = LIVE_CHANNELS[idx];
-
-  // Update tabs
-  var tabs = document.querySelectorAll('.live-tab');
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].className = 'live-tab' + (i === idx ? ' live-tab-active' : '');
-  }
-
-  // Swap iframe src (lazy load — only active channel loads)
-  var iframe = document.getElementById('live-stream-iframe');
-  if (iframe) {
-    iframe.src = buildEmbedSrc(ch);
-    iframe.title = ch.label + ' Live';
-  }
-
-  updateStreamLink(idx);
-}
-
-function updateStreamLink(idx) {
-  var ch = LIVE_CHANNELS[idx];
-  var linkDiv = document.getElementById('live-stream-link');
-  if (linkDiv) {
-    linkDiv.innerHTML = '<a href="' + ch.link + '" target="_blank" rel="noopener">'
-      + 'Open ' + ch.label + ' on YouTube &#x2197;</a>';
-  }
+  container.appendChild(slot);
 }
 
 // ============================================

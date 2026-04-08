@@ -102,6 +102,7 @@ var RSS_FEEDS = [
   { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
   // Premium news (previously client-side via rss2json — now worker-side, no rate limits)
   { url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml',             source: 'WSJ',             tag: 'MARKETS', isGov: false },
+  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',          source: 'WSJ Markets',     tag: 'MARKETS', isGov: false },
   { url: 'https://feeds.reuters.com/reuters/businessNews',           source: 'Reuters',         tag: 'MARKETS', isGov: false },
   { url: 'https://feeds.marketwatch.com/marketwatch/topstories',     source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
   { url: 'https://finance.yahoo.com/rss/topstories',                source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
