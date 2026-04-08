@@ -101,8 +101,12 @@ var RSS_FEEDS = [
   { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',     isGov: true  },
   { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
   // Premium news (previously client-side via rss2json — now worker-side, no rate limits)
-  { url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml',             source: 'WSJ',             tag: 'MARKETS', isGov: false },
+  // WSJ: RSSWorldNews was removed — it is general world news and >90% of articles
+  // fail the financial keyword filter. RSSMarketsMain + RSSBusiness are directly
+  // financial. Note: feeds.a.dj.com may occasionally block Cloudflare Worker IPs;
+  // if WSJ articles drop to zero, the feeds are being blocked (not a code issue).
   { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',          source: 'WSJ Markets',     tag: 'MARKETS', isGov: false },
+  { url: 'https://feeds.a.dj.com/rss/RSSBusiness.xml',             source: 'WSJ Business',    tag: 'MARKETS', isGov: false },
   { url: 'https://feeds.reuters.com/reuters/businessNews',           source: 'Reuters',         tag: 'MARKETS', isGov: false },
   { url: 'https://feeds.marketwatch.com/marketwatch/topstories',     source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
   { url: 'https://finance.yahoo.com/rss/topstories',                source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
@@ -257,14 +261,20 @@ async function handleNews(env) {
   });
 
   // Relevance filter: non-gov items must match at least one financial keyword
+  // FIN_KEYWORDS: catches financial content across Reuters, MarketWatch, Yahoo, WSJ.
+  // WSJ tends to use broader business language — 'capital', 'invest', 'financ',
+  // 'merger', 'deal' etc. — so these are added to prevent over-filtering.
   var FIN_KEYWORDS = [
-    'fed','fomc','rate','yield','bond','treasury','inflation','cpi','pci','ppi',
+    'fed','fomc','rate','yield','bond','treasury','inflation','cpi','ppi','pce',
     'gdp','economy','economic','market','stock','equity','dollar','currency','forex',
     'oil','crude','energy','commodity','gold','silver','copper','trade','tariff',
     'bank','credit','debt','deficit','fiscal','monetary','employment','jobs','payroll',
     'recession','growth','output','spending','budget','opec','ecb','boe','boj',
     'interest','spread','liquidity','repo','sofr','effr','rrp','mbs','mortgage',
-    'earnings','revenue','profit','loss','quarter','annual','guidance'
+    'earnings','revenue','profit','loss','quarter','annual','guidance',
+    'invest','capital','financ','fund','hedge','merger','acquisition','ipo',
+    'wall street','sanction','tariff','deal','shares','investor','asset','portfolio',
+    'volatil','downturn','rally','selloff','correction','bull','bear','risk'
   ];
   allItems = allItems.filter(function(item) {
     if (item.isGov) return true;  // always keep gov sources (Fed, ECB)

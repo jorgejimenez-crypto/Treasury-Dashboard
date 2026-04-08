@@ -40,17 +40,35 @@
   </div>
 
   <!-- MAIN DASHBOARD GRID
-    Row 0: Movers strip (full width)
-    Row 1: Macro | Calendar | News          ← TOP 3 PRIORITIES
-    Row 2: Yields | Commodities (span 2)    ← Yields moved up
-    Row 3: Funding | Risk & Credit | Live   ← Dual-screen live
-    Row 4: Forex (full width)               ← Upgraded converter
+    Row 0: Movers strip (full width, yellow accent)
+    Row 0.5: Funding + Risk compact strip (full width, two halves)
+    Row 1: Macro | Calendar | News          ← TOP 3
+    Row 2: Yields+Bloomberg | Commodities   ← Bloomberg inside Yields
+    Row 3: Forex (full width)
   -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Row 0: Movers Strip -->
+    <!-- Row 0: Energy Movers strip (no header) -->
     <section class="panel panel-full panel-strip" id="panel-movers" aria-label="Energy Movers">
       <div id="movers-content"></div>
+    </section>
+
+    <!-- Row 0.5: Funding & Liquidity + Risk & Credit — compact inline strip -->
+    <section class="panel panel-full panel-compact-row" id="panel-funding-risk" aria-label="Funding and Risk">
+      <div id="panel-funding" class="compact-half" aria-label="Funding and Liquidity">
+        <div class="strip-h2">Funding &amp; Liquidity</div>
+        <div class="metrics-grid cols-3" id="funding-grid"></div>
+        <div class="strip-footer" id="funding-footer"></div>
+      </div>
+      <div class="compact-divider"></div>
+      <div id="panel-risk" class="compact-half" aria-label="Risk and Credit">
+        <div class="strip-h2">Risk &amp; Credit</div>
+        <div class="metrics-grid cols-4" id="risk-grid-combined">
+          <!-- risk-grid and credit-grid rendered inline here -->
+          <div id="risk-grid" style="display:contents;"></div>
+          <div id="credit-grid" style="display:contents;"></div>
+        </div>
+      </div>
     </section>
 
     <!-- Row 1: Top 3 — Macro · Calendar · News -->
@@ -70,13 +88,26 @@
       <div id="news-content" class="news-feed"></div>
     </section>
 
-    <!-- Row 2: Yields + Commodities (wide) -->
-    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
-      <h2>Treasury Yields</h2>
-      <div class="metrics-grid cols-2" id="yields-grid"></div>
-      <div class="panel-footer" id="yields-footer"></div>
-      <div class="chart-container">
-        <canvas id="yield-curve-canvas" height="160"></canvas>
+    <!-- Row 2: Yields (with Bloomberg inside) + Commodities (wide, with symbol selector) -->
+    <section class="panel panel-yields-combined" id="panel-yields" aria-label="Treasury Yields">
+      <div class="yields-live-layout">
+        <div class="yields-data">
+          <h2>Treasury Yields</h2>
+          <div class="metrics-grid cols-2" id="yields-grid"></div>
+          <div class="panel-footer" id="yields-footer"></div>
+          <div class="chart-container">
+            <canvas id="yield-curve-canvas" height="150"></canvas>
+          </div>
+        </div>
+        <div id="panel-live" class="yields-live-stream">
+          <div class="strip-h2">
+            <span class="live-dot" id="live-dot-indicator"></span>
+            Bloomberg TV
+            <a href="https://www.youtube.com/@BloombergTelevision/live" target="_blank" rel="noopener"
+               style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>
+          </div>
+          <div class="live-streams" id="live-streams"></div>
+        </div>
       </div>
     </section>
 
@@ -85,30 +116,21 @@
       <div class="metrics-grid cols-4" id="commodities-grid"></div>
       <div class="panel-footer" id="commodities-footer"></div>
       <div class="chart-container" id="tv-chart-wrap">
+        <!-- Commodity symbol selector -->
+        <div class="tv-chart-controls">
+          <label class="tv-chart-label">Chart</label>
+          <select id="commodity-selector" class="commodity-select">
+            <option value="NYMEX:CL1!">WTI Crude (CL1!)</option>
+            <option value="NYMEX:BZ1!">Brent Crude (BZ1!)</option>
+            <option value="NYMEX:RB1!">RBOB Gasoline (RB1!)</option>
+            <option value="NYMEX:HO1!">Heating Oil (HO1!)</option>
+          </select>
+        </div>
         <div id="tradingview-widget"></div>
       </div>
     </section>
 
-    <!-- Row 3: Funding · Risk & Credit · Live Catalysts (dual-screen) -->
-    <section class="panel" id="panel-funding" aria-label="Funding and Liquidity">
-      <h2>Funding &amp; Liquidity</h2>
-      <div class="metrics-grid cols-2" id="funding-grid"></div>
-      <div class="panel-footer" id="funding-footer"></div>
-    </section>
-
-    <section class="panel" id="panel-risk" aria-label="Risk and Credit">
-      <h2>Risk &amp; Credit</h2>
-      <div class="metrics-grid cols-2" id="risk-grid"></div>
-      <div class="separator"></div>
-      <div class="metrics-grid cols-2" id="credit-grid"></div>
-    </section>
-
-    <section class="panel" id="panel-live" aria-label="Live Catalysts">
-      <h2>Live Catalysts</h2>
-      <div class="live-streams" id="live-streams"></div>
-    </section>
-
-    <!-- Row 4: Forex — full width, upgraded converter -->
+    <!-- Row 3: Forex — full width -->
     <section class="panel panel-full" id="panel-forex" aria-label="Forex">
       <h2>Forex</h2>
       <div class="forex-layout">
@@ -167,7 +189,7 @@
         <tr><td><kbd>N</kbd></td><td>Toggle news panel</td></tr>
         <tr><td><kbd>C</kbd></td><td>Toggle calendar panel</td></tr>
         <tr><td><kbd>J</kbd></td><td>Toggle trading notes</td></tr>
-        <tr><td><kbd>L</kbd></td><td>Toggle live streams</td></tr>
+        <tr><td><kbd>L</kbd></td><td>Toggle Bloomberg stream</td></tr>
         <tr><td><kbd>?</kbd></td><td>Show/hide shortcuts</td></tr>
         <tr><td><kbd>Esc</kbd></td><td>Close modal / notes</td></tr>
         <tr><td><kbd>Ctrl+P</kbd></td><td>Print / export snapshot</td></tr>

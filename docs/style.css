@@ -841,11 +841,7 @@ main {
 
 /* ---- Live Streams (Bloomberg only) ---- */
 
-.live-streams {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+.live-streams { display: block; }
 
 .live-stream-slot {
   position: relative;
@@ -1189,6 +1185,24 @@ footer kbd {
     margin: 0 -8px 8px;
   }
 
+  .yields-live-layout {
+    flex-direction: column;
+  }
+  .yields-live-stream {
+    width: 100%;
+  }
+  #risk-grid-combined {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .panel-compact-row {
+    flex-direction: column;
+  }
+  .compact-divider {
+    width: 100%;
+    height: 1px;
+    margin: 6px 0;
+  }
+
 
   #calendar-content {
     max-height: 280px;
@@ -1512,3 +1526,150 @@ body.density-compact .metric {
 .cal-actual-beat    { color: var(--green); }
 .cal-actual-miss    { color: var(--red);   }
 .cal-actual-pending { color: var(--text-dim); font-style: italic; }
+
+
+/* ---- Compact Funding+Risk data strip (Row 0.5) ---- */
+
+.panel-compact-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 5px 10px;
+  border-left: 3px solid var(--cyan);   /* distinct from yellow movers accent */
+}
+
+.compact-half {
+  flex: 1;
+  min-width: 0;
+}
+
+.compact-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.strip-h2 {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.strip-footer {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+}
+
+/* Compact row metric cards — smaller than panel metrics */
+.panel-compact-row .metric {
+  padding: 4px 7px;
+}
+.panel-compact-row .metric-label {
+  font-size: 9px;
+}
+.panel-compact-row .metric-value {
+  font-size: 13px;
+}
+.panel-compact-row .metric-value.sm {
+  font-size: 12px;
+}
+.panel-compact-row .metric-delta {
+  font-size: 10px;
+}
+
+/* Risk+Credit combined grid in compact row — 4-col inline */
+#risk-grid-combined {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+
+/* ---- Treasury Yields + Bloomberg (combined panel) ---- */
+
+.panel-yields-combined {
+  padding: 8px 10px;
+}
+
+.yields-live-layout {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.yields-data {
+  flex: 1;
+  min-width: 0;
+}
+
+.yields-data h2 {
+  margin-bottom: 6px;
+}
+
+.yields-live-stream {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.yields-live-stream.collapsed {
+  display: none;
+}
+
+.yields-live-stream .live-streams iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #000;
+  display: block;
+}
+
+/* ---- Commodity chart controls ---- */
+
+.tv-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 4px;
+  margin-bottom: 2px;
+}
+
+.tv-chart-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.commodity-select {
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 3px 8px 3px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: border-color 0.15s;
+}
+
+.commodity-select:focus {
+  border-color: var(--yellow);
+  outline: none;
+}
+
+.commodity-select:hover {
+  border-color: var(--border-light);
+}

@@ -124,15 +124,21 @@ var ECON_CALENDAR = [
 
 var tvInitialized = false;
 
-function initTradingView() {
+// Currently active commodity symbol for the TradingView chart
+var tvCurrentSymbol = 'NYMEX:CL1!';
+
+function initTradingView(symbol) {
+  if (symbol) tvCurrentSymbol = symbol;
   if (tvInitialized) return;
   var wrap = document.getElementById('tradingview-widget');
   if (!wrap) return;
   tvInitialized = true;
+  renderTVChart(tvCurrentSymbol);
+}
 
-  // Use embed-widget-advanced-chart.js — official script-injection method.
-  // Requires: outer container with explicit height, inner __widget div,
-  // then script tag with JSON config as textContent (not innerHTML).
+function renderTVChart(symbol) {
+  var wrap = document.getElementById('tradingview-widget');
+  if (!wrap) return;
   wrap.innerHTML = '';
 
   var container = document.createElement('div');
@@ -146,12 +152,8 @@ function initTradingView() {
   inner.style.height = '100%';
   container.appendChild(inner);
 
-  // Explicit width/height in config (not autosize) — same pattern as initTVHeatmap.
-  // autosize:true causes TradingView to measure the container at init time,
-  // which can resolve to 0px before CSS layout is computed. Explicit dimensions
-  // bypass that race and reliably render on first paint.
   var config = {
-    symbol: 'NYMEX:CL1!',
+    symbol: symbol || 'NYMEX:CL1!',
     width: '100%',
     height: 350,
     interval: 'D',
@@ -162,7 +164,7 @@ function initTradingView() {
     backgroundColor: 'rgba(10, 14, 20, 1)',
     gridColor: 'rgba(30, 42, 58, 0.5)',
     allow_symbol_change: true,
-    watchlist: ['NYMEX:CL1!', 'NYMEX:BZ1!', 'NYMEX:NG1!', 'NYMEX:HO1!'],
+    watchlist: ['NYMEX:CL1!', 'NYMEX:BZ1!', 'NYMEX:RB1!', 'NYMEX:HO1!'],
     details: false,
     hotlist: false,
     calendar: false,
@@ -175,8 +177,22 @@ function initTradingView() {
   script.async = true;
   script.textContent = JSON.stringify(config);
   container.appendChild(script);
-
   wrap.appendChild(container);
+}
+
+function switchCommodityChart(symbol) {
+  tvCurrentSymbol = symbol;
+  tvInitialized = false;   // allow re-render
+  renderTVChart(symbol);
+  tvInitialized = true;    // restore guard
+}
+
+function initCommoditySelector() {
+  var sel = document.getElementById('commodity-selector');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    switchCommodityChart(sel.value);
+  });
 }
 
 // ============================================
@@ -1265,6 +1281,7 @@ function renderDashboard(data) {
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
   initTradingView();
+  initCommoditySelector();
 
   // Clear error states on successful render
   var allPanels = document.querySelectorAll('.panel-error');
@@ -1414,9 +1431,9 @@ function initNotes() {
 // LIVE CATALYSTS — Bloomberg TV + CNBC (dual-screen, stacked)
 // ============================================
 
+// Bloomberg only — live stream now embedded inside the Treasury Yields panel
 var LIVE_CHANNELS = [
-  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
-  { label: 'CNBC',         channelId: 'UCrp_UI8XtuYfpiqluWLD7Lw', link: 'https://www.youtube.com/@CNBC/live' }
+  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' }
 ];
 
 function initLiveStreams() {
@@ -1426,31 +1443,22 @@ function initLiveStreams() {
 
   var live = isMarketOpen();
 
-  for (var i = 0; i < LIVE_CHANNELS.length; i++) {
-    var ch = LIVE_CHANNELS[i];
-
-    var slot = document.createElement('div');
-    slot.className = 'live-stream-slot';
-
-    var labelDiv = document.createElement('div');
-    labelDiv.className = 'live-stream-label';
-    labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
-      + ' ' + ch.label
-      + ' <a href="' + ch.link + '" target="_blank" rel="noopener"'
-      + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>';
-
-    var iframe = document.createElement('iframe');
-    iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
-      + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-    iframe.title = ch.label + ' Live';
-    iframe.loading = 'lazy';
-    iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-    iframe.setAttribute('allowfullscreen', '');
-
-    slot.appendChild(labelDiv);
-    slot.appendChild(iframe);
-    container.appendChild(slot);
+  // Update the pre-rendered live dot in the Yields panel header
+  var dot = document.getElementById('live-dot-indicator');
+  if (dot) {
+    dot.className = 'live-dot' + (live ? '' : ' live-dot-off');
   }
+
+  // Bloomberg only — single iframe, no loop needed
+  var ch = LIVE_CHANNELS[0];
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
+    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  iframe.title = ch.label + ' Live';
+  iframe.loading = 'lazy';
+  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+  iframe.setAttribute('allowfullscreen', '');
+  container.appendChild(iframe);
 }
 
 // ============================================
@@ -1548,7 +1556,8 @@ function initShortcuts() {
     }
     if (e.key === 'l' || e.key === 'L') {
       e.preventDefault();
-      document.getElementById('panel-live').classList.toggle('collapsed');
+      var liveEl = document.getElementById('panel-live');
+      if (liveEl) liveEl.classList.toggle('collapsed');
       return;
     }
   });
