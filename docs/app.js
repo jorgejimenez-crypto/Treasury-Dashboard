@@ -239,15 +239,32 @@ function getCachedData(key, maxAgeMs) {
 function renderMetric(label, value, delta, dateStr, opts) {
   if (!opts) opts = {};
   var div = document.createElement('div');
-  div.className = 'metric' + (opts.inverse ? ' inverse' : '');
+  div.className = 'metric' + (opts.inverse ? ' inverse' : '') + (opts.secondary ? ' metric-secondary' : '');
+  div.tabIndex = 0;
+
+  // Tooltip: source + raw value
+  var tip = label + ': ' + value;
+  if (delta) tip += ' (' + delta + ')';
+  if (dateStr) tip += ' — ' + dateStr;
+  if (opts.stale) tip += ' [stale]';
+  div.title = tip;
+  div.setAttribute('aria-label', tip);
+
+  // Status dot
+  var status = opts.stale ? 'yellow' : (value === 'N/A' ? 'red' : 'green');
+  if (opts.status) status = opts.status;
 
   var lbl = document.createElement('div');
   lbl.className = 'metric-label';
-  lbl.textContent = label;
+  var dot = document.createElement('span');
+  dot.className = 'status-dot dot-' + status;
+  dot.setAttribute('aria-hidden', 'true');
+  lbl.appendChild(dot);
+  lbl.appendChild(document.createTextNode(label));
   div.appendChild(lbl);
 
   var val = document.createElement('div');
-  val.className = 'metric-value' + (value === 'N/A' ? ' value-na' : '') + (opts.sm ? ' sm' : '');
+  val.className = 'metric-value' + (value === 'N/A' ? ' value-na' : '') + (opts.sm ? ' sm' : '') + (opts.primary ? ' primary' : '');
   val.textContent = value;
   div.appendChild(val);
 
@@ -262,7 +279,25 @@ function renderMetric(label, value, delta, dateStr, opts) {
   if (delta != null && delta !== '') {
     var del = document.createElement('div');
     del.className = 'metric-delta ' + deltaClass(opts.deltaNum);
-    del.textContent = delta;
+    // Add directional arrow for accessibility (not color-only)
+    var arrow = '';
+    var srText = '';
+    if (opts.deltaNum != null && Math.abs(opts.deltaNum) >= 0.01) {
+      arrow = opts.deltaNum > 0 ? '\u25B2 ' : '\u25BC ';
+      srText = opts.deltaNum > 0 ? 'increasing' : 'decreasing';
+    }
+    if (arrow) {
+      var arrowSpan = document.createElement('span');
+      arrowSpan.className = 'delta-arrow';
+      arrowSpan.setAttribute('aria-hidden', 'true');
+      arrowSpan.textContent = arrow;
+      del.appendChild(arrowSpan);
+      var srSpan = document.createElement('span');
+      srSpan.className = 'sr-only';
+      srSpan.textContent = srText;
+      del.appendChild(srSpan);
+    }
+    del.appendChild(document.createTextNode(delta));
     div.appendChild(del);
   }
 
@@ -1058,6 +1093,10 @@ function renderDashboard(data) {
   initTVCalendar();
   lazyLoadHeatmap();
 
+  // Clear error states on successful render
+  var allPanels = document.querySelectorAll('.panel-error');
+  for (var pe = 0; pe < allPanels.length; pe++) allPanels[pe].classList.remove('panel-error');
+
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'grid';
 }
@@ -1072,20 +1111,29 @@ function fetchData() {
     document.getElementById('setup-banner').style.display = 'block';
     return;
   }
+  beginFetch();
   fetch(WORKER_URL + '/api/market-data')
     .then(function(resp) {
       if (!resp.ok) throw new Error('Worker returned ' + resp.status);
       return resp.json();
     })
     .then(function(data) {
+      fetchRetryCount = 0;
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
+      lastRefreshTime = Date.now();
       renderDashboard(data);
+      updateAgoCounter();
     })
     .catch(function(err) {
-      // Show cached data if available, even on fetch failure
-      var cached = getCachedData('market', 3600000); // 1hr stale fallback
+      fetchRetryCount++;
+      var cached = getCachedData('market', 3600000);
       if (cached) {
         try { renderDashboard(cached); return; } catch (e) {}
+      }
+      // After 3 retries, show error state on panels
+      if (fetchRetryCount >= 3) {
+        var panels = document.querySelectorAll('.panel');
+        for (var p = 0; p < panels.length; p++) panels[p].classList.add('panel-error');
       }
       var loading = document.getElementById('loading');
       if (loading.style.display !== 'none') {
@@ -1093,7 +1141,8 @@ function fetchData() {
           + '<br><small>Worker: ' + WORKER_URL + '</small>'
           + '<br><small>Will retry in 15 minutes. Press R to retry now.</small></div>';
       }
-    });
+    })
+    .finally(endFetch);
 }
 
 // All news now fetched worker-side (Fed, ECB, CNBC, WSJ, Reuters, MarketWatch,
@@ -1342,13 +1391,141 @@ function initShortcuts() {
   for (var i = 0; i < panels.length; i++) {
     panels[i].addEventListener('click', function() {
       this.parentElement.classList.toggle('collapsed');
+      savePanelPrefs();
     });
   }
 }
 
 // ============================================
+// SKELETON LOADING (per-panel placeholders)
+// ============================================
+
+function showSkeletons() {
+  var grids = ['yields-grid', 'forex-grid', 'commodities-grid', 'macro-grid', 'funding-grid', 'risk-grid', 'credit-grid'];
+  for (var i = 0; i < grids.length; i++) {
+    var g = document.getElementById(grids[i]);
+    if (!g || g.children.length > 0) continue;
+    var count = grids[i] === 'commodities-grid' ? 7 : 4;
+    for (var j = 0; j < count; j++) {
+      var sk = document.createElement('div');
+      sk.className = 'metric';
+      sk.innerHTML = '<div class="skeleton-line sk-sm"></div><div class="skeleton-line sk-lg"></div><div class="skeleton-line sk-sm"></div>';
+      g.appendChild(sk);
+    }
+  }
+}
+
+// ============================================
+// REFRESH INDICATOR (spin button + updated-ago counter)
+// ============================================
+
+var lastRefreshTime = 0;
+var fetchInFlight = 0;
+
+function beginFetch() {
+  fetchInFlight++;
+  var btn = document.getElementById('btn-refresh');
+  if (btn) btn.classList.add('refreshing');
+}
+function endFetch() {
+  fetchInFlight = Math.max(0, fetchInFlight - 1);
+  if (fetchInFlight === 0) {
+    var btn = document.getElementById('btn-refresh');
+    if (btn) btn.classList.remove('refreshing');
+  }
+}
+function updateAgoCounter() {
+  if (!lastRefreshTime) return;
+  var secs = Math.round((Date.now() - lastRefreshTime) / 1000);
+  var label = secs < 60 ? secs + 's ago' : Math.floor(secs / 60) + 'm ago';
+  var el = document.getElementById('updated-ago');
+  if (!el) {
+    el = document.createElement('span');
+    el.id = 'updated-ago';
+    var meta = document.getElementById('header-meta');
+    if (meta) meta.appendChild(el);
+  }
+  el.textContent = ' | Updated ' + label;
+}
+
+// ============================================
+// DENSITY TOGGLE
+// ============================================
+
+function initDensityToggle() {
+  var saved = localStorage.getItem('td_density');
+  if (saved === 'compact') document.body.classList.add('density-compact');
+  var btn = document.getElementById('btn-density');
+  if (!btn) return;
+  btn.textContent = document.body.classList.contains('density-compact') ? 'Comfortable' : 'Compact';
+  btn.addEventListener('click', function() {
+    document.body.classList.toggle('density-compact');
+    var isCompact = document.body.classList.contains('density-compact');
+    btn.textContent = isCompact ? 'Comfortable' : 'Compact';
+    localStorage.setItem('td_density', isCompact ? 'compact' : 'comfortable');
+  });
+}
+
+// ============================================
+// PANEL PREFS (persist collapsed state)
+// ============================================
+
+function loadPanelPrefs() {
+  try {
+    var prefs = JSON.parse(localStorage.getItem('td_panel_prefs') || '{}');
+    var ids = Object.keys(prefs);
+    for (var i = 0; i < ids.length; i++) {
+      if (prefs[ids[i]].collapsed) {
+        var el = document.getElementById(ids[i]);
+        if (el) el.classList.add('collapsed');
+      }
+    }
+  } catch (e) {}
+}
+
+function savePanelPrefs() {
+  var panels = document.querySelectorAll('.panel[id]');
+  var prefs = {};
+  for (var i = 0; i < panels.length; i++) {
+    if (panels[i].classList.contains('collapsed')) {
+      prefs[panels[i].id] = { collapsed: true };
+    }
+  }
+  try { localStorage.setItem('td_panel_prefs', JSON.stringify(prefs)); } catch (e) {}
+}
+
+// ============================================
+// LAZY INIT UTILITY (IntersectionObserver)
+// ============================================
+
+function lazyInit(panelId, initFn) {
+  var panel = document.getElementById(panelId);
+  if (!panel) { initFn(); return; }
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting) { initFn(); obs.disconnect(); }
+    }, { rootMargin: '300px' });
+    obs.observe(panel);
+  } else {
+    setTimeout(initFn, 1500);
+  }
+}
+
+// ============================================
+// ERROR RETRY COUNTER
+// ============================================
+
+var fetchRetryCount = 0;
+
+// ============================================
 // INIT
 // ============================================
+
+// 0. Show dashboard grid immediately with skeletons
+document.getElementById('dashboard').style.display = 'grid';
+showSkeletons();
+loadPanelPrefs();
+initDensityToggle();
 
 // 1. Show cached data instantly if available
 var cachedMarket = getCachedData('market', 600000); // 10 min cache
@@ -1374,7 +1551,10 @@ tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
 // 5. Init interactive features
 initShortcuts();
 initNotes();
-initLiveStreams();
 
-// 6. Init TradingView Ticker Tape (runs once, independent of data)
+// 6. Lazy-init heavy widgets
+lazyInit('panel-live', initLiveStreams);
 initTVTickerTape();
+
+// 7. Updated-ago counter (ticks every 10s)
+setInterval(updateAgoCounter, 10000);

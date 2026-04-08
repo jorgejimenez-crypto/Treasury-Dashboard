@@ -1144,3 +1144,151 @@ footer kbd {
 .panel.collapsed h2::after {
   transform: rotate(-90deg);
 }
+
+/* ============================================
+   UX OVERHAUL — Phase B additions
+   ============================================ */
+
+/* ---- Density toggle ---- */
+body.density-compact {
+  --gap: 6px;
+}
+body.density-compact .panel {
+  padding: 8px;
+}
+body.density-compact .metric-value {
+  font-size: 15px;
+}
+body.density-compact .panel h2 {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+/* ---- 480px breakpoint ---- */
+@media (max-width: 480px) {
+  body { font-size: 12px; }
+  .metric-value { font-size: 14px; }
+  .metric-value.sm { font-size: 12px; }
+  .panel h2 { font-size: 10px; }
+  .btn-icon { width: 44px; height: 44px; }
+  .dashboard-desc { display: none; }
+  .header-meta { font-size: 10px; }
+}
+
+/* ---- Skeleton loading ---- */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.skeleton-line {
+  height: 14px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-card-alt) 25%, var(--border) 50%, var(--bg-card-alt) 75%);
+  background-size: 400px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+}
+.skeleton-line.sk-lg { height: 22px; width: 60%; }
+.skeleton-line.sk-sm { height: 10px; width: 40%; }
+
+/* ---- Status dots ---- */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.status-dot.dot-green  { background: var(--green); }
+.status-dot.dot-yellow { background: var(--yellow); }
+.status-dot.dot-red    { background: var(--red); }
+
+/* ---- Error card ---- */
+.panel-error {
+  border-color: var(--red) !important;
+}
+.panel-error-msg {
+  color: var(--red);
+  font-size: 11px;
+  padding: 8px;
+  text-align: center;
+}
+
+/* ---- Refresh button spin ---- */
+@keyframes btn-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+#btn-refresh.refreshing {
+  animation: btn-spin 1s linear infinite;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* ---- Metric tooltip ---- */
+.metric[title] {
+  cursor: default;
+}
+.metric:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Data hierarchy ---- */
+.metric-value.primary {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.metric.metric-secondary {
+  opacity: 0.7;
+}
+.metric.metric-secondary .metric-value {
+  font-size: 14px;
+}
+
+/* ---- Delta arrows (accessibility) ---- */
+.delta-arrow {
+  font-size: 9px;
+  margin-right: 1px;
+}
+
+/* ---- Screen reader only ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Updated-ago counter ---- */
+#updated-ago {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* ---- Layout toggle button ---- */
+.btn-text {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.btn-text:hover {
+  color: var(--text);
+  border-color: var(--border-light);
+}

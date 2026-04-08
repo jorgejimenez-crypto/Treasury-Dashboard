@@ -22,6 +22,7 @@
     <div class="header-right">
       <span id="market-status" class="market-badge">--</span>
       <span id="fomc-badge" class="fomc-badge" title="Next FOMC meeting">--</span>
+      <button id="btn-density" class="btn-text" title="Toggle compact/comfortable">Compact</button>
       <button id="btn-refresh" class="btn-icon" title="Refresh now (R)">&#x21bb;</button>
       <button id="btn-notes" class="btn-icon" title="Trading notes (J)">&#x270E;</button>
       <button id="btn-shortcuts" class="btn-icon" title="Keyboard shortcuts (?)">?</button>
@@ -29,7 +30,7 @@
   </header>
 
   <!-- ALERT BAR -->
-  <div id="alert-bar"></div>
+  <div id="alert-bar" role="status" aria-live="polite"></div>
 
   <!-- SETUP BANNER -->
   <div id="setup-banner" class="banner-warn" style="display:none;">
@@ -46,30 +47,30 @@
   <main id="dashboard" style="display:none;">
 
     <!-- Compact strip: Energy Movers -->
-    <section class="panel panel-full panel-compact" id="panel-movers">
+    <section class="panel panel-full panel-compact" id="panel-movers" aria-label="Energy Movers">
       <h2>Energy Movers</h2>
       <div id="movers-content"></div>
     </section>
 
     <!-- Row 1: Calendar + News + Live -->
-    <section class="panel" id="panel-calendar">
+    <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
       <h2>Economic Calendar</h2>
       <div id="calendar-content"></div>
       <div class="panel-footer" id="calendar-fomc-footer"></div>
     </section>
 
-    <section class="panel" id="panel-news">
+    <section class="panel" id="panel-news" aria-label="News and Intelligence">
       <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
       <div id="news-content" class="news-feed"></div>
     </section>
 
-    <section class="panel" id="panel-live">
+    <section class="panel" id="panel-live" aria-label="Live Catalysts">
       <h2>Live Catalysts</h2>
       <div class="live-streams" id="live-streams"></div>
     </section>
 
     <!-- Row 2: Forex + Yields + Commodities -->
-    <section class="panel" id="panel-forex">
+    <section class="panel" id="panel-forex" aria-label="Forex">
       <h2>Forex</h2>
       <div class="metrics-grid cols-2" id="forex-grid"></div>
       <div class="separator"></div>
@@ -87,7 +88,7 @@
       </div>
     </section>
 
-    <section class="panel" id="panel-yields">
+    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
       <h2>Treasury Yields</h2>
       <div class="metrics-grid cols-2" id="yields-grid"></div>
       <div class="panel-footer" id="yields-footer"></div>
@@ -96,7 +97,7 @@
       </div>
     </section>
 
-    <section class="panel" id="panel-commodities">
+    <section class="panel" id="panel-commodities" aria-label="Commodities">
       <h2>Commodities</h2>
       <div class="metrics-grid cols-3" id="commodities-grid"></div>
       <div class="panel-footer" id="commodities-footer"></div>
@@ -106,18 +107,18 @@
     </section>
 
     <!-- Row 3: Macro + Funding + Risk -->
-    <section class="panel" id="panel-macro">
+    <section class="panel" id="panel-macro" aria-label="Macro Indicators">
       <h2>Macro Indicators</h2>
       <div class="metrics-grid cols-2" id="macro-grid"></div>
     </section>
 
-    <section class="panel" id="panel-funding">
+    <section class="panel" id="panel-funding" aria-label="Funding and Liquidity">
       <h2>Funding & Liquidity</h2>
       <div class="metrics-grid cols-2" id="funding-grid"></div>
       <div class="panel-footer" id="funding-footer"></div>
     </section>
 
-    <section class="panel" id="panel-risk">
+    <section class="panel" id="panel-risk" aria-label="Risk and Credit">
       <h2>Risk & Credit</h2>
       <div class="metrics-grid cols-2" id="risk-grid"></div>
       <div class="separator"></div>
@@ -125,7 +126,7 @@
     </section>
 
     <!-- Row 4: Market Heatmap (full width) -->
-    <section class="panel panel-full" id="panel-heatmap">
+    <section class="panel panel-full" id="panel-heatmap" aria-label="S&P 500 Heatmap">
       <h2>S&P 500 Heatmap</h2>
       <div id="heatmap-content" class="tv-widget-container"></div>
     </section>
