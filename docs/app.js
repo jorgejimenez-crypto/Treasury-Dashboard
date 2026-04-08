@@ -93,9 +93,14 @@ function initTradingView() {
   inner.style.height = '100%';
   container.appendChild(inner);
 
+  // Explicit width/height in config (not autosize) — same pattern as initTVHeatmap.
+  // autosize:true causes TradingView to measure the container at init time,
+  // which can resolve to 0px before CSS layout is computed. Explicit dimensions
+  // bypass that race and reliably render on first paint.
   var config = {
-    autosize: true,
     symbol: 'NYMEX:CL1!',
+    width: '100%',
+    height: 350,
     interval: 'D',
     timezone: 'America/New_York',
     theme: 'dark',

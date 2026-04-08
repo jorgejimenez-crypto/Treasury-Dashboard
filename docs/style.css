@@ -430,7 +430,18 @@ main {
 }
 
 #tradingview-widget {
-  min-height: 300px;
+  min-height: 350px;
+  width: 100%;
+}
+
+/* TradingView Advanced Chart — must have CSS-backed height so the widget's
+   internal iframe can resolve height:100% at paint time (same as heatmap). */
+#tradingview-widget .tradingview-widget-container {
+  height: 350px;
+  width: 100%;
+}
+#tradingview-widget .tradingview-widget-container__widget {
+  height: 100%;
   width: 100%;
 }
 
