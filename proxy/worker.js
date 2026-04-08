@@ -48,15 +48,18 @@ var YAHOO_SYMBOLS = [
 // Lightweight ticker list -- /api/ticker only (10s refresh)
 // Keeps frequent ticker refresh fast: 9 symbols, no FRED/NY Fed overhead
 var TICKER_SYMBOLS_WORKER = [
+  { key: 'SP500',   symbol: '%5EGSPC',  group: 'equities'    },
+  { key: 'DOW',     symbol: '%5EDJI',   group: 'equities'    },
+  { key: 'NASDAQ',  symbol: '%5EIXIC',  group: 'equities'    },
+  { key: 'RUSSELL', symbol: '%5ERUT',   group: 'equities'    },
   { key: 'WTI',     symbol: 'CL%3DF',   group: 'commodities' },
   { key: 'Brent',   symbol: 'BZ%3DF',   group: 'commodities' },
   { key: 'NatGas',  symbol: 'NG%3DF',   group: 'commodities' },
   { key: 'HeatOil', symbol: 'HO%3DF',   group: 'commodities' },
   { key: 'Gold',    symbol: 'GC%3DF',   group: 'commodities' },
   { key: 'Silver',  symbol: 'SI%3DF',   group: 'commodities' },
-  { key: 'VIX',     symbol: '%5EVIX',   group: 'risk' },
-  { key: 'DXY',     symbol: 'DX-Y.NYB', group: 'risk' },
-  { key: 'SP500',   symbol: '%5EGSPC',  group: 'equities' },
+  { key: 'VIX',     symbol: '%5EVIX',   group: 'risk'        },
+  { key: 'DXY',     symbol: 'DX-Y.NYB', group: 'risk'        },
 ];
 
 var FRED_MARKET = [
@@ -323,6 +326,7 @@ async function fetchFREDSeries(series, apiKey) {
         id: series.id,
         current: parseFloat(obs[0].value),
         prior: obs.length >= 2 ? parseFloat(obs[1].value) : null,
+        t2:    obs.length >= 3 ? parseFloat(obs[2].value) : null,
         date: obs[0].date,
         label: series.label,
       };

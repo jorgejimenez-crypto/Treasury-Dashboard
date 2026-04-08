@@ -464,6 +464,29 @@ main {
   border: 1px solid var(--border);
 }
 
+/* ---- Yield Curve Legend ---- */
+
+.yield-curve-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-left: 4px;
+}
+.yield-curve-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.ycl-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* ---- Metrics Grid ---- */
 
 .metrics-grid {
@@ -650,13 +673,16 @@ main {
   text-align: center;
 }
 
-.news-tag-FED       { background: var(--blue-bg); color: var(--blue); }
-.news-tag-LABOR     { background: var(--purple); color: #1a1a2e; }
-.news-tag-INFLATION { background: var(--red-bg); color: var(--red); }
-.news-tag-RATES     { background: var(--cyan); color: #0a0e14; }
-.news-tag-GDP       { background: var(--green-bg); color: var(--green); }
-.news-tag-COMMODITIES { background: var(--yellow-bg); color: var(--yellow); }
-.news-tag-MARKETS   { background: rgba(100,100,100,0.15); color: var(--text-muted); }
+.news-tag-FED         { background: rgba(59,130,246,0.15);  color: var(--blue);       }
+.news-tag-INFLATION   { background: rgba(249,115,22,0.15);  color: #f97316;            }
+.news-tag-RATES       { background: rgba(6,182,212,0.15);   color: var(--cyan);        }
+.news-tag-LABOR       { background: rgba(234,179,8,0.15);   color: var(--yellow);      }
+.news-tag-GDP         { background: rgba(34,197,94,0.15);   color: var(--green);       }
+.news-tag-COMMODITIES { background: rgba(217,119,6,0.15);   color: #d97706;            }
+.news-tag-MARKETS     { background: rgba(125,141,161,0.15); color: var(--text-muted);  }
+.news-tag-FX          { background: rgba(34,197,94,0.15);   color: var(--green);       }
+.news-tag-CREDIT      { background: rgba(167,139,250,0.15); color: var(--purple);      }
+.news-tag-MACRO       { background: rgba(239,68,68,0.15);   color: var(--red);         }
 
 .news-body {
   flex: 1;
@@ -714,55 +740,36 @@ main {
 
 /* ---- Energy Movers ---- */
 
-.movers-list {
+.movers-strip {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
 }
-
-.mover-row {
+.mover-chip {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 5px 8px;
+  gap: 6px;
+  padding: 5px 9px;
   border-radius: 4px;
-  background: var(--bg-card-alt);
   border: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.mover-name {
-  font-weight: 600;
-  color: var(--text);
-  min-width: 80px;
-}
-
-.mover-price {
+  background: var(--bg-card-alt);
   font-family: var(--font-mono);
-  color: var(--text);
-  font-size: 12px;
-}
-
-.mover-change {
-  font-family: var(--font-mono);
-  font-weight: 600;
   font-size: 11px;
-  min-width: 65px;
-  text-align: right;
 }
+.mover-chip-name  { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.mover-chip-price { color: var(--text); font-weight: 600; }
+.mover-chip-pct   { font-weight: 600; }
+.mover-chip.chip-up   { border-color: rgba(34,197,94,0.25); }
+.mover-chip.chip-down { border-color: rgba(239,68,68,0.25); }
+.mover-chip.chip-up   .mover-chip-pct { color: var(--green); }
+.mover-chip.chip-down .mover-chip-pct { color: var(--red);   }
 
-.mover-bar {
-  height: 3px;
-  border-radius: 2px;
-  margin-top: 2px;
-  max-width: 60px;
-  margin-left: auto;
+#panel-movers {
+  grid-column: 1 / -1;
+  max-height: 130px;
+  overflow: hidden;
 }
-
-.mover-up .mover-change { color: var(--green); }
-.mover-down .mover-change { color: var(--red); }
-.mover-up .mover-bar { background: var(--green); }
-.mover-down .mover-bar { background: var(--red); }
 
 /* ---- Live Streams ---- */
 
@@ -931,10 +938,43 @@ main {
   font-weight: 700;
 }
 
-/* ---- News Tag Additions ---- */
+.cal-legend {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.cal-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.dot-high   { background: var(--yellow); }
+.dot-medium { background: var(--text-muted); }
+.dot-fomc   { background: var(--blue); }
+.dot-today  { background: rgba(59,130,246,0.3); border: 1px solid var(--blue); }
 
-.news-tag-FX      { background: var(--green-bg); color: var(--green); }
-.news-tag-CREDIT  { background: rgba(167,139,250,0.15); color: var(--purple); }
+.cal-urgency-medium td { color: var(--text); }
+.cal-urgency-medium .cal-event { font-weight: 500; }
+
+.news-updated {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
 
 /* ---- Footer ---- */
 

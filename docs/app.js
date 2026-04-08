@@ -52,11 +52,12 @@ var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
 // Ticker symbols — descriptive labels with exchange symbols
-var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY', 'SP500'];
+var TICKER_SYMBOLS = ['SP500', 'DOW', 'NASDAQ', 'RUSSELL', 'WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY'];
 var TICKER_LABELS = {
-  WTI: 'WTI Crude (CL=F)', Brent: 'Brent Crude (BZ=F)', NatGas: 'Nat Gas (NG=F)',
-  HeatOil: 'Heating Oil (HO=F)', Gold: 'Gold (GC=F)', VIX: 'CBOE VIX',
-  DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)', Silver: 'Silver (SI=F)'
+  SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSSELL: 'Russell 2k',
+  WTI: 'WTI Crude (CL=F)', Brent: 'Brent (BZ=F)', NatGas: 'Nat Gas (NG=F)',
+  HeatOil: 'Heat Oil (HO=F)', Gold: 'Gold (GC=F)', Silver: 'Silver (SI=F)',
+  VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)'
 };
 
 var MACRO_DISPLAY = [
@@ -72,6 +73,15 @@ var MACRO_DISPLAY = [
 
 // High-impact calendar events get urgency coloring
 var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
+
+var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment'];
+
+function isMediumImpact(eventName) {
+  for (var i = 0; i < MEDIUM_IMPACT_KEYWORDS.length; i++) {
+    if (eventName.indexOf(MEDIUM_IMPACT_KEYWORDS[i]) !== -1) return true;
+  }
+  return false;
+}
 
 var ECON_CALENDAR = [
   { date: '2026-04-06', time: '10:00', event: 'ISM Services PMI (Mar)', consensus: '54.8', prior: '56.1' },
@@ -100,6 +110,64 @@ var ECON_CALENDAR = [
 // ============================================
 // STATE
 // ============================================
+
+var tvInitialized = false;
+
+function initTradingView() {
+  if (tvInitialized) return;
+  var wrap = document.getElementById('tradingview-widget');
+  if (!wrap) return;
+  tvInitialized = true;
+
+  var container = document.createElement('div');
+  container.className = 'tradingview-widget-container';
+  container.style.height = '220px';
+  container.style.width = '100%';
+
+  var inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  container.appendChild(inner);
+
+  var config = {
+    symbols: [
+      ['WTI Crude', 'NYMEX:CL1!|1D'],
+      ['Brent',     'NYMEX:BZ1!|1D'],
+      ['Nat Gas',   'NYMEX:NG1!|1D'],
+      ['Heat Oil',  'NYMEX:HO1!|1D']
+    ],
+    chartOnly: false,
+    width: '100%',
+    height: 220,
+    locale: 'en',
+    colorTheme: 'dark',
+    autosize: true,
+    showVolume: false,
+    hideDateRanges: false,
+    hideMarketStatus: false,
+    hideSymbolLogo: true,
+    scalePosition: 'right',
+    scaleMode: 'Normal',
+    fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
+    fontSize: '10',
+    noTimeScale: false,
+    valuesTracking: '1',
+    changeMode: 'price-and-percent',
+    chartType: 'area',
+    lineWidth: 2,
+    lineType: 0,
+    dateRanges: ['1d|1', '1w|15', '1m|60', '3m|1D']
+  };
+
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+  script.async = true;
+  script.textContent = JSON.stringify(config);
+  container.appendChild(script);
+
+  wrap.innerHTML = '';
+  wrap.appendChild(container);
+}
 
 var yieldCurveChart = null;
 var refreshTimer = null;
@@ -387,75 +455,98 @@ function renderYields(fred) {
 }
 
 function renderYieldCurve(fred) {
-  var labels = [];
-  var values = [];
+  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [];
   for (var i = 0; i < CURVE_KEYS.length; i++) {
     var d = fred[CURVE_KEYS[i]];
     labels.push(CURVE_LABELS[i]);
-    values.push(d && d.current != null ? d.current : null);
+    valuesT.push(d && d.current != null ? d.current : null);
+    valuesT1.push(d && d.prior   != null ? d.prior   : null);
+    valuesT2.push(d && d.t2      != null ? d.t2      : null);
   }
   var canvas = document.getElementById('yield-curve-canvas');
   var ctx = canvas.getContext('2d');
+
+  var datasets = [
+    {
+      label: 'Today',
+      data: valuesT,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      fill: true, tension: 0.3, pointRadius: 5,
+      pointBackgroundColor: '#3b82f6',
+      pointBorderColor: '#0a0e14',
+      pointBorderWidth: 2,
+      borderWidth: 2,
+      datalabels: {
+        display: true,
+        color: '#e6edf3',
+        anchor: 'end', align: 'top', offset: 2,
+        font: { size: 10, family: 'Consolas, monospace', weight: '600' },
+        formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
+      }
+    },
+    {
+      label: 'T-1',
+      data: valuesT1,
+      borderColor: '#64748b',
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3, pointRadius: 3,
+      borderDash: [4, 3], borderWidth: 1.5,
+      datalabels: { display: false }
+    },
+    {
+      label: 'T-2',
+      data: valuesT2,
+      borderColor: '#374151',
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3, pointRadius: 2,
+      borderDash: [2, 4], borderWidth: 1,
+      datalabels: { display: false }
+    }
+  ];
+
   if (yieldCurveChart) {
     yieldCurveChart.data.labels = labels;
-    yieldCurveChart.data.datasets[0].data = values;
+    yieldCurveChart.data.datasets = datasets;
     yieldCurveChart.update();
-    return;
-  }
-  yieldCurveChart = new Chart(ctx, {
-    type: 'line',
-    plugins: [ChartDataLabels],
-    data: {
-      labels: labels,
-      datasets: [{
-        data: values,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.08)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 5,
-        pointBackgroundColor: '#3b82f6',
-        pointBorderColor: '#0a0e14',
-        pointBorderWidth: 2,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 20 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) { return ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) + '%' : 'N/A'; }
+  } else {
+    yieldCurveChart = new Chart(ctx, {
+      type: 'line',
+      plugins: [ChartDataLabels],
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 20 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) + '%' : 'N/A');
+              }
+            }
           }
         },
-        datalabels: {
-          color: '#e6edf3',
-          anchor: 'end',
-          align: 'top',
-          offset: 2,
-          font: { size: 10, family: 'Consolas, monospace', weight: '600' },
-          formatter: function(value) { return value != null ? value.toFixed(2) + '%' : ''; }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#7d8da1', font: { size: 10 } },
-          grid: { color: 'rgba(30,42,58,0.5)' },
-        },
-        y: {
-          ticks: {
-            color: '#7d8da1',
-            font: { size: 10 },
-            callback: function(v) { return v.toFixed(1) + '%'; }
-          },
-          grid: { color: 'rgba(30,42,58,0.5)' },
+        scales: {
+          x: { ticks: { color: '#7d8da1', font: { size: 10 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
+          y: { ticks: { color: '#7d8da1', font: { size: 10 }, callback: function(v) { return v.toFixed(1) + '%'; } }, grid: { color: 'rgba(30,42,58,0.5)' } }
         }
       }
-    }
-  });
+    });
+  }
+
+  // Inline legend below chart
+  var existingLegend = canvas.parentElement.parentElement.querySelector('.yield-curve-legend');
+  if (!existingLegend) {
+    var legendDiv = document.createElement('div');
+    legendDiv.className = 'yield-curve-legend';
+    legendDiv.innerHTML =
+      '<span><span class="ycl-swatch" style="background:#3b82f6"></span>Today</span>' +
+      '<span><span class="ycl-swatch" style="background:#64748b;height:2px;border-style:dashed"></span>T-1</span>' +
+      '<span><span class="ycl-swatch" style="background:#374151;height:1px;border-style:dashed"></span>T-2</span>';
+    canvas.parentElement.parentElement.appendChild(legendDiv);
+  }
 }
 
 // Cache last known funding values so weekends/holidays don't show all N/A
@@ -705,6 +796,14 @@ function renderMacro(macro) {
 function renderCalendar(fomc) {
   var container = document.getElementById('calendar-content');
   container.innerHTML = '';
+  var legend = document.createElement('div');
+  legend.className = 'cal-legend';
+  legend.innerHTML =
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High Impact</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-medium"></span>Medium</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-today"></span>Today</span>';
+  container.appendChild(legend);
   var todayStr = new Date().toISOString().split('T')[0];
   var upcoming = [];
   for (var i = 0; i < ECON_CALENDAR.length; i++) {
@@ -728,6 +827,7 @@ function renderCalendar(fomc) {
     if (e.date === todayStr) tr.className = 'today';
     // Color-code high-impact events
     if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
+    else if (isMediumImpact(e.event)) tr.classList.add('cal-urgency-medium');
     var d = new Date(e.date + 'T12:00:00');
     var dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
     if (e.time && e.time !== 'ALL') dateLabel += ' ' + e.time;
@@ -760,7 +860,17 @@ function renderNews(items) {
     return;
   }
   countBadge.textContent = items.length;
-  for (var i = 0; i < items.length && i < 15; i++) {
+  // Last-updated timestamp
+  var existingTs = document.getElementById('news-updated');
+  if (existingTs) existingTs.remove();
+  if (items.length > 0 && items[0].date) {
+    var tsSpan = document.createElement('span');
+    tsSpan.id = 'news-updated';
+    tsSpan.className = 'news-updated';
+    tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
+    countBadge.parentElement.appendChild(tsSpan);
+  }
+  for (var i = 0; i < items.length && i < 20; i++) {
     var item = items[i];
     var div = document.createElement('div');
     div.className = 'news-item';
@@ -844,7 +954,6 @@ function renderDashboard(data) {
   renderYieldCurve(data.fred);
   renderFunding(data.nyfed, data.fred);
   renderRisk(data.yahoo, data.fred);
-  renderEquities(data.yahoo);
   renderCommodities(data.yahoo);
   renderForex(data.yahoo);
   renderMacro(data.macro);
@@ -856,13 +965,14 @@ function renderDashboard(data) {
   addSourceAttribution('panel-yields', 'FRED', yDate);
   addSourceAttribution('panel-funding', 'NY Fed / FRED', data.nyfed.sofr ? data.nyfed.sofr.date : null);
   addSourceAttribution('panel-risk', 'Yahoo / FRED', data.yahoo.VIX ? data.yahoo.VIX.date : null);
-  addSourceAttribution('panel-equities', 'Yahoo Finance', data.yahoo.SP500 ? data.yahoo.SP500.date : null);
   addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
   addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
   addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
   addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
   addSourceAttribution('panel-news', 'Fed / ECB / CNBC RSS', null);
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
+
+  initTradingView();
 
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'grid';
@@ -1017,8 +1127,10 @@ function fetchNews() {
         }
       }
 
-      // Sort by date descending
+      // Pin gov sources (Fed, ECB) to top; sort rest by date descending
       deduped.sort(function(a, b) {
+        if (a.isGov && !b.isGov) return -1;
+        if (!a.isGov && b.isGov) return 1;
         return new Date(b.date || 0) - new Date(a.date || 0);
       });
 
@@ -1172,50 +1284,33 @@ var MOVERS_LABELS = {
 function renderMovers(yahoo) {
   var container = document.getElementById('movers-content');
   if (!container) return;
-  container.innerHTML = '';
-
-  // Build sortable array of movers
   var movers = [];
   for (var i = 0; i < MOVERS_KEYS.length; i++) {
     var k = MOVERS_KEYS[i];
     var d = yahoo[k];
     if (d && d.current != null && d.prior != null) {
       var pct = pctChange(d.current, d.prior);
-      if (pct != null) {
-        movers.push({ key: k, price: d.current, pct: pct });
-      }
+      if (pct != null) movers.push({ key: k, price: d.current, pct: pct });
     }
   }
-
-  // Sort by absolute % change descending (biggest movers first)
   movers.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
 
-  var list = document.createElement('div');
-  list.className = 'movers-list';
-
+  var strip = document.createElement('div');
+  strip.className = 'movers-strip';
   for (var j = 0; j < movers.length; j++) {
     var m = movers[j];
     var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
     var prefix = isNonDollar ? '' : '$';
-    var cls = m.pct >= 0 ? 'mover-up' : 'mover-down';
-
-    var row = document.createElement('div');
-    row.className = 'mover-row ' + cls;
-    row.innerHTML = '<span class="mover-name">' + MOVERS_LABELS[m.key] + '</span>'
-      + '<span class="mover-price">' + prefix + m.price.toFixed(2) + '</span>'
-      + '<span class="mover-change">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
-
-    // Mini bar proportional to % move (max 60px at 5%)
-    var bar = document.createElement('div');
-    bar.className = 'mover-bar';
-    bar.style.width = Math.min(Math.abs(m.pct) / 5 * 60, 60) + 'px';
-    var changeCell = row.querySelector('.mover-change');
-    if (changeCell) changeCell.appendChild(bar);
-
-    list.appendChild(row);
+    var chip = document.createElement('div');
+    chip.className = 'mover-chip ' + (m.pct >= 0 ? 'chip-up' : 'chip-down');
+    chip.innerHTML =
+      '<span class="mover-chip-name">' + MOVERS_LABELS[m.key] + '</span>' +
+      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2) + '</span>' +
+      '<span class="mover-chip-pct">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
+    strip.appendChild(chip);
   }
-
-  container.appendChild(list);
+  container.innerHTML = '';
+  container.appendChild(strip);
 }
 
 // ============================================
