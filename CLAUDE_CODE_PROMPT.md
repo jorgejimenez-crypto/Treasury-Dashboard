@@ -1,90 +1,76 @@
-# Treasury Intelligence Dashboard — Claude Code Session Prompt
+# Treasury Intelligence Dashboard — Claude Code Optimization Prompt
 
-> **Read this entire file before writing a single line of code.**
-> Follow the tasks in order. Verify each change against the actual file before modifying it.
+## FIRST: Read all files before touching anything
+
+```bash
+Read docs/index.html
+Read docs/app.js
+Read docs/style.css
+Read proxy/worker.js
+```
+
+**Project location:** `C:\Users\JORGE-PC\Documents\Treasury\treasury dashboard`
+**Live site:** https://jorgejimenez-crypto.github.io/Treasury-Dashboard/
+**Worker:** https://treasury-proxy.treasurydashboard.workers.dev
+**Files to modify:** `docs/index.html`, `docs/app.js`, `docs/style.css`, `proxy/worker.js`
+**Stack:** Vanilla JS only. GitHub Pages (static). Cloudflare Worker proxy. Chart.js v4 + chartjs-plugin-datalabels. Zero cost — no paid APIs, no npm build step.
 
 ---
 
-## Project Snapshot
+## Architecture — critical, read before any edit
 
-| Item | Value |
-|------|-------|
-| **Local path** | `C:\Users\jorge.jimenez\Documents\CLAUDE_PROJECTS\Treasury-Dashboard` |
-| **Live site** | https://jorgejimenez-crypto.github.io/Treasury-Dashboard/ |
-| **Worker URL** | https://treasury-proxy.treasurydashboard.workers.dev |
-| **Stack** | Vanilla JS · GitHub Pages · Cloudflare Worker · Chart.js v4 + datalabels |
-| **Constraint** | Zero cost — no paid APIs, no npm build, no bundler |
+The dashboard is a single-page vanilla JS app. `app.js` fetches from the Cloudflare Worker at two endpoints:
 
----
+- `/api/market-data` — full payload (Yahoo Finance + FRED + NY Fed), 15-min timer
+- `/api/ticker` — lightweight 9-symbol Yahoo-only payload, every 10s during market hours
 
-## Architecture — Non-Negotiable Rules
+`renderDashboard(data)` populates all panels. `tickerRefresh()` only updates the scrolling ticker bar + Commodities + Movers + Risk panels. **FRED data (`data.fred`, `data.macro`) is only available from `/api/market-data` — never merge these two data paths.**
 
-The app has two data paths. **Never merge them.**
+**Current 3-column CSS grid panel order (HTML source order):**
 
-| Path | Endpoint | Cadence | Contains |
-|------|----------|---------|----------|
-| Full refresh | `/api/market-data` | 15 min | Yahoo + FRED + NY Fed + macro |
-| Ticker refresh | `/api/ticker` | 10s (market hours) | 9–12 Yahoo symbols only |
+| Row | Col 1 | Col 2 | Col 3 |
+|-----|-------|-------|-------|
+| 1 | `panel-calendar` | `panel-live` | `panel-news` |
+| 2 | `panel-yields` | `panel-commodities` | `panel-equities` |
+| 3 | `panel-forex` | `panel-macro` | `panel-funding` |
+| 4 | `panel-risk` | `panel-movers` | — |
 
-`renderDashboard(data)` handles the full refresh and populates every panel.
-`tickerRefresh()` calls `/api/ticker`, merges result into `cachedYahoo`, and calls only `renderTicker`, `renderCommodities`, `renderRisk`, `renderMovers`. **FRED data (`data.fred`, `data.macro`) is never available from the ticker endpoint.**
+**Data objects in `renderDashboard(data)`:**
 
-**Deployment rules:**
-- Changes to `proxy/worker.js` → run `npx wrangler deploy` from `proxy/` (GitHub push does NOT redeploy the worker)
-- Changes to `docs/` → push to GitHub main → auto-deploys in ~2 min
+- `data.yahoo` — `WTI`, `Brent`, `NatGas`, `HeatOil`, `Copper`, `Gold`, `Silver`, `SP500`, `DOW`, `NASDAQ`, `RUSSELL`, `EURUSD`, `GBPUSD`, `USDJPY`, `AUDUSD`, `USDCAD`, `USDCHF`, `USDCNH`, `DXY`, `VIX` — each `{current, prior, date, group}`
+- `data.fred` — `DGS3MO`, `DGS6MO`, `DGS1`, `DGS2`, `DGS5`, `DGS10`, `DGS30`, `RRPONTSYD`, `BAMLC0A0CM`, `BAMLH0A0HYM2` — each `{current, prior, date}`
+- `data.macro` — `FEDFUNDS`, `CPIAUCSL`, `CPILFESL`, `PPIACO`, `UNRATE`, `ICSA`, `A191RL1Q225SBEA`, `WM2NS`
+- `data.nyfed` — `{sofr: {rate, date, volume}, effr: {rate, date, volume}}`
+- `data.fomc` — `{next, daysAway, dates[]}`
 
----
-
-## Current Panel Grid (3 columns)
-
-```
-Row 1:  panel-calendar  |  panel-live       |  panel-news
-Row 2:  panel-yields    |  panel-commodities |  panel-equities
-Row 3:  panel-forex     |  panel-macro       |  panel-funding
-Row 4:  panel-risk      |  panel-movers      |  —
-```
-
-**Target grid after all tasks:**
-```
-Row 1:  panel-calendar  |  panel-live        |  panel-news
-Row 2:  panel-yields    |  panel-commodities  |  panel-forex
-Row 3:  panel-macro     |  panel-funding      |  panel-risk
-Row 4:  panel-movers    (spans all 3 columns — full-width footer bar)
-```
+**Deployment rules — enforce strictly:**
+- Any change to `proxy/worker.js` → must run `npx wrangler deploy` from the `proxy/` folder. GitHub push alone does NOT redeploy the Worker.
+- Any change to `docs/` → push to GitHub main. GitHub Pages auto-deploys in ~2 min.
+- After all changes → clear localStorage in browser console: `localStorage.clear(); location.reload();`
 
 ---
 
-## Data Reference
+## DO NOT TOUCH — ever
 
-```
-data.yahoo   → WTI, Brent, NatGas, HeatOil, Copper, Gold, Silver,
-               SP500, DOW, NASDAQ, RUSSELL,
-               EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, USDCNH,
-               DXY, VIX   →  each: { current, prior, date, group }
-
-data.fred    → DGS3MO, DGS6MO, DGS1, DGS2, DGS5, DGS10, DGS30,
-               RRPONTSYD, BAMLC0A0CM, BAMLH0A0HYM2  →  { current, prior, date }
-
-data.macro   → FEDFUNDS, CPIAUCSL, CPILFESL, PPIACO, UNRATE,
-               ICSA, A191RL1Q225SBEA, WM2NS
-
-data.nyfed   → { sofr: { rate, date, volume }, effr: { rate, date, volume } }
-data.fomc    → { next, daysAway, dates[] }
-```
+- `WORKER_URL` value in `app.js`
+- `renderFunding()`, `renderYields()`, `renderMacro()` render logic — confirmed working
+- `cachedFred` / `cachedYahoo` merge logic in `tickerRefresh()`
+- `fetchFREDSeries()` base URL and auth logic — only add `t2` field in Task 3
+- `wrangler.toml`
+- `@media print` block in `style.css`
 
 ---
 
-## Tasks — Execute in Order
+## Tasks — implement in this exact order, one at a time
 
 ---
 
-### TASK 1 · Remove Equity Indices panel · Move equities to ticker
+### TASK 1 — Remove Equity Indices panel; move equities to ticker bar
 
-**Why:** `panel-equities` consumes 1/3 of a row for data that is secondary to treasury ops. The ticker bar is the right home for index levels.
+**Why:** `panel-equities` consumes 1/3 of a row for data that belongs in the ticker. Removing it frees a row slot and declutters the grid.
 
-**Exact changes:**
+**`docs/index.html`** — Delete this entire section:
 
-**`docs/index.html`** — Delete these 4 lines:
 ```html
 <section class="panel" id="panel-equities">
   <h2>Equity Indices</h2>
@@ -92,10 +78,11 @@ data.fomc    → { next, daysAway, dates[] }
 </section>
 ```
 
-**`docs/app.js`** — Replace `TICKER_SYMBOLS` and `TICKER_LABELS` (currently around line 55):
+**`docs/app.js`** — Replace `TICKER_SYMBOLS` and `TICKER_LABELS` with:
+
 ```javascript
-var TICKER_SYMBOLS = ['SP500','DOW','NASDAQ','RUSSELL','WTI','Brent','NatGas','HeatOil','Gold','Silver','VIX','DXY'];
-var TICKER_LABELS  = {
+var TICKER_SYMBOLS = ['SP500', 'DOW', 'NASDAQ', 'RUSSELL', 'WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY'];
+var TICKER_LABELS = {
   SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSSELL: 'Russell 2k',
   WTI: 'WTI Crude (CL=F)', Brent: 'Brent (BZ=F)', NatGas: 'Nat Gas (NG=F)',
   HeatOil: 'Heat Oil (HO=F)', Gold: 'Gold (GC=F)', Silver: 'Silver (SI=F)',
@@ -103,16 +90,10 @@ var TICKER_LABELS  = {
 };
 ```
 
-**`docs/app.js`** — In `renderDashboard()` (around line 847), remove:
-```javascript
-renderEquities(data.yahoo);
-// and
-addSourceAttribution('panel-equities', 'Yahoo Finance', data.yahoo.SP500 ? data.yahoo.SP500.date : null);
-```
+**`docs/app.js`** — Remove `renderEquities(data.yahoo)` call from `renderDashboard()`. Remove `addSourceAttribution('panel-equities', ...)` call. Keep `EQUITY_KEYS` and `EQUITY_LABELS` variables defined — do not delete them.
 
-**`docs/app.js`** — Do NOT delete `EQUITY_KEYS`, `EQUITY_LABELS`, or the `renderEquities()` function definition. Just stop calling them.
+**`proxy/worker.js`** — Replace `TICKER_SYMBOLS_WORKER` with:
 
-**`proxy/worker.js`** — Replace `TICKER_SYMBOLS_WORKER` with the expanded 12-symbol list:
 ```javascript
 var TICKER_SYMBOLS_WORKER = [
   { key: 'SP500',   symbol: '%5EGSPC',  group: 'equities'    },
@@ -130,21 +111,32 @@ var TICKER_SYMBOLS_WORKER = [
 ];
 ```
 
-**After this task:** Run `npx wrangler deploy`. Verify ticker scrolls with all 12 symbols. Verify `panel-equities` div is gone from the DOM.
+**Target grid layout after this task:**
+
+| Row | Col 1 | Col 2 | Col 3 |
+|-----|-------|-------|-------|
+| 1 | calendar | live | news |
+| 2 | yields | commodities | forex |
+| 3 | macro | funding | risk |
+| 4 | movers | — | — |
+
+**Deploy worker after this task:** `cd proxy && npx wrangler deploy`
 
 ---
 
-### TASK 2 · Fix TradingView energy chart (currently not displaying)
+### TASK 2 — Fix TradingView energy chart (not displaying)
 
-**Why:** The inline IIFE script at the bottom of `index.html` has a timing and container structure conflict with how TradingView injects its iframe. Moving initialization into `renderDashboard()` with a one-time guard fixes it.
+**Why:** The inline `<script>` IIFE at the bottom of `index.html` has a container structure conflict. The widget must be initialized after the DOM is ready and `renderDashboard()` has run.
 
-**`docs/index.html`** — Remove the entire block from `<!-- TradingView Widget -->` to the closing `</script>` tag before `</body>`. It starts with:
+**`docs/index.html`** — Remove the entire TradingView inline script block at the bottom of the file. It starts with:
 ```javascript
 (function() {
   var wrap = document.getElementById('tradingview-widget');
 ```
+Delete everything from that line through the closing `})();` and `</script>` tag.
 
-**`docs/app.js`** — Add this new function and flag near the top of the STATE section:
+**`docs/app.js`** — Add this function and the guard variable near the top of the file (after the STATE section):
+
 ```javascript
 var tvInitialized = false;
 
@@ -156,30 +148,48 @@ function initTradingView() {
 
   var container = document.createElement('div');
   container.className = 'tradingview-widget-container';
-  container.style.cssText = 'width:100%;height:220px;';
+  container.style.height = '220px';
+  container.style.width = '100%';
 
   var inner = document.createElement('div');
   inner.className = 'tradingview-widget-container__widget';
   container.appendChild(inner);
 
+  var config = {
+    symbols: [
+      ['WTI Crude', 'NYMEX:CL1!|1D'],
+      ['Brent',     'NYMEX:BZ1!|1D'],
+      ['Nat Gas',   'NYMEX:NG1!|1D'],
+      ['Heat Oil',  'NYMEX:HO1!|1D']
+    ],
+    chartOnly: false,
+    width: '100%',
+    height: 220,
+    locale: 'en',
+    colorTheme: 'dark',
+    autosize: true,
+    showVolume: false,
+    hideDateRanges: false,
+    hideMarketStatus: false,
+    hideSymbolLogo: true,
+    scalePosition: 'right',
+    scaleMode: 'Normal',
+    fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif',
+    fontSize: '10',
+    noTimeScale: false,
+    valuesTracking: '1',
+    changeMode: 'price-and-percent',
+    chartType: 'area',
+    lineWidth: 2,
+    lineType: 0,
+    dateRanges: ['1d|1', '1w|15', '1m|60', '3m|1D']
+  };
+
   var script = document.createElement('script');
+  script.type = 'text/javascript';
   script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
   script.async = true;
-  script.textContent = JSON.stringify({
-    symbols: [
-      ['WTI Crude','NYMEX:CL1!|1D'],
-      ['Brent',    'NYMEX:BZ1!|1D'],
-      ['Nat Gas',  'NYMEX:NG1!|1D'],
-      ['Heat Oil', 'NYMEX:HO1!|1D']
-    ],
-    chartOnly: false, width: '100%', height: 220, locale: 'en',
-    colorTheme: 'dark', autosize: true, showVolume: false,
-    hideDateRanges: false, hideMarketStatus: false, hideSymbolLogo: true,
-    scalePosition: 'right', scaleMode: 'Normal', noTimeScale: false,
-    valuesTracking: '1', changeMode: 'price-and-percent',
-    chartType: 'area', lineWidth: 2, lineType: 0,
-    dateRanges: ['1d|1','1w|15','1m|60','3m|1D']
-  });
+  script.textContent = JSON.stringify(config);
   container.appendChild(script);
 
   wrap.innerHTML = '';
@@ -187,239 +197,223 @@ function initTradingView() {
 }
 ```
 
-**`docs/app.js`** — Add `initTradingView();` as the **last line** of `renderDashboard()`, after all `addSourceAttribution` calls.
+**`docs/app.js`** — At the very end of `renderDashboard()`, after all other render calls and `addSourceAttribution` lines, add:
 
-> **Critical:** `autosize: true` + the `.tradingview-widget-container__widget` div must exist before the script appends — the inner div is the injection target. The order `inner → container → script → append` must be preserved exactly as written above.
+```javascript
+initTradingView();
+```
 
-**After this task:** Reload the dashboard. The Commodities panel should show a live TradingView chart with 4 energy symbols.
+> `autosize: true` is required. The `.tradingview-widget-container__widget` div must exist in the DOM before the script tag is appended — which is why the container is constructed first.
 
 ---
 
-### TASK 3 · Yield curve: overlay T-1 and T-2 prior days
+### TASK 3 — Yield curve: overlay T-1 and T-2 prior trading days
 
-**Why:** A single curve shows the current shape but not the direction of travel. Overlaying T-1 (yesterday) and T-2 (two days ago) immediately reveals parallel shifts, steepening, flattening, and inversion events developing in real time.
+**Why:** A single-day curve shows shape but not movement. Overlaying T-1 and T-2 lets you spot parallel shifts, bear/bull steepening, and inversion progression at a glance.
 
-**`proxy/worker.js`** — In `fetchFREDSeries()`, the return statement currently provides `current` and `prior`. Extend it to expose `t2`:
+**`proxy/worker.js`** — In `fetchFREDSeries()`, find the return statement and add `t2`:
+
 ```javascript
-// BEFORE:
-return {
-  id: series.id,
-  current: parseFloat(obs[0].value),
-  prior:   obs.length >= 2 ? parseFloat(obs[1].value) : null,
-  date:    obs[0].date,
-  label:   series.label,
-};
-
-// AFTER:
 return {
   id:      series.id,
-  current: parseFloat(obs[0].value),                           // T
-  prior:   obs.length >= 2 ? parseFloat(obs[1].value) : null, // T-1
-  t2:      obs.length >= 3 ? parseFloat(obs[2].value) : null, // T-2
+  current: parseFloat(obs[0].value),
+  prior:   obs.length >= 2 ? parseFloat(obs[1].value) : null,
+  t2:      obs.length >= 3 ? parseFloat(obs[2].value) : null,
   date:    obs[0].date,
   label:   series.label,
 };
 ```
 
-The `limit=5` in the FRED URL already fetches enough observations — no URL change needed.
+The FRED call already uses `limit=5` so obs[2] is available without any URL change.
 
-**`docs/app.js`** — `renderYieldCurve(fred)` currently has a branch: if `yieldCurveChart` exists it updates `datasets[0].data` and returns early. This branch must be extended to update all three datasets. Rewrite the full function:
+**`docs/app.js`** — Fully replace `renderYieldCurve(fred)` with:
 
 ```javascript
 function renderYieldCurve(fred) {
-  var labels = [], valT = [], valT1 = [], valT2 = [];
+  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [];
   for (var i = 0; i < CURVE_KEYS.length; i++) {
     var d = fred[CURVE_KEYS[i]];
     labels.push(CURVE_LABELS[i]);
-    valT.push(d  && d.current != null ? d.current : null);
-    valT1.push(d && d.prior   != null ? d.prior   : null);
-    valT2.push(d && d.t2      != null ? d.t2      : null);
+    valuesT.push(d && d.current != null ? d.current : null);
+    valuesT1.push(d && d.prior   != null ? d.prior   : null);
+    valuesT2.push(d && d.t2      != null ? d.t2      : null);
   }
-
   var canvas = document.getElementById('yield-curve-canvas');
-  var ctx    = canvas.getContext('2d');
+  var ctx = canvas.getContext('2d');
 
-  // Dataset definitions
   var datasets = [
     {
-      label: 'Today (T)',
-      data: valT,
-      borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',
-      fill: true, tension: 0.3, borderWidth: 2,
-      pointRadius: 5, pointBackgroundColor: '#3b82f6', pointBorderColor: '#0a0e14', pointBorderWidth: 2,
+      label: 'Today',
+      data: valuesT,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      fill: true, tension: 0.3, pointRadius: 5,
+      pointBackgroundColor: '#3b82f6',
+      pointBorderColor: '#0a0e14',
+      pointBorderWidth: 2,
+      borderWidth: 2,
+      datalabels: {
+        display: true,
+        color: '#e6edf3',
+        anchor: 'end', align: 'top', offset: 2,
+        font: { size: 10, family: 'Consolas, monospace', weight: '600' },
+        formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
+      }
     },
     {
       label: 'T-1',
-      data: valT1,
-      borderColor: '#64748b', backgroundColor: 'transparent',
-      fill: false, tension: 0.3, borderWidth: 1.5, borderDash: [4, 3],
-      pointRadius: 3, pointBackgroundColor: '#64748b',
+      data: valuesT1,
+      borderColor: '#64748b',
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3, pointRadius: 3,
+      borderDash: [4, 3], borderWidth: 1.5,
+      datalabels: { display: false }
     },
     {
       label: 'T-2',
-      data: valT2,
-      borderColor: '#374151', backgroundColor: 'transparent',
-      fill: false, tension: 0.3, borderWidth: 1, borderDash: [2, 4],
-      pointRadius: 2, pointBackgroundColor: '#374151',
+      data: valuesT2,
+      borderColor: '#374151',
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3, pointRadius: 2,
+      borderDash: [2, 4], borderWidth: 1,
+      datalabels: { display: false }
     }
   ];
 
-  // Update path (chart already exists)
   if (yieldCurveChart) {
-    yieldCurveChart.data.labels          = labels;
-    yieldCurveChart.data.datasets[0].data = valT;
-    yieldCurveChart.data.datasets[1].data = valT1;
-    yieldCurveChart.data.datasets[2].data = valT2;
+    yieldCurveChart.data.labels = labels;
+    yieldCurveChart.data.datasets = datasets;
     yieldCurveChart.update();
-    return;
-  }
-
-  // Create path (first render)
-  yieldCurveChart = new Chart(ctx, {
-    type: 'line',
-    plugins: [ChartDataLabels],
-    data: { labels: labels, datasets: datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 20 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(c) {
-              return c.dataset.label + ': ' + (c.parsed.y != null ? c.parsed.y.toFixed(2) + '%' : 'N/A');
+  } else {
+    yieldCurveChart = new Chart(ctx, {
+      type: 'line',
+      plugins: [ChartDataLabels],
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 20 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) + '%' : 'N/A');
+              }
             }
           }
         },
-        datalabels: {
-          display: function(c) { return c.datasetIndex === 0; }, // only label Today's curve
-          color: '#e6edf3', anchor: 'end', align: 'top', offset: 2,
-          font: { size: 10, family: 'Consolas, monospace', weight: '600' },
-          formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
-        }
-      },
-      scales: {
-        x: { ticks: { color: '#7d8da1', font: { size: 10 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
-        y: {
-          ticks: { color: '#7d8da1', font: { size: 10 }, callback: function(v) { return v.toFixed(1) + '%'; } },
-          grid: { color: 'rgba(30,42,58,0.5)' }
+        scales: {
+          x: { ticks: { color: '#7d8da1', font: { size: 10 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
+          y: { ticks: { color: '#7d8da1', font: { size: 10 }, callback: function(v) { return v.toFixed(1) + '%'; } }, grid: { color: 'rgba(30,42,58,0.5)' } }
         }
       }
-    }
-  });
+    });
+  }
 
-  // Inline legend — insert after the canvas's parent .chart-container
-  var legendDiv = document.createElement('div');
-  legendDiv.className = 'yield-curve-legend';
-  legendDiv.innerHTML =
-    '<span><i class="ycl-swatch" style="background:#3b82f6"></i>Today</span>' +
-    '<span><i class="ycl-swatch" style="background:#64748b;opacity:0.8"></i>T-1</span>' +
-    '<span><i class="ycl-swatch" style="background:#374151;border:1px solid #64748b"></i>T-2</span>';
-  canvas.closest('.chart-container').after(legendDiv);
+  // Inline legend below chart
+  var existingLegend = canvas.parentElement.parentElement.querySelector('.yield-curve-legend');
+  if (!existingLegend) {
+    var legendDiv = document.createElement('div');
+    legendDiv.className = 'yield-curve-legend';
+    legendDiv.innerHTML =
+      '<span><span class="ycl-swatch" style="background:#3b82f6"></span>Today</span>' +
+      '<span><span class="ycl-swatch" style="background:#64748b;height:2px;border-style:dashed"></span>T-1</span>' +
+      '<span><span class="ycl-swatch" style="background:#374151;height:1px;border-style:dashed"></span>T-2</span>';
+    canvas.parentElement.parentElement.appendChild(legendDiv);
+  }
 }
 ```
 
 **`docs/style.css`** — Add:
+
 ```css
 .yield-curve-legend {
   display: flex;
   gap: 14px;
-  margin-top: 5px;
-  padding-left: 2px;
+  margin-top: 6px;
   font-size: 10px;
   color: var(--text-muted);
+  padding-left: 4px;
 }
-.yield-curve-legend span { display: flex; align-items: center; gap: 5px; }
+.yield-curve-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .ycl-swatch {
   display: inline-block;
-  width: 18px;
+  width: 22px;
   height: 3px;
   border-radius: 2px;
   flex-shrink: 0;
 }
 ```
 
-**After this task:** Run `npx wrangler deploy`. Reload dashboard. Yield curve panel should show 3 overlaid lines — solid blue (today), dashed slate (T-1), faint dashed charcoal (T-2).
+**Deploy worker after this task:** `cd proxy && npx wrangler deploy`
 
 ---
 
-### TASK 4 · News & Intelligence — sort, tag colors, display cap
+### TASK 4 — News & Intelligence: gov pinning, tag colors, recency cap
 
-**Context:** Age filtering (72h) and financial keyword gating are already in the codebase from a prior session. The remaining gaps are sorting priority, tag visual distinctiveness, and display count.
-
-**`docs/app.js`** — In `fetchNews()`, replace the existing `deduped.sort(...)` line with a two-tier sort that pins Federal Reserve and ECB items (highest signal for treasury ops) above all commercial sources:
+**`docs/app.js`** — In `fetchNews()`, replace the final sort before `renderNews()` with:
 
 ```javascript
+// Pin gov sources (Fed, ECB) to top; sort rest by date descending
 deduped.sort(function(a, b) {
-  if (a.isGov && !b.isGov) return -1;  // gov always first
+  if (a.isGov && !b.isGov) return -1;
   if (!a.isGov && b.isGov) return 1;
-  return new Date(b.date || 0) - new Date(a.date || 0);  // then newest-first
+  return new Date(b.date || 0) - new Date(a.date || 0);
 });
 ```
 
-**`docs/app.js`** — In `renderNews()`, change the display cap from 15 to 20:
-```javascript
-// BEFORE: for (var i = 0; i < items.length && i < 15; i++) {
-// AFTER:
-for (var i = 0; i < items.length && i < 20; i++) {
-```
+**`docs/app.js`** — In `renderNews(items)`, change the loop cap from `i < 15` to `i < 20`. Also add a last-updated timestamp to the news panel header. After rendering items, find the `news-count` badge and add a sibling span:
 
-**`docs/app.js`** — In `renderNews()`, add a "last updated" micro-timestamp to the panel header. After the existing `countBadge.textContent = items.length;` line, add:
 ```javascript
-var updatedEl = document.getElementById('news-updated');
-if (updatedEl && items.length > 0) {
-  updatedEl.textContent = 'Updated ' + formatTime(items[0].date);
+// After setting countBadge.textContent:
+var existingTs = document.getElementById('news-updated');
+if (existingTs) existingTs.remove();
+if (items.length > 0 && items[0].date) {
+  var tsSpan = document.createElement('span');
+  tsSpan.id = 'news-updated';
+  tsSpan.className = 'news-updated';
+  tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
+  countBadge.parentElement.appendChild(tsSpan);
 }
 ```
 
-**`docs/index.html`** — Add the span to the news panel heading:
-```html
-<!-- BEFORE: -->
-<h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+**`docs/style.css`** — Add or replace all news tag classes and the timestamp style:
 
-<!-- AFTER: -->
-<h2>News & Intelligence <span id="news-count" class="badge"></span><span id="news-updated" class="news-updated-ts"></span></h2>
-```
-
-**`docs/style.css`** — Add the timestamp style and all distinct tag colors:
 ```css
-.news-updated-ts {
+.news-tag-FED         { background: rgba(59,130,246,0.15);  color: var(--blue);       }
+.news-tag-INFLATION   { background: rgba(249,115,22,0.15);  color: #f97316;            }
+.news-tag-RATES       { background: rgba(6,182,212,0.15);   color: var(--cyan);        }
+.news-tag-LABOR       { background: rgba(234,179,8,0.15);   color: var(--yellow);      }
+.news-tag-GDP         { background: rgba(34,197,94,0.15);   color: var(--green);       }
+.news-tag-COMMODITIES { background: rgba(217,119,6,0.15);   color: #d97706;            }
+.news-tag-MARKETS     { background: rgba(125,141,161,0.15); color: var(--text-muted);  }
+.news-tag-FX          { background: rgba(34,197,94,0.15);   color: var(--green);       }
+.news-tag-CREDIT      { background: rgba(167,139,250,0.15); color: var(--purple);      }
+.news-tag-MACRO       { background: rgba(239,68,68,0.15);   color: var(--red);         }
+
+.news-updated {
   font-size: 9px;
   color: var(--text-dim);
-  font-weight: 400;
-  margin-left: 6px;
   font-family: var(--font-mono);
-  text-transform: none;
-  letter-spacing: 0;
+  margin-left: 6px;
 }
-
-/* News tag color palette — each category visually distinct */
-.news-tag-FED         { background: rgba(59,130,246,0.15);  color: var(--blue);      border: 1px solid rgba(59,130,246,0.3);  }
-.news-tag-INFLATION   { background: rgba(249,115,22,0.15);  color: #f97316;          border: 1px solid rgba(249,115,22,0.3);  }
-.news-tag-RATES       { background: rgba(6,182,212,0.15);   color: var(--cyan);      border: 1px solid rgba(6,182,212,0.3);   }
-.news-tag-LABOR       { background: rgba(234,179,8,0.15);   color: var(--yellow);    border: 1px solid rgba(234,179,8,0.3);   }
-.news-tag-GDP         { background: rgba(34,197,94,0.12);   color: var(--green);     border: 1px solid rgba(34,197,94,0.25);  }
-.news-tag-COMMODITIES { background: rgba(217,119,6,0.15);   color: #d97706;          border: 1px solid rgba(217,119,6,0.3);   }
-.news-tag-MARKETS     { background: rgba(125,141,161,0.12); color: var(--text-muted);border: 1px solid rgba(125,141,161,0.2); }
-.news-tag-FX          { background: rgba(34,197,94,0.12);   color: var(--green);     border: 1px solid rgba(34,197,94,0.2);   }
-.news-tag-CREDIT      { background: rgba(167,139,250,0.15); color: var(--purple);    border: 1px solid rgba(167,139,250,0.3); }
-.news-tag-MACRO       { background: rgba(239,68,68,0.15);   color: var(--red);       border: 1px solid rgba(239,68,68,0.3);   }
 ```
 
 ---
 
-### TASK 5 · Energy Movers — compact horizontal chip strip
+### TASK 5 — Energy Movers: compact horizontal chip strip
 
-**Why:** The current vertical bar list duplicates data already shown in the Commodities panel. The only unique insight is the ranked ordering by % move — a full-width chip strip at the bottom of the dashboard communicates this in a fraction of the vertical space, like a Bloomberg terminal bottom bar.
-
-**`docs/app.js`** — Replace the full `renderMovers(yahoo)` function (currently around line 1172). Keep the same sort logic, change only the output format:
+**`docs/app.js`** — Fully replace `renderMovers(yahoo)` with:
 
 ```javascript
 function renderMovers(yahoo) {
   var container = document.getElementById('movers-content');
   if (!container) return;
-  container.innerHTML = '';
-
   var movers = [];
   for (var i = 0; i < MOVERS_KEYS.length; i++) {
     var k = MOVERS_KEYS[i];
@@ -433,79 +427,67 @@ function renderMovers(yahoo) {
 
   var strip = document.createElement('div');
   strip.className = 'movers-strip';
-
   for (var j = 0; j < movers.length; j++) {
-    var m       = movers[j];
-    var noDollar = m.key === 'VIX' || m.key === 'DXY';
-    var prefix  = noDollar ? '' : '$';
-    var cls     = m.pct >= 0 ? 'chip-up' : 'chip-down';
-    var chip    = document.createElement('div');
-    chip.className = 'mover-chip ' + cls;
+    var m = movers[j];
+    var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
+    var prefix = isNonDollar ? '' : '$';
+    var chip = document.createElement('div');
+    chip.className = 'mover-chip ' + (m.pct >= 0 ? 'chip-up' : 'chip-down');
     chip.innerHTML =
-      '<span class="mover-chip-name">'  + MOVERS_LABELS[m.key]                    + '</span>' +
-      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2)             + '</span>' +
-      '<span class="mover-chip-pct">'   + sign(m.pct) + m.pct.toFixed(2) + '%'   + '</span>';
+      '<span class="mover-chip-name">' + MOVERS_LABELS[m.key] + '</span>' +
+      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2) + '</span>' +
+      '<span class="mover-chip-pct">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
     strip.appendChild(chip);
   }
+  container.innerHTML = '';
   container.appendChild(strip);
 }
 ```
 
-**`docs/style.css`** — Add chip styles and make the panel span full width:
+**`docs/style.css`** — Add:
 
 ```css
-/* Movers — full-width footer chip strip */
-#panel-movers {
-  grid-column: 1 / -1;
-  max-height: 110px;
-  overflow: hidden;
-}
-
 .movers-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  padding: 2px 0;
+  gap: 6px;
+  padding: 4px 0;
 }
 .mover-chip {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 5px 9px;
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg-card-alt);
   font-family: var(--font-mono);
   font-size: 11px;
-  white-space: nowrap;
 }
-.mover-chip-name  { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; }
+.mover-chip-name  { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
 .mover-chip-price { color: var(--text); font-weight: 600; }
-.mover-chip-pct   { font-weight: 700; }
-.mover-chip.chip-up   { border-color: rgba(34,197,94,0.3); }
-.mover-chip.chip-down { border-color: rgba(239,68,68,0.3); }
+.mover-chip-pct   { font-weight: 600; }
+.mover-chip.chip-up   { border-color: rgba(34,197,94,0.25); }
+.mover-chip.chip-down { border-color: rgba(239,68,68,0.25); }
 .mover-chip.chip-up   .mover-chip-pct { color: var(--green); }
 .mover-chip.chip-down .mover-chip-pct { color: var(--red);   }
-```
 
-**`docs/style.css`** — Also remove the old `.mover-row`, `.mover-name`, `.mover-change`, `.mover-bar` rules if they exist — they are no longer used and will clutter the stylesheet.
+#panel-movers {
+  grid-column: 1 / -1;
+  max-height: 130px;
+  overflow: hidden;
+}
+```
 
 ---
 
-### TASK 6 · Economic Calendar — color-coded impact legend + medium tier
+### TASK 6 — Economic Calendar: color-coded impact legend + medium tier
 
-**Why:** The calendar already uses yellow for high-impact events and blue for FOMC, but there is no legend — the color coding is opaque to any new user. Adding a legend and a medium-impact tier (ISM, retail, claims, sentiment) makes event priority immediately readable.
+**`docs/app.js`** — In the CONFIG section, add after `HIGH_IMPACT_KEYWORDS`:
 
-**`docs/app.js`** — Add `MEDIUM_IMPACT_KEYWORDS` to the CONFIG section, directly below `HIGH_IMPACT_KEYWORDS`:
 ```javascript
-// Existing:
-var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
-// Add:
-var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment', 'ISM'];
-```
+var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment'];
 
-Add a matching helper next to `isHighImpact()`:
-```javascript
 function isMediumImpact(eventName) {
   for (var i = 0; i < MEDIUM_IMPACT_KEYWORDS.length; i++) {
     if (eventName.indexOf(MEDIUM_IMPACT_KEYWORDS[i]) !== -1) return true;
@@ -514,35 +496,35 @@ function isMediumImpact(eventName) {
 }
 ```
 
-**`docs/app.js`** — In `renderCalendar()`, in the `tbody` render loop, after the existing high-impact class assignment, add the medium tier:
-```javascript
-// Existing:
-if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
-// Add immediately after:
-else if (isMediumImpact(e.event)) tr.classList.add('cal-urgency-medium');
-```
+**`docs/app.js`** — In `renderCalendar()`, after `container.innerHTML = ''` and before building the table, insert:
 
-**`docs/app.js`** — In `renderCalendar()`, insert the legend div **after `container.innerHTML = ''`** and **before the table is appended**. Place it as the first child of `container`:
 ```javascript
 var legend = document.createElement('div');
 legend.className = 'cal-legend';
 legend.innerHTML =
-  '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High</span>'   +
+  '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High Impact</span>' +
   '<span class="cal-legend-item"><span class="cal-legend-dot dot-medium"></span>Medium</span>' +
-  '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>'    +
+  '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>' +
   '<span class="cal-legend-item"><span class="cal-legend-dot dot-today"></span>Today</span>';
 container.appendChild(legend);
-// (append table after this)
+```
+
+**`docs/app.js`** — In the calendar row render loop, after the existing `if (isHighImpact(e.event) || e.fomc)` block, add:
+
+```javascript
+else if (isMediumImpact(e.event)) tr.classList.add('cal-urgency-medium');
 ```
 
 **`docs/style.css`** — Add:
+
 ```css
 .cal-legend {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 8px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 .cal-legend-item {
   display: flex;
@@ -562,84 +544,65 @@ container.appendChild(legend);
 .dot-high   { background: var(--yellow); }
 .dot-medium { background: var(--text-muted); }
 .dot-fomc   { background: var(--blue); }
-.dot-today  { background: rgba(59,130,246,0.25); border: 1px solid var(--blue); }
+.dot-today  { background: rgba(59,130,246,0.3); border: 1px solid var(--blue); }
 
-/* Medium impact: default text color (brighter than dim, not as urgent as yellow) */
 .cal-urgency-medium td { color: var(--text); }
 .cal-urgency-medium .cal-event { font-weight: 500; }
 ```
 
 ---
 
-### TASK 7 · Bloomberg TV — verify embed and positioning
+### TASK 7 — Bloomberg TV: verify embed and positioning
 
-**Why:** Bloomberg is confirmed in position (Row 1, Col 2) and should remain there. This is a verification task — no structural changes needed unless the checks below fail.
+`panel-live` is already at Row 1, Col 2. No repositioning needed. Only verify and fix if wrong.
 
-**Check `docs/app.js` `initLiveStreams()`:**
-- `LIVE_CHANNELS` should contain exactly one entry: Bloomberg TV with `channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg'`
-- Embed URL must be: `https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0`
-- The live dot must conditionally apply class `live-dot-off` when `!isMarketOpen()`
+**`docs/app.js`** — In `initLiveStreams()`, confirm the iframe `src` is:
+```
+https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Lg&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0
+```
 
-**Check `docs/style.css`:**
+**`docs/style.css`** — Confirm these rules exist exactly:
 ```css
-/* These two rules must exist exactly as written: */
 .live-streams { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .live-stream-slot iframe { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 4px; background: #000; }
 ```
 
-Fix anything that doesn't match. If everything is correct, make no changes.
+If either is wrong, fix it. Otherwise skip.
 
 ---
 
-### TASK 8 · Final layout verification
+### TASK 8 — Verify final grid layout
 
-**Confirm the HTML panel source order is exactly:**
+After Tasks 1–7, confirm the panel source order in `index.html` is exactly:
+
 ```
-panel-calendar → panel-live → panel-news →
-panel-yields → panel-commodities → panel-forex →
-panel-macro → panel-funding → panel-risk →
-panel-movers
+Row 1: panel-calendar | panel-live   | panel-news
+Row 2: panel-yields   | panel-commodities | panel-forex
+Row 3: panel-macro    | panel-funding     | panel-risk
+Row 4: panel-movers   (grid-column: 1 / -1 via CSS — spans full width)
 ```
 
-**`panel-equities` must not exist anywhere in the file.**
-
-**`docs/style.css`** — Confirm `#panel-movers { grid-column: 1 / -1; }` is present (added in Task 5). No other layout changes needed — the 3-column grid handles everything else automatically.
+- `panel-equities` must be fully absent from the HTML
+- `panel-movers` must be the last panel in source order
+- No other panels should have `grid-column` overrides in the HTML
 
 ---
 
-## Deployment Sequence
+## Deployment sequence — run after all 8 tasks complete
 
 ```bash
-# Step 1 — Deploy worker changes (Tasks 1, 3 require this)
+# From project root:
 cd proxy
 git pull origin main
 npx wrangler deploy
 
-# Step 2 — Push client changes
 cd ..
 git add docs/ proxy/
-git commit -m "feat: equity ticker, TradingView fix, T-1/T-2 yields, news sort, movers strip, calendar legend"
+git commit -m "feat: equity ticker, TV widget fix, T-1/T-2 yields, news sort, movers strip, calendar legend"
 git push origin main
-# GitHub Pages redeploys automatically in ~2 min
 ```
 
-**After deploying, clear stale cache and reload:**
+Then in the browser console on the live dashboard:
 ```javascript
-// Paste in browser console on the live dashboard:
 localStorage.clear(); location.reload();
 ```
-
----
-
-## Do NOT Touch
-
-| Item | Reason |
-|------|--------|
-| `WORKER_URL` in `app.js` | Hardcoded to the live worker — changing it breaks everything |
-| `renderFunding()` | Confirmed working — SOFR/EFFR/ON RRP render correctly |
-| `renderYields()` | Confirmed working — only `renderYieldCurve()` changes |
-| `renderMacro()` | Confirmed working |
-| `cachedFred` / `cachedYahoo` merge in `tickerRefresh()` | Core data path logic |
-| `fetchFREDSeries()` URL and auth block | Only add `t2` to the return object |
-| `wrangler.toml` | Worker name and routing — do not modify |
-| `@media print` in `style.css` | Print snapshot feature — do not modify |
