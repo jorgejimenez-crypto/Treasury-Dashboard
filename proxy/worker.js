@@ -332,7 +332,7 @@ async function fetchFREDSeries(series, apiKey) {
       };
     }
   } catch (e) { /* fall through */ }
-  return { id: series.id, current: null, prior: null, date: null, label: series.label };
+  return { id: series.id, current: null, prior: null, t2: null, date: null, label: series.label };
 }
 
 async function fetchAllFRED(seriesList, apiKey) {
@@ -340,7 +340,7 @@ async function fetchAllFRED(seriesList, apiKey) {
   var out = {};
   for (var i = 0; i < results.length; i++) {
     var r = results[i];
-    out[r.id] = { current: r.current, prior: r.prior, date: r.date, label: r.label };
+    out[r.id] = { current: r.current, prior: r.prior, t2: r.t2, date: r.date, label: r.label };
   }
   return out;
 }
