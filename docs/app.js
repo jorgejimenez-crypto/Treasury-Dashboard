@@ -77,23 +77,48 @@ function initTradingView() {
   if (!wrap) return;
   tvInitialized = true;
 
-  // Use TradingView Advanced Chart iframe — more reliable than script-injected widget
+  // Use embed-widget-advanced-chart.js — official script-injection method.
+  // Requires: outer container with explicit height, inner __widget div,
+  // then script tag with JSON config as textContent (not innerHTML).
   wrap.innerHTML = '';
-  var iframe = document.createElement('iframe');
-  iframe.src = 'https://s.tradingview.com/widgetembed/?hideideas=1&overrides=&'
-    + 'enabled_features=&disabled_features=&locale=en'
-    + '#{"symbol":"NYMEX:CL1!","interval":"D","timezone":"America/New_York",'
-    + '"theme":"dark","style":"3","withdateranges":true,"hide_side_toolbar":true,'
-    + '"allow_symbol_change":true,"watchlist":["NYMEX:CL1!","NYMEX:BZ1!","NYMEX:NG1!","NYMEX:HO1!"],'
-    + '"details":true,"calendar":false,"width":"100%","height":"350"}';
-  iframe.style.width = '100%';
-  iframe.style.height = '350px';
-  iframe.style.border = 'none';
-  iframe.style.borderRadius = '4px';
-  iframe.loading = 'lazy';
-  iframe.setAttribute('allowtransparency', 'true');
-  iframe.setAttribute('allowfullscreen', '');
-  wrap.appendChild(iframe);
+
+  var container = document.createElement('div');
+  container.className = 'tradingview-widget-container';
+  container.style.width = '100%';
+  container.style.height = '350px';
+
+  var inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  inner.style.width = '100%';
+  inner.style.height = '100%';
+  container.appendChild(inner);
+
+  var config = {
+    autosize: true,
+    symbol: 'NYMEX:CL1!',
+    interval: 'D',
+    timezone: 'America/New_York',
+    theme: 'dark',
+    style: '1',
+    locale: 'en',
+    backgroundColor: 'rgba(10, 14, 20, 1)',
+    gridColor: 'rgba(30, 42, 58, 0.5)',
+    allow_symbol_change: true,
+    watchlist: ['NYMEX:CL1!', 'NYMEX:BZ1!', 'NYMEX:NG1!', 'NYMEX:HO1!'],
+    details: false,
+    hotlist: false,
+    calendar: false,
+    show_popup_button: false
+  };
+
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  script.async = true;
+  script.textContent = JSON.stringify(config);
+  container.appendChild(script);
+
+  wrap.appendChild(container);
 }
 
 // ============================================
@@ -548,7 +573,7 @@ function renderYieldCurve(fred) {
 
 // Cache last known values so FRED outages/weekends don't show all N/A.
 // Persisted to localStorage so they survive page reloads.
-var lastKnownFunding = { sofr: null, effr: null };
+var lastKnownFunding = loadLastKnown('funding') || { sofr: null, effr: null, onrrp: null };
 
 function loadLastKnown(key) {
   try {
@@ -568,29 +593,42 @@ function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
   grid.innerHTML = '';
 
-  // Use live data if available, otherwise fall back to last known
-  var sofr = (nyfed.sofr && nyfed.sofr.rate != null) ? nyfed.sofr : lastKnownFunding.sofr;
-  var effr = (nyfed.effr && nyfed.effr.rate != null) ? nyfed.effr : lastKnownFunding.effr;
+  // Prefer live data; fall back to last known (persisted across page loads via localStorage)
+  var sofrLive = nyfed.sofr && nyfed.sofr.rate != null;
+  var effrLive = nyfed.effr && nyfed.effr.rate != null;
+  var sofr = sofrLive ? nyfed.sofr : lastKnownFunding.sofr;
+  var effr = effrLive ? nyfed.effr : lastKnownFunding.effr;
 
-  // Update cache when we get live data
-  if (nyfed.sofr && nyfed.sofr.rate != null) lastKnownFunding.sofr = nyfed.sofr;
-  if (nyfed.effr && nyfed.effr.rate != null) lastKnownFunding.effr = nyfed.effr;
+  // ON RRP comes from FRED — persist it too so weekends don't blank the panel
+  var onrrp = (fred.RRPONTSYD && fred.RRPONTSYD.current != null)
+    ? fred.RRPONTSYD
+    : lastKnownFunding.onrrp;
+
+  // Update in-memory + localStorage when we get fresh data
+  var changed = false;
+  if (sofrLive)                                    { lastKnownFunding.sofr  = nyfed.sofr;      changed = true; }
+  if (effrLive)                                    { lastKnownFunding.effr  = nyfed.effr;      changed = true; }
+  if (fred.RRPONTSYD && fred.RRPONTSYD.current != null) { lastKnownFunding.onrrp = fred.RRPONTSYD; changed = true; }
+  if (changed) saveLastKnown('funding', lastKnownFunding);
 
   if (sofr && sofr.rate != null) {
     var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
-    grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', volNote, sofr.date));
+    // Append * when showing a cached (stale) value so user knows source age
+    var sofrNote = volNote + (!sofrLive && sofr ? ' *' : '');
+    grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', sofrNote, sofr.date));
   } else {
-    grid.appendChild(renderMetric('SOFR', 'N/A', 'Weekend/Holiday', ''));
+    grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
   }
   if (effr && effr.rate != null) {
-    grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', '', effr.date));
+    var effrNote = !effrLive && effr ? '*' : '';
+    grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', effrNote, effr.date));
   } else {
-    grid.appendChild(renderMetric('EFFR', 'N/A', 'Weekend/Holiday', ''));
+    grid.appendChild(renderMetric('EFFR', 'N/A', '', ''));
   }
-  var onrrp = fred.RRPONTSYD;
   if (onrrp && onrrp.current != null) {
     var valB = (onrrp.current / 1000).toFixed(1);
-    grid.appendChild(renderMetric('ON RRP', '$' + valB + 'B', '', onrrp.date));
+    var onrrpNote = (fred.RRPONTSYD && fred.RRPONTSYD.current != null) ? '' : '*';
+    grid.appendChild(renderMetric('ON RRP', '$' + valB + 'B', onrrpNote, onrrp.date));
   } else {
     grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
   }
@@ -599,7 +637,7 @@ function renderFunding(nyfed, fred) {
     var spread = Math.round((sofr.rate - effr.rate) * 100);
     footer.textContent = 'SOFR-EFFR: ' + sign(spread) + spread + ' bps';
   } else {
-    footer.textContent = 'SOFR-EFFR: unavailable (weekend/holiday)';
+    footer.textContent = 'SOFR-EFFR: unavailable';
   }
 }
 

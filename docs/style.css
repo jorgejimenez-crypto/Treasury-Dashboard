@@ -266,7 +266,6 @@ main {
   margin-bottom: 16px;
 }
 
-/* .panel-span-2 applies only at <=1200px breakpoint (see media queries below) */
 
 /* ---- Panels ---- */
 
@@ -465,7 +464,6 @@ main {
   gap: 6px;
 }
 
-.cols-1 { grid-template-columns: 1fr; }
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 
@@ -666,9 +664,6 @@ main {
   grid-column: 1 / -1;
 }
 
-.panel-span-2 {
-  grid-column: span 2;
-}
 
 /* ---- Energy Movers ---- */
 
@@ -769,20 +764,7 @@ main {
   background: #000;
 }
 
-.live-stream-link {
-  text-align: right;
-  margin-bottom: 4px;
-}
 
-.live-stream-link a {
-  color: var(--text-dim);
-  font-size: 9px;
-  text-decoration: none;
-}
-
-.live-stream-link a:hover {
-  color: var(--text-muted);
-}
 
 .live-dot {
   display: inline-block;
@@ -804,15 +786,7 @@ main {
   50% { opacity: 0.3; }
 }
 
-.live-fallback-text a {
-  color: var(--blue);
-  text-decoration: none;
-  font-weight: 500;
-}
 
-.live-fallback-text a:hover {
-  text-decoration: underline;
-}
 
 /* ---- Quick Notes Panel ---- */
 
@@ -1048,10 +1022,6 @@ footer kbd {
   #panel-news {
     grid-column: span 2;
   }
-  .panel-span-2 {
-    grid-column: span 2;
-  }
-
 }
 
 @media (max-width: 768px) {
@@ -1080,8 +1050,7 @@ footer kbd {
     grid-template-columns: 1fr;
   }
 
-  #panel-news,
-  .panel-span-2 {
+  #panel-news {
     grid-column: span 1;
   }
 
@@ -1208,12 +1177,6 @@ body.density-compact .panel h2 {
 /* ---- Error card ---- */
 .panel-error {
   border-color: var(--red) !important;
-}
-.panel-error-msg {
-  color: var(--red);
-  font-size: 11px;
-  padding: 8px;
-  text-align: center;
 }
 
 /* ---- Refresh button spin ---- */
