@@ -330,6 +330,11 @@ main {
   padding: 12px;
   min-width: 0;
   overflow: hidden;
+  font-size: 13px;
+}
+
+.panel-compact {
+  padding: 6px 12px;
 }
 
 .panel h2 {
@@ -479,7 +484,7 @@ main {
 }
 
 #tradingview-widget {
-  min-height: 228px;
+  min-height: 300px;
   width: 100%;
 }
 
@@ -757,10 +762,21 @@ main {
   height: 400px;
 }
 
+/* Compact movers strip — reduced height, above main grid rows */
 #panel-movers {
   grid-column: 1 / -1;
-  max-height: 130px;
+  max-height: 72px;
   overflow: hidden;
+  padding: 6px 12px;
+}
+
+#panel-movers h2 {
+  font-size: 9px;
+  margin-bottom: 4px;
+}
+
+#panel-movers .movers-strip {
+  max-height: 36px;
 }
 
 /* ---- Live Streams (multi-channel tabbed) ---- */

@@ -49,13 +49,11 @@ var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '3
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
-// Ticker symbols — descriptive labels with exchange symbols
-var TICKER_SYMBOLS = ['SP500', 'DOW', 'NASDAQ', 'RUSSELL', 'WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY'];
+// Custom ticker — energy + risk focus only (equities/gold/FX handled by TV Ticker Tape)
+var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'VIX', 'DXY'];
 var TICKER_LABELS = {
-  SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSSELL: 'Russell 2k',
   WTI: 'WTI Crude (CL=F)', Brent: 'Brent (BZ=F)', NatGas: 'Nat Gas (NG=F)',
-  HeatOil: 'Heat Oil (HO=F)', Gold: 'Gold (GC=F)', Silver: 'Silver (SI=F)',
-  VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)'
+  HeatOil: 'Heat Oil (HO=F)', VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)'
 };
 
 var MACRO_DISPLAY = [
@@ -86,7 +84,7 @@ function initTradingView() {
 
   var container = document.createElement('div');
   container.className = 'tradingview-widget-container';
-  container.style.height = '220px';
+  container.style.height = '300px';
   container.style.width = '100%';
 
   var inner = document.createElement('div');
@@ -102,7 +100,7 @@ function initTradingView() {
     ],
     chartOnly: false,
     width: '100%',
-    height: 220,
+    height: 300,
     locale: 'en',
     colorTheme: 'dark',
     autosize: false,

@@ -50,13 +50,22 @@
   <!-- MAIN DASHBOARD GRID -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Row 1: Calendar + Live Feed + News -->
+    <!-- Compact strip: Energy Movers -->
+    <section class="panel panel-full panel-compact" id="panel-movers">
+      <h2>Energy Movers</h2>
+      <div id="movers-content"></div>
+    </section>
+
+    <!-- Row 1: Calendar + News + Live -->
     <section class="panel" id="panel-calendar">
       <h2>Economic Calendar</h2>
-      <div id="calendar-content">
-        <!-- TradingView Economic Calendar widget injected by JS -->
-      </div>
+      <div id="calendar-content"></div>
       <div class="panel-footer" id="calendar-fomc-footer"></div>
+    </section>
+
+    <section class="panel" id="panel-news">
+      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
+      <div id="news-content" class="news-feed"></div>
     </section>
 
     <section class="panel" id="panel-live">
@@ -65,31 +74,7 @@
       <div class="live-streams" id="live-streams"></div>
     </section>
 
-    <section class="panel" id="panel-news">
-      <h2>News & Intelligence <span id="news-count" class="badge"></span></h2>
-      <div id="news-content" class="news-feed"></div>
-    </section>
-
-    <section class="panel" id="panel-yields">
-      <h2>Treasury Yields</h2>
-      <div class="metrics-grid cols-2" id="yields-grid"></div>
-      <div class="panel-footer" id="yields-footer"></div>
-      <div class="chart-container">
-        <canvas id="yield-curve-canvas" height="180"></canvas>
-      </div>
-    </section>
-
-    <!-- Row 2: Cross-asset signals -->
-    <section class="panel" id="panel-commodities">
-      <h2>Commodities</h2>
-      <div class="metrics-grid cols-3" id="commodities-grid"></div>
-      <div class="panel-footer" id="commodities-footer"></div>
-      <!-- TradingView Energy Chart Widget -->
-      <div class="chart-container" id="tv-chart-wrap">
-        <div id="tradingview-widget"></div>
-      </div>
-    </section>
-
+    <!-- Row 2: Forex + Yields + Commodities -->
     <section class="panel" id="panel-forex">
       <h2>Forex</h2>
       <div class="metrics-grid cols-2" id="forex-grid"></div>
@@ -105,6 +90,24 @@
         </div>
         <div class="fx-result" id="fx-result">--</div>
         <div class="fx-rate-line" id="fx-rate-line"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-yields">
+      <h2>Treasury Yields</h2>
+      <div class="metrics-grid cols-2" id="yields-grid"></div>
+      <div class="panel-footer" id="yields-footer"></div>
+      <div class="chart-container">
+        <canvas id="yield-curve-canvas" height="180"></canvas>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-commodities">
+      <h2>Commodities</h2>
+      <div class="metrics-grid cols-3" id="commodities-grid"></div>
+      <div class="panel-footer" id="commodities-footer"></div>
+      <div class="chart-container" id="tv-chart-wrap">
+        <div id="tradingview-widget"></div>
       </div>
     </section>
 
@@ -130,15 +133,7 @@
     <!-- Row 4: Market Heatmap (full width) -->
     <section class="panel panel-full" id="panel-heatmap">
       <h2>S&P 500 Heatmap</h2>
-      <div id="heatmap-content" class="tv-widget-container">
-        <!-- TradingView Heatmap widget injected by JS -->
-      </div>
-    </section>
-
-    <!-- Row 5: Market Movers -->
-    <section class="panel" id="panel-movers">
-      <h2>Energy Movers</h2>
-      <div id="movers-content"></div>
+      <div id="heatmap-content" class="tv-widget-container"></div>
     </section>
 
   </main>
