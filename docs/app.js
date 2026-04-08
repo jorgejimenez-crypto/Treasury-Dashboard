@@ -49,7 +49,14 @@ var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '3
 var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
-// Custom scrolling ticker removed — TV Ticker Tape handles all symbols.
+// Scrolling energy + risk + equity ticker
+var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY', 'SP500', 'DOW', 'NASDAQ'];
+var TICKER_LABELS = {
+  WTI: 'WTI Crude (CL=F)', Brent: 'Brent Crude (BZ=F)', NatGas: 'Nat Gas (NG=F)',
+  HeatOil: 'Heating Oil (HO=F)', Gold: 'Gold (GC=F)', Silver: 'Silver (SI=F)',
+  VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)',
+  DOW: 'Dow Jones', NASDAQ: 'Nasdaq'
+};
 
 var MACRO_DISPLAY = [
   { id: 'FEDFUNDS',        label: 'Fed Funds',     suffix: '%',  dec: 2 },
@@ -62,8 +69,49 @@ var MACRO_DISPLAY = [
   { id: 'WM2NS',           label: 'M2 YoY',        suffix: '%',  dec: 1 },
 ];
 
-// Economic calendar now handled by TradingView widget (auto-updating).
-// FOMC dates provided by the worker (FOMC_2026 array) for the header badge/alerts.
+// High-impact calendar events get urgency coloring
+var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
+var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment'];
+
+function isHighImpact(eventName) {
+  for (var i = 0; i < HIGH_IMPACT_KEYWORDS.length; i++) {
+    if (eventName.indexOf(HIGH_IMPACT_KEYWORDS[i]) !== -1) return true;
+  }
+  return false;
+}
+function isMediumImpact(eventName) {
+  for (var i = 0; i < MEDIUM_IMPACT_KEYWORDS.length; i++) {
+    if (eventName.indexOf(MEDIUM_IMPACT_KEYWORDS[i]) !== -1) return true;
+  }
+  return false;
+}
+
+var ECON_CALENDAR = [
+  { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)', consensus: null,    prior: null,          fomc: true },
+  { date: '2026-04-09', time: '08:30', event: 'Core PCE Price Index YoY (Feb)', consensus: '2.7%', prior: '2.6%' },
+  { date: '2026-04-09', time: '08:30', event: 'Initial Jobless Claims',          consensus: '225K', prior: '219K' },
+  { date: '2026-04-10', time: '08:30', event: 'CPI MoM (Mar)',                   consensus: '+0.3%', prior: '+0.2%' },
+  { date: '2026-04-10', time: '08:30', event: 'CPI YoY (Mar)',                   consensus: '3.2%', prior: '2.8%' },
+  { date: '2026-04-10', time: '10:00', event: 'UMich Consumer Sentiment (Apr Prelim)', consensus: null, prior: null },
+  { date: '2026-04-17', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null },
+  { date: '2026-04-17', time: '08:30', event: 'Retail Sales (Mar)',              consensus: null,    prior: null },
+  { date: '2026-04-24', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null },
+  { date: '2026-04-24', time: '08:30', event: 'Durable Goods Orders (Mar)',      consensus: null,    prior: null },
+  { date: '2026-04-29', time: 'ALL',   event: 'FOMC Meeting Begins',             consensus: null,    prior: null,  fomc: true },
+  { date: '2026-04-30', time: '08:30', event: 'GDP Advance (Q1)',                consensus: null,    prior: null },
+  { date: '2026-04-30', time: '14:00', event: 'FOMC Decision',                  consensus: 'Hold',  prior: '4.25-4.50%', fomc: true },
+  { date: '2026-05-01', time: '08:30', event: 'Nonfarm Payrolls (Apr)',          consensus: null,    prior: null },
+  { date: '2026-05-01', time: '10:00', event: 'ISM Manufacturing PMI (Apr)',     consensus: null,    prior: null },
+  { date: '2026-05-13', time: '08:30', event: 'CPI (Apr)',                       consensus: null,    prior: null },
+  { date: '2026-05-14', time: '08:30', event: 'PPI (Apr)',                       consensus: null,    prior: null },
+  { date: '2026-05-29', time: '08:30', event: 'GDP 2nd Estimate (Q1)',           consensus: null,    prior: null },
+  { date: '2026-05-29', time: '08:30', event: 'PCE Price Index (Apr)',           consensus: null,    prior: null },
+  { date: '2026-06-18', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+  { date: '2026-07-30', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+  { date: '2026-09-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+  { date: '2026-11-05', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+  { date: '2026-12-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true },
+];
 
 // ============================================
 // STATE
@@ -127,54 +175,30 @@ function initTradingView() {
 }
 
 // ============================================
-// TRADINGVIEW TICKER TAPE (real-time, free widget)
+// SCROLLING TICKER BAR
 // ============================================
 
-var tvTickerInitialized = false;
-
-function initTVTickerTape() {
-  if (tvTickerInitialized) return;
-  var wrap = document.getElementById('tv-ticker-tape');
-  if (!wrap) return;
-  tvTickerInitialized = true;
-
-  var container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  container.appendChild(inner);
-
-  var config = {
-    symbols: [
-      { proName: 'FOREXCOM:SPXUSD',   title: 'S&P 500' },
-      { proName: 'FOREXCOM:NSXUSD',   title: 'Nasdaq' },
-      { proName: 'NYMEX:CL1!',        title: 'WTI Crude' },
-      { proName: 'NYMEX:BZ1!',        title: 'Brent' },
-      { proName: 'NYMEX:NG1!',        title: 'Nat Gas' },
-      { proName: 'NYMEX:HO1!',        title: 'Heat Oil' },
-      { proName: 'COMEX:GC1!',        title: 'Gold' },
-      { proName: 'TVC:VIX',           title: 'VIX' },
-      { proName: 'TVC:DXY',           title: 'US Dollar' },
-      { proName: 'TVC:US10Y',         title: '10Y Yield' },
-      { proName: 'FX:EURUSD',         title: 'EUR/USD' },
-      { proName: 'FX:USDJPY',         title: 'USD/JPY' }
-    ],
-    showSymbolLogo: true,
-    isTransparent: true,
-    displayMode: 'adaptive',
-    colorTheme: 'dark',
-    locale: 'en'
-  };
-
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  container.appendChild(script);
-
-  wrap.appendChild(container);
+function renderTicker(yahoo) {
+  if (!yahoo) return;
+  var container = document.getElementById('ticker-content');
+  if (!container) return;
+  var html = '';
+  for (var i = 0; i < TICKER_SYMBOLS.length; i++) {
+    var key = TICKER_SYMBOLS[i];
+    var d = yahoo[key];
+    if (!d || d.current == null) continue;
+    var pct = pctChange(d.current, d.prior);
+    var cls = pct == null ? 'ticker-flat' : (pct >= 0 ? 'ticker-up' : 'ticker-down');
+    var pctStr = pct != null ? (' ' + sign(pct) + pct.toFixed(2) + '%') : '';
+    var prefix = (key === 'VIX' || key === 'DXY' || key === 'SP500' || key === 'DOW' || key === 'NASDAQ') ? '' : '$';
+    html += '<span class="ticker-item">'
+      + '<span class="ticker-symbol">' + TICKER_LABELS[key] + '</span>'
+      + '<span class="ticker-price">' + prefix + d.current.toFixed(2) + '</span>'
+      + '<span class="' + cls + '">' + pctStr + '</span>'
+      + '</span>';
+  }
+  // Duplicate content for seamless scroll loop
+  container.innerHTML = html + html;
 }
 
 var yieldCurveChart = null;
@@ -876,56 +900,74 @@ function renderMacro(macro) {
 }
 
 // ============================================
-// TRADINGVIEW ECONOMIC CALENDAR WIDGET
+// CUSTOM ECONOMIC CALENDAR
 // ============================================
-// Replaces the hardcoded ECON_CALENDAR. Auto-updates, shows high-impact events.
-// FOMC badge in header still uses worker-provided dates (FOMC_2026).
+// Hardcoded upcoming events with color-coded urgency tiers.
+// FOMC badge in header uses worker-provided FOMC_2026 dates.
 
-var tvCalendarInitialized = false;
-
-function initTVCalendar() {
-  if (tvCalendarInitialized) return;
+function renderCalendar(fomc) {
   var container = document.getElementById('calendar-content');
   if (!container) return;
-  tvCalendarInitialized = true;
-
   container.innerHTML = '';
-  var widgetDiv = document.createElement('div');
-  widgetDiv.className = 'tradingview-widget-container';
-  widgetDiv.style.height = '100%';
-  widgetDiv.style.width = '100%';
 
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  widgetDiv.appendChild(inner);
+  // Legend
+  var legend = document.createElement('div');
+  legend.className = 'cal-legend';
+  legend.innerHTML =
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High Impact</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-medium"></span>Medium</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>' +
+    '<span class="cal-legend-item"><span class="cal-legend-dot dot-today"></span>Today</span>';
+  container.appendChild(legend);
 
-  var config = {
-    width: '100%',
-    height: 400,
-    colorTheme: 'dark',
-    isTransparent: true,
-    locale: 'en',
-    importanceFilter: '0,1',
-    countryFilter: 'us'
-  };
+  var todayStr = new Date().toISOString().split('T')[0];
+  var upcoming = [];
+  for (var i = 0; i < ECON_CALENDAR.length; i++) {
+    if (ECON_CALENDAR[i].date >= todayStr) upcoming.push(ECON_CALENDAR[i]);
+  }
+  upcoming = upcoming.slice(0, 12);
 
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-events.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  widgetDiv.appendChild(script);
+  if (upcoming.length === 0) {
+    container.innerHTML += '<div class="news-empty">No upcoming events. Update ECON_CALENDAR in app.js.</div>';
+    return;
+  }
 
-  container.appendChild(widgetDiv);
-}
+  var table = document.createElement('table');
+  table.className = 'cal-table';
+  var thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th></tr>';
+  table.appendChild(thead);
+  var tbody = document.createElement('tbody');
 
-function renderCalendarFooter(fomc) {
-  var footer = document.getElementById('calendar-fomc-footer');
-  if (!footer) return;
+  for (var j = 0; j < upcoming.length; j++) {
+    var e = upcoming[j];
+    var tr = document.createElement('tr');
+    if (e.date === todayStr) tr.className = 'today';
+    if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
+    else if (isMediumImpact(e.event))    tr.classList.add('cal-urgency-medium');
+
+    var d = new Date(e.date + 'T12:00:00');
+    var dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+    if (e.time && e.time !== 'ALL') dateLabel += ' ' + e.time;
+
+    var eventCell = e.event;
+    if (e.fomc) eventCell = '<span class="cal-fomc">' + e.event + '</span>';
+    if (e.date === todayStr) eventCell += ' <span class="cal-tag cal-tag-today">TODAY</span>';
+
+    tr.innerHTML = '<td class="cal-date">' + dateLabel + '</td>'
+      + '<td class="cal-event">' + eventCell + '</td>'
+      + '<td class="cal-values">' + (e.consensus || '--') + '</td>'
+      + '<td class="cal-values">' + (e.prior    || '--') + '</td>';
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+
   if (fomc && fomc.next) {
-    footer.textContent = 'Next FOMC: ' + fomc.next + ' (' + fomc.daysAway + ' days)';
-  } else {
-    footer.textContent = '';
+    var fomcDiv = document.createElement('div');
+    fomcDiv.className = 'panel-footer';
+    fomcDiv.textContent = 'Next FOMC: ' + fomc.next + ' (' + fomc.daysAway + ' days)';
+    container.appendChild(fomcDiv);
   }
 }
 
@@ -1117,7 +1159,8 @@ function renderDashboard(data) {
   renderCommodities(data.yahoo);
   renderForex(data.yahoo);
   renderMacro(data.macro);
-  renderCalendarFooter(data.fomc);
+  renderCalendar(data.fomc);
+  renderTicker(data.yahoo);
   renderMovers(data.yahoo);
 
   // Source attribution
@@ -1128,12 +1171,11 @@ function renderDashboard(data) {
   addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
   addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
   addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
-  addSourceAttribution('panel-calendar', 'TradingView', null);
+  addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
   addSourceAttribution('panel-news', 'Fed / ECB / WSJ / Reuters / CNBC / MarketWatch / Yahoo / Seeking Alpha', null);
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
   initTradingView();
-  initTVCalendar();
   lazyLoadHeatmap();
 
   // Clear error states on successful render
@@ -1222,6 +1264,7 @@ function tickerRefresh() {
     .then(function(data) {
       // Merge ticker symbols into cached full dataset so other panels stay intact
       cachedYahoo = Object.assign(cachedYahoo || {}, data.yahoo);
+      renderTicker(cachedYahoo);
       renderCommodities(cachedYahoo);
       renderRisk(cachedYahoo, cachedFred || {});
       renderMovers(cachedYahoo);
@@ -1597,7 +1640,6 @@ initNotes();
 
 // 6. Lazy-init heavy widgets
 lazyInit('panel-live', initLiveStreams);
-initTVTickerTape();
 
 // 7. Updated-ago counter (ticks every 10s)
 setInterval(updateAgoCounter, 10000);
