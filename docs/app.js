@@ -36,8 +36,6 @@ var THRESHOLDS = {
 };
 
 // Labels
-var EQUITY_KEYS  = ['SP500', 'DOW', 'NASDAQ', 'RUSSELL'];
-var EQUITY_LABELS = { SP500: 'S&P 500', DOW: 'Dow Jones', NASDAQ: 'Nasdaq', RUSSELL: 'Russell 2000' };
 var COMMODITY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver'];
 var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry Hub', HeatOil: 'Heating Oil', Copper: 'Copper', Gold: 'Gold', Silver: 'Silver' };
 var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
@@ -140,7 +138,7 @@ function initTradingView() {
     height: 220,
     locale: 'en',
     colorTheme: 'dark',
-    autosize: true,
+    autosize: false,
     showVolume: false,
     hideDateRanges: false,
     hideMarketStatus: false,
@@ -176,6 +174,7 @@ var tickerTimer = null;
 var cachedYahoo = null;
 var cachedFred = null;                   // preserved across ticker refreshes
 var tickerBackoff = TICKER_REFRESH_MS;   // exponential backoff tracker
+var lastManualRefresh = 0;               // debounce R key / refresh button
 var fxConverterInitialized = false;      // track if event listeners are attached
 
 // ============================================
@@ -227,6 +226,7 @@ function formatTime(dateStr) {
     var d = new Date(dateStr);
     if (isNaN(d)) return '';
     var diff = new Date() - d;
+    if (diff < 60000) return 'just now';
     if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
     if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -334,8 +334,9 @@ function renderTicker(yahoo) {
     var pct = pctChange(d.current, d.prior);
     var cls = pct == null ? 'ticker-flat' : (pct >= 0 ? 'ticker-up' : 'ticker-down');
     var pctStr = pct != null ? (' ' + sign(pct) + pct.toFixed(2) + '%') : '';
-    var dec = (key === 'VIX' || key === 'DXY') ? 2 : 2;
-    var prefix = (key === 'VIX' || key === 'DXY' || key === 'SP500') ? '' : '$';
+    var dec = 2;
+    var isIndex = ['VIX', 'DXY', 'SP500', 'DOW', 'NASDAQ', 'RUSSELL'].indexOf(key) !== -1;
+    var prefix = isIndex ? '' : '$';
     html += '<span class="ticker-item">'
       + '<span class="ticker-symbol">' + TICKER_LABELS[key] + '</span>'
       + '<span class="ticker-price">' + prefix + d.current.toFixed(dec) + '</span>'
@@ -411,22 +412,6 @@ function computeAlerts(data) {
 // ============================================
 // PANEL RENDERERS
 // ============================================
-
-function renderEquities(yahoo) {
-  var grid = document.getElementById('equities-grid');
-  grid.innerHTML = '';
-  for (var i = 0; i < EQUITY_KEYS.length; i++) {
-    var k = EQUITY_KEYS[i];
-    var d = yahoo[k];
-    if (d && d.current != null) {
-      var pct = pctChange(d.current, d.prior);
-      var delta = pct != null ? sign(pct) + pct.toFixed(2) + '%' : '';
-      grid.appendChild(renderMetric(EQUITY_LABELS[k], fmt(d.current, 0, ''), delta, d.date, { deltaNum: pct }));
-    } else {
-      grid.appendChild(renderMetric(EQUITY_LABELS[k], 'N/A', '', ''));
-    }
-  }
-}
 
 function renderYields(fred) {
   var grid = document.getElementById('yields-grid');
@@ -582,11 +567,6 @@ function renderFunding(nyfed, fred) {
   } else {
     grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
   }
-  // Fed Funds rate from macro cache (if available)
-  if (cachedFred && cachedFred.FEDFUNDS && cachedFred.FEDFUNDS !== undefined) {
-    // Skip — already shown in macro panel
-  }
-  grid.appendChild(renderMetric('Spread', '', '', '', {}));
   var footer = document.getElementById('funding-footer');
   if (sofr && effr && sofr.rate != null && effr.rate != null) {
     var spread = Math.round((sofr.rate - effr.rate) * 100);
@@ -860,15 +840,15 @@ function renderNews(items) {
     return;
   }
   countBadge.textContent = items.length;
-  // Last-updated timestamp
+  // Last-updated timestamp (inside news-content so it hides when collapsed)
   var existingTs = document.getElementById('news-updated');
   if (existingTs) existingTs.remove();
   if (items.length > 0 && items[0].date) {
-    var tsSpan = document.createElement('span');
+    var tsSpan = document.createElement('div');
     tsSpan.id = 'news-updated';
     tsSpan.className = 'news-updated';
     tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
-    countBadge.parentElement.appendChild(tsSpan);
+    container.appendChild(tsSpan);
   }
   for (var i = 0; i < items.length && i < 20; i++) {
     var item = items[i];
@@ -1028,10 +1008,10 @@ function classifyClientArticle(title, desc) {
   if (/employment|\bjobs\b|unemployment|payroll|\bicsa\b|jobless/.test(t)) return 'LABOR';
   if (/\bgdp\b|gross domestic|economic growth/.test(t)) return 'GDP';
   if (/treasury|\byield\b|\bbond\b|\bdgs\b|note auction/.test(t)) return 'RATES';
-  if (/\boil\b|crude|\benergy\b|opec|nat.?gas|heating oil/.test(t)) return 'COMMODITIES';
+  if (/\boil\b|crude|\benergy\b|opec|nat.?gas|heating oil|\bgold\b|\bsilver\b|\bcopper\b|\bmetal/.test(t)) return 'COMMODITIES';
   if (/\bdollar\b|currency|forex|yuan|euro|yen|sterling/.test(t)) return 'FX';
   if (/credit spread|\boas\b|high.yield|investment.grade/.test(t)) return 'CREDIT';
-  if (/tariff|trade war|sanction|import|export duty/.test(t)) return 'MACRO';
+  if (/tariff|trade war|sanction|import|export duty|\brecession\b|stimulus|shutdown|sequester/.test(t)) return 'MACRO';
   return 'MARKETS';
 }
 
@@ -1127,10 +1107,13 @@ function fetchNews() {
         }
       }
 
-      // Pin gov sources (Fed, ECB) to top; sort rest by date descending
+      // Pin recent gov sources (last 6h) to top; sort rest by date descending
+      var sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
       deduped.sort(function(a, b) {
-        if (a.isGov && !b.isGov) return -1;
-        if (!a.isGov && b.isGov) return 1;
+        var aPin = a.isGov && new Date(a.date || 0).getTime() > sixHoursAgo;
+        var bPin = b.isGov && new Date(b.date || 0).getTime() > sixHoursAgo;
+        if (aPin && !bPin) return -1;
+        if (!aPin && bPin) return 1;
         return new Date(b.date || 0) - new Date(a.date || 0);
       });
 
@@ -1341,6 +1324,8 @@ function initShortcuts() {
     }
     if (e.key === 'r' || e.key === 'R') {
       e.preventDefault();
+      if (Date.now() - lastManualRefresh < 3000) return;
+      lastManualRefresh = Date.now();
       fetchData();
       fetchNews();
       return;
@@ -1370,6 +1355,8 @@ function initShortcuts() {
   });
 
   document.getElementById('btn-refresh').addEventListener('click', function() {
+    if (Date.now() - lastManualRefresh < 3000) return;
+    lastManualRefresh = Date.now();
     fetchData();
     fetchNews();
   });

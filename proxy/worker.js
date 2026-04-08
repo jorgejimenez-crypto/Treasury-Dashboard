@@ -46,7 +46,7 @@ var YAHOO_SYMBOLS = [
 ];
 
 // Lightweight ticker list -- /api/ticker only (10s refresh)
-// Keeps frequent ticker refresh fast: 9 symbols, no FRED/NY Fed overhead
+// Keeps frequent ticker refresh fast: 12 symbols, no FRED/NY Fed overhead
 var TICKER_SYMBOLS_WORKER = [
   { key: 'SP500',   symbol: '%5EGSPC',  group: 'equities'    },
   { key: 'DOW',     symbol: '%5EDJI',   group: 'equities'    },
@@ -73,6 +73,8 @@ var FRED_MARKET = [
   { id: 'RRPONTSYD',    label: 'ON RRP',  extra: '' },
   { id: 'BAMLC0A0CM',   label: 'IG OAS',  extra: '' },
   { id: 'BAMLH0A0HYM2', label: 'HY OAS',  extra: '' },
+  { id: 'SOFR',          label: 'SOFR',    extra: '' },
+  { id: 'EFFR',          label: 'EFFR',    extra: '' },
 ];
 
 var FRED_MACRO = [
@@ -164,6 +166,14 @@ async function handleMarketData(env) {
   var fredMacro = results[2];
   var nyfed = results[3];
 
+  // Fallback: if NY Fed API is blocked, use FRED SOFR/EFFR series
+  if (!nyfed.sofr.rate && fredMarket.SOFR && fredMarket.SOFR.current != null) {
+    nyfed.sofr = { rate: fredMarket.SOFR.current, date: fredMarket.SOFR.date, volume: null };
+  }
+  if (!nyfed.effr.rate && fredMarket.EFFR && fredMarket.EFFR.current != null) {
+    nyfed.effr = { rate: fredMarket.EFFR.current, date: fredMarket.EFFR.date, volume: null };
+  }
+
   // Compute next FOMC
   var now = new Date();
   var todayStr = now.toISOString().split('T')[0];
@@ -193,7 +203,7 @@ async function handleMarketData(env) {
 
 // ============================================
 // /api/ticker  (new -- lightweight, 10s refresh)
-// Only 9 Yahoo symbols, no FRED or NY Fed overhead
+// Only 12 Yahoo symbols, no FRED or NY Fed overhead
 // ============================================
 
 async function handleTicker() {
@@ -261,7 +271,7 @@ async function handleNews(env) {
   var seen = {};
   var deduped = [];
   for (var i = 0; i < allItems.length; i++) {
-    var normTitle = allItems[i].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 60);
+    var normTitle = allItems[i].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
     if (!seen[normTitle]) {
       seen[normTitle] = true;
       deduped.push(allItems[i]);
@@ -290,9 +300,19 @@ async function fetchYahooSymbol(sym) {
     var ts = result.timestamp;
     var closes = result.indicators.quote[0].close;
     if (ts && closes && ts.length >= 2) {
-      var lastIdx = ts.length - 1;
-      var dateStr = new Date(ts[lastIdx] * 1000).toISOString().split('T')[0];
-      return { key: sym.key, current: closes[lastIdx], prior: closes[lastIdx - 1], date: dateStr, group: sym.group };
+      // Walk backwards to find last non-null close (Yahoo returns null for incomplete days)
+      var lastIdx = -1;
+      for (var j = closes.length - 1; j >= 0; j--) {
+        if (closes[j] != null) { lastIdx = j; break; }
+      }
+      if (lastIdx >= 1) {
+        var priorIdx = -1;
+        for (var j2 = lastIdx - 1; j2 >= 0; j2--) {
+          if (closes[j2] != null) { priorIdx = j2; break; }
+        }
+        var dateStr = new Date(ts[lastIdx] * 1000).toISOString().split('T')[0];
+        return { key: sym.key, current: closes[lastIdx], prior: priorIdx >= 0 ? closes[priorIdx] : null, date: dateStr, group: sym.group };
+      }
     }
   } catch (e) { /* fall through */ }
   return { key: sym.key, current: null, prior: null, date: null, group: sym.group };

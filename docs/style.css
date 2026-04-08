@@ -464,6 +464,11 @@ main {
   border: 1px solid var(--border);
 }
 
+#tradingview-widget {
+  min-height: 228px;
+  width: 100%;
+}
+
 /* ---- Yield Curve Legend ---- */
 
 .yield-curve-legend {
