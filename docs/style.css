@@ -306,6 +306,7 @@ main {
 
 /* Commodities spans 2 of 3 cols in Row 2 */
 .panel-commodities-wide { grid-column: span 2; }
+.panel-news-wide { grid-column: span 2; }
 
 /* Forex is full width in Row 4 */
 #panel-forex { grid-column: 1 / -1; }
@@ -1110,12 +1111,11 @@ footer kbd {
     grid-template-columns: repeat(2, 1fr);
   }
   /* On 2-col: commodities still spans 2 */
-  .panel-commodities-wide {
-    grid-column: span 2;
-  }
-  #panel-forex {
-    grid-column: 1 / -1;
-  }
+  .panel-commodities-wide { grid-column: span 2; }
+.panel-news-wide { grid-column: span 2; }
+  #panel-forex { grid-column: 1 / -1; }
+  #panel-fx-converter { grid-column: 1 / -1; }
+  #panel-macro { grid-column: 1 / -1; }
   /* cols-4 falls back to cols-2 at tablet */
   .cols-4 {
     grid-template-columns: repeat(2, 1fr);
@@ -1148,21 +1148,19 @@ footer kbd {
     grid-template-columns: 1fr;
   }
 
-  .panel-commodities-wide {
-    grid-column: span 1;
-  }
-  #panel-forex {
-    grid-column: 1 / -1;
-  }
+  .panel-commodities-wide { grid-column: span 1; }
+  #panel-forex { grid-column: 1 / -1; }
+  #panel-fx-converter { grid-column: 1 / -1; }
+  #panel-macro { grid-column: 1 / -1; }
   .cols-4 {
     grid-template-columns: repeat(2, 1fr);
   }
-  .forex-layout {
-    grid-template-columns: 1fr;
+  .fx-converter-fullrow {
+    flex-direction: column;
   }
-  .fx-converter {
+  .fx-converter-right {
     min-width: 0;
-    max-width: 100%;
+    width: 100%;
   }
 
   .cols-3 {
@@ -1185,11 +1183,8 @@ footer kbd {
     margin: 0 -8px 8px;
   }
 
-  .yields-live-layout {
-    flex-direction: column;
-  }
-  .yields-live-stream {
-    width: 100%;
+  .yields-bloomberg {
+    margin-top: 6px;
   }
   #risk-grid-combined {
     grid-template-columns: repeat(2, 1fr);
@@ -1384,49 +1379,40 @@ body.density-compact .metric {
   border-color: var(--border-light);
 }
 
-/* Commodities panel — energy prices deserve larger visual weight */
-#panel-commodities .metric-value {
-  font-size: 17px;
-}
-#panel-commodities .metric-value.sm {
-  font-size: 16px;
-}
-#panel-commodities .metric-delta {
-  font-size: 12px;
-  font-weight: 600;
-}
+/* Commodities metric boost removed — panel is chart-only */
 /* Macro panel — key indicators get slightly larger type */
 #panel-macro .metric-value {
   font-size: 15px;
 }
 
-/* ---- Forex panel layout (full-width row) ---- */
+/* ---- FX Converter — promoted full-width panel ---- */
 
-.forex-layout {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: start;
+#panel-fx-converter {
+  grid-column: 1 / -1;
 }
 
-@media (max-width: 900px) {
-  .forex-layout {
-    grid-template-columns: 1fr;
-  }
+.fx-converter-fullrow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
 }
 
-/* ---- Upgraded FX Converter ---- */
+.fx-converter-left {
+  flex: 1;
+  min-width: 300px;
+}
 
-.fx-converter {
-  min-width: 280px;
-  max-width: 340px;
-  padding: 10px 12px;
+.fx-converter-right {
+  min-width: 180px;
+  padding: 8px 14px;
   background: var(--bg-card-alt);
   border: 1px solid var(--border-light);
   border-radius: 6px;
+  border-left: 3px solid var(--blue);
 }
 
-.fx-converter-header {
+.fx-converter-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1437,6 +1423,8 @@ body.density-compact .metric {
   letter-spacing: 0.4px;
   margin-bottom: 8px;
 }
+
+/* ---- Forex chip strip ---- */
 
 /* Preset amount buttons */
 .fx-presets {
@@ -1596,41 +1584,35 @@ body.density-compact .metric {
 
 /* ---- Treasury Yields + Bloomberg (combined panel) ---- */
 
-.panel-yields-combined {
-  padding: 8px 10px;
-}
+/* panel-yields-combined removed — yields panel uses standard .panel padding */
 
-.yields-live-layout {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
+/* Yields panel: full-width, Bloomberg stacked below chart */
 
-.yields-data {
-  flex: 1;
-  min-width: 0;
-}
-
-.yields-data h2 {
-  margin-bottom: 6px;
-}
-
-.yields-live-stream {
-  width: 200px;
-  flex-shrink: 0;
-}
-
-.yields-live-stream.collapsed {
-  display: none;
-}
-
-.yields-live-stream .live-streams iframe {
+.chart-container-full {
   width: 100%;
-  aspect-ratio: 16 / 9;
+}
+
+.yields-bloomberg {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.yields-bloomberg .strip-h2 {
+  margin-bottom: 5px;
+}
+
+.yields-bloomberg .live-streams iframe {
+  width: 100%;
+  height: 140px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #000;
   display: block;
+}
+
+.yields-bloomberg.collapsed {
+  display: none;
 }
 
 /* ---- Commodity chart controls ---- */
@@ -1643,8 +1625,19 @@ body.density-compact .metric {
   margin-bottom: 2px;
 }
 
+/* Prominent full-bar toggle version */
+.tv-chart-controls-prominent {
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .tv-chart-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
@@ -1665,11 +1658,93 @@ body.density-compact .metric {
   transition: border-color 0.15s;
 }
 
-.commodity-select:focus {
-  border-color: var(--yellow);
-  outline: none;
-}
-
-.commodity-select:hover {
+/* Large prominent version for the chart bar */
+.commodity-select-lg {
+  font-size: 13px;
+  padding: 5px 12px;
+  flex: 1;
+  background: var(--bg);
   border-color: var(--border-light);
 }
+
+.commodity-select:focus,
+.commodity-select-lg:focus {
+  border-color: var(--yellow);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(234,179,8,0.15);
+}
+
+.commodity-select:hover,
+.commodity-select-lg:hover {
+  border-color: var(--yellow);
+}
+
+/* ---- Macro Indicators strip (same pattern as Energy Movers) ---- */
+
+#panel-macro {
+  grid-column: 1 / -1;
+  padding: 5px 10px;
+  border-left: 3px solid var(--cyan);
+}
+
+.macro-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 2px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.macro-chips::-webkit-scrollbar { display: none; }
+
+.macro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card-alt);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.macro-chip-stale { opacity: 0.65; }
+.macro-chip-name  { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.macro-chip-value { color: var(--text); font-weight: 600; }
+.macro-chip-delta { font-weight: 600; font-size: 10px; }
+
+/* ---- Forex chip strip ---- */
+
+#panel-forex {
+  grid-column: 1 / -1;
+  padding: 5px 10px;
+  border-left: 3px solid var(--purple);
+}
+
+.forex-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card-alt);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.forex-chip-name  { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.forex-chip-price { color: var(--text); font-weight: 600; }
+.forex-chip-pct   { font-weight: 600; font-size: 10px; }
+
+#forex-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+/* Old .forex-layout references cleaned up */
+.forex-layout { display: none; }

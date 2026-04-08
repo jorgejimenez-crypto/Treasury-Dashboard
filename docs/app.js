@@ -758,43 +758,9 @@ function renderRisk(yahoo, fred) {
 }
 
 function renderCommodities(yahoo) {
-  var grid = document.getElementById('commodities-grid');
-  grid.innerHTML = '';
-  for (var i = 0; i < COMMODITY_KEYS.length; i++) {
-    var k = COMMODITY_KEYS[i];
-    var d = yahoo[k];
-    if (d && d.current != null) {
-      var pct = pctChange(d.current, d.prior);
-      var delta = pct != null ? sign(pct) + pct.toFixed(1) + '%' : '';
-      grid.appendChild(renderMetric(COMMODITY_LABELS[k], fmt(d.current), delta, d.date, { deltaNum: pct, sm: true }));
-    } else {
-      grid.appendChild(renderMetric(COMMODITY_LABELS[k], 'N/A', '', ''));
-    }
-  }
-  // Footer: WTI/Brent spread + commodity status (reframed from margin pressure)
-  var footer = document.getElementById('commodities-footer');
-  var txt = '';
-  var wti = yahoo.WTI;
-  var brent = yahoo.Brent;
-  if (wti && brent && wti.current != null && brent.current != null) {
-    var spread = wti.current - brent.current;
-    txt += 'WTI/Brent: ' + (spread >= 0 ? '+' : '') + '$' + spread.toFixed(2);
-  }
-  var sigs = [];
-  for (var j = 0; j < ENERGY_KEYS.length; j++) {
-    var ek = ENERGY_KEYS[j];
-    var ed = yahoo[ek];
-    if (ed && ed.current != null && ed.prior != null) {
-      var epct = pctChange(ed.current, ed.prior);
-      if (epct != null && Math.abs(epct) >= THRESHOLDS.commodityPct) {
-        sigs.push(COMMODITY_LABELS[ek] + ' ' + (epct > 0 ? 'up' : 'down') + ' ' + Math.abs(epct).toFixed(1) + '%');
-      }
-    }
-  }
-  if (sigs.length >= 2) txt += (txt ? ' | ' : '') + 'SURGE: ' + sigs.join(', ');
-  else if (sigs.length === 1) txt += (txt ? ' | ' : '') + 'WATCH: ' + sigs[0];
-  else txt += (txt ? ' | ' : '') + 'Commodities: stable';
-  footer.textContent = txt;
+  // Metric chips and footer removed — panel shows chart + toggle only.
+  // Alert computation still runs via computeAlerts() which uses yahoo directly.
+  // No DOM updates needed here; chart is managed by initTradingView/renderTVChart.
 }
 
 function fxDecimals(key) {
@@ -803,20 +769,32 @@ function fxDecimals(key) {
 }
 
 function renderForex(yahoo) {
-  var grid = document.getElementById('forex-grid');
-  grid.innerHTML = '';
+  // Render FX pairs as mover-style chips into the forex strip
+  renderForexStrip(yahoo);
+  // Always (re-)initialize the converter — it lives in its own promoted panel
+  initFxConverter();
+}
+
+function renderForexStrip(yahoo) {
+  var container = document.getElementById('forex-chips');
+  if (!container) return;
+  var chips = [];
   for (var i = 0; i < FOREX_KEYS.length; i++) {
     var k = FOREX_KEYS[i];
     var d = yahoo[k];
-    if (d && d.current != null) {
-      var pct = pctChange(d.current, d.prior);
-      var delta = pct != null ? sign(pct) + pct.toFixed(2) + '%' : '';
-      grid.appendChild(renderMetric(FOREX_LABELS[k], d.current.toFixed(fxDecimals(k)), delta, d.date, { deltaNum: pct, sm: true }));
-    } else {
-      grid.appendChild(renderMetric(FOREX_LABELS[k], 'N/A', '', ''));
-    }
+    if (!d || d.current == null) continue;
+    var pct = pctChange(d.current, d.prior);
+    var pctCls  = pct == null ? 'delta-flat' : (pct >= 0 ? 'delta-up' : 'delta-down');
+    var pctStr  = pct != null ? sign(pct) + pct.toFixed(2) + '%' : '';
+    chips.push(
+      '<span class="forex-chip">'
+      + '<span class="forex-chip-name">' + FOREX_LABELS[k] + '</span>'
+      + '<span class="forex-chip-price">' + d.current.toFixed(fxDecimals(k)) + '</span>'
+      + (pctStr ? '<span class="forex-chip-pct ' + pctCls + '">' + pctStr + '</span>' : '')
+      + '</span>'
+    );
   }
-  initFxConverter();
+  container.innerHTML = chips.join('');
 }
 
 // ============================================
@@ -952,36 +930,53 @@ function getToUSDPrior(ccy) {
 }
 
 function renderMacro(macro) {
-  var grid = document.getElementById('macro-grid');
-  grid.innerHTML = '';
+  var container = document.getElementById('macro-chips');
+  if (!container) return;
+
+  var chips = [];
   var anyLive = false;
+
   for (var i = 0; i < MACRO_DISPLAY.length; i++) {
     var m = MACRO_DISPLAY[i];
     var d = macro[m.id];
+    var valStr = 'N/A';
+    var delta = '';
+    var deltaNum = null;
+    var stale = false;
+
     if (d && d.current != null) {
       anyLive = true;
       var val = m.divideBy ? d.current / m.divideBy : d.current;
-      var valStr = val.toFixed(m.dec) + m.suffix;
+      valStr = val.toFixed(m.dec) + m.suffix;
       var priorVal = d.prior != null ? (m.divideBy ? d.prior / m.divideBy : d.prior) : null;
-      var delta = '';
-      var deltaNum = null;
       if (priorVal != null) {
         var diff = val - priorVal;
         deltaNum = diff;
-        if (m.suffix === 'K') {
-          delta = sign(diff) + diff.toFixed(0) + 'K';
-        } else {
-          delta = sign(diff) + diff.toFixed(m.dec) + (m.suffix === '%' ? ' pp' : '');
-        }
+        delta = m.suffix === 'K'
+          ? sign(diff) + diff.toFixed(0) + 'K'
+          : sign(diff) + diff.toFixed(m.dec) + (m.suffix === '%' ? 'pp' : '');
       }
-      grid.appendChild(renderMetric(m.label, valStr, delta, d.date, { deltaNum: deltaNum, sm: true }));
     } else if (lastKnownMacro && lastKnownMacro[m.id]) {
-      var cached = lastKnownMacro[m.id];
-      grid.appendChild(renderMetric(m.label, cached.value, '', cached.date, { sm: true, stale: true }));
-    } else {
-      grid.appendChild(renderMetric(m.label, 'N/A', '', ''));
+      valStr = lastKnownMacro[m.id].value;
+      stale = true;
     }
+
+    var deltaClass = deltaNum == null ? 'delta-flat'
+      : (deltaNum > 0 ? 'delta-up' : (deltaNum < 0 ? 'delta-down' : 'delta-flat'));
+
+    chips.push(
+      '<span class="macro-chip' + (stale ? ' macro-chip-stale' : '') + '">'
+      + '<span class="macro-chip-name">' + m.label + '</span>'
+      + '<span class="macro-chip-value">' + valStr + '</span>'
+      + (delta ? '<span class="macro-chip-delta ' + deltaClass + '">' + delta + '</span>' : '')
+      + '</span>'
+    );
   }
+
+  // Duplicate for seamless scroll (same pattern as ticker/movers)
+  var html = chips.join('');
+  container.innerHTML = html + html;
+
   if (anyLive) {
     var snapshot = {};
     for (var j = 0; j < MACRO_DISPLAY.length; j++) {
@@ -1373,6 +1368,7 @@ function tickerRefresh() {
       renderCommodities(cachedYahoo);
       renderRisk(cachedYahoo, cachedFred || {});
       renderMovers(cachedYahoo);
+      renderForexStrip(cachedYahoo);
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
     })
     .catch(function() {
@@ -1593,11 +1589,11 @@ function initShortcuts() {
 // ============================================
 
 function showSkeletons() {
-  var grids = ['yields-grid', 'forex-grid', 'commodities-grid', 'macro-grid', 'funding-grid', 'risk-grid', 'credit-grid'];
+  var grids = ['yields-grid', 'funding-grid', 'risk-grid', 'credit-grid'];
   for (var i = 0; i < grids.length; i++) {
     var g = document.getElementById(grids[i]);
     if (!g || g.children.length > 0) continue;
-    var count = grids[i] === 'commodities-grid' ? 7 : 4;
+    var count = 4;
     for (var j = 0; j < count; j++) {
       var sk = document.createElement('div');
       sk.className = 'metric';

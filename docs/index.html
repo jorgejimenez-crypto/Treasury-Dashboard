@@ -40,20 +40,28 @@
   </div>
 
   <!-- MAIN DASHBOARD GRID
-    Row 0: Movers strip (full width, yellow accent)
-    Row 0.5: Funding + Risk compact strip (full width, two halves)
-    Row 1: Macro | Calendar | News          ← TOP 3
-    Row 2: Yields+Bloomberg | Commodities   ← Bloomberg inside Yields
-    Row 3: Forex (full width)
+    Strip A : Energy Movers      (full width, yellow accent)
+    Strip B : Macro Indicators   (full width, cyan accent)   ← CHANGE 1
+    Strip C : Funding + Risk     (full width, two halves)
+    Panel D : FX Converter       (full width, promoted)      ← CHANGE 4a
+    Row E   : Calendar (1) | News (2)
+    Row F   : Yields full-width  (Bloomberg below chart)     ← CHANGE 3
+              + Commodities (chart + toggle only)            ← CHANGE 2
+    Strip G : Forex rates        (full width, purple accent) ← CHANGE 4b
   -->
   <main id="dashboard" style="display:none;">
 
-    <!-- Row 0: Energy Movers strip (no header) -->
+    <!-- Strip A: Energy Movers -->
     <section class="panel panel-full panel-strip" id="panel-movers" aria-label="Energy Movers">
       <div id="movers-content"></div>
     </section>
 
-    <!-- Row 0.5: Funding & Liquidity + Risk & Credit — compact inline strip -->
+    <!-- Strip B: Macro Indicators (same compact style as Movers) -->
+    <section class="panel panel-full panel-strip panel-macro-strip" id="panel-macro" aria-label="Macro Indicators">
+      <div id="macro-chips"></div>
+    </section>
+
+    <!-- Strip C: Funding & Liquidity + Risk & Credit -->
     <section class="panel panel-full panel-compact-row" id="panel-funding-risk" aria-label="Funding and Risk">
       <div id="panel-funding" class="compact-half" aria-label="Funding and Liquidity">
         <div class="strip-h2">Funding &amp; Liquidity</div>
@@ -64,79 +72,17 @@
       <div id="panel-risk" class="compact-half" aria-label="Risk and Credit">
         <div class="strip-h2">Risk &amp; Credit</div>
         <div class="metrics-grid cols-4" id="risk-grid-combined">
-          <!-- risk-grid and credit-grid rendered inline here -->
           <div id="risk-grid" style="display:contents;"></div>
           <div id="credit-grid" style="display:contents;"></div>
         </div>
       </div>
     </section>
 
-    <!-- Row 1: Top 3 — Macro · Calendar · News -->
-    <section class="panel" id="panel-macro" aria-label="Macro Indicators">
-      <h2>Macro Indicators</h2>
-      <div class="metrics-grid cols-2" id="macro-grid"></div>
-    </section>
-
-    <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
-      <h2>Economic Calendar</h2>
-      <div id="calendar-content"></div>
-      <div class="panel-footer" id="calendar-fomc-footer"></div>
-    </section>
-
-    <section class="panel" id="panel-news" aria-label="News and Intelligence">
-      <h2>News &amp; Intelligence <span id="news-count" class="badge"></span></h2>
-      <div id="news-content" class="news-feed"></div>
-    </section>
-
-    <!-- Row 2: Yields (with Bloomberg inside) + Commodities (wide, with symbol selector) -->
-    <section class="panel panel-yields-combined" id="panel-yields" aria-label="Treasury Yields">
-      <div class="yields-live-layout">
-        <div class="yields-data">
-          <h2>Treasury Yields</h2>
-          <div class="metrics-grid cols-2" id="yields-grid"></div>
-          <div class="panel-footer" id="yields-footer"></div>
-          <div class="chart-container">
-            <canvas id="yield-curve-canvas" height="150"></canvas>
-          </div>
-        </div>
-        <div id="panel-live" class="yields-live-stream">
-          <div class="strip-h2">
-            <span class="live-dot" id="live-dot-indicator"></span>
-            Bloomberg TV
-            <a href="https://www.youtube.com/@BloombergTelevision/live" target="_blank" rel="noopener"
-               style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>
-          </div>
-          <div class="live-streams" id="live-streams"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
-      <h2>Commodities</h2>
-      <div class="metrics-grid cols-4" id="commodities-grid"></div>
-      <div class="panel-footer" id="commodities-footer"></div>
-      <div class="chart-container" id="tv-chart-wrap">
-        <!-- Commodity symbol selector -->
-        <div class="tv-chart-controls">
-          <label class="tv-chart-label">Chart</label>
-          <select id="commodity-selector" class="commodity-select">
-            <option value="NYMEX:CL1!">WTI Crude (CL1!)</option>
-            <option value="NYMEX:BZ1!">Brent Crude (BZ1!)</option>
-            <option value="NYMEX:RB1!">RBOB Gasoline (RB1!)</option>
-            <option value="NYMEX:HO1!">Heating Oil (HO1!)</option>
-          </select>
-        </div>
-        <div id="tradingview-widget"></div>
-      </div>
-    </section>
-
-    <!-- Row 3: Forex — full width -->
-    <section class="panel panel-full" id="panel-forex" aria-label="Forex">
-      <h2>Forex</h2>
-      <div class="forex-layout">
-        <div class="metrics-grid cols-4" id="forex-grid"></div>
-        <div class="fx-converter" id="fx-converter">
-          <div class="fx-converter-header">
+    <!-- Panel D: FX Converter (promoted, full width) -->
+    <section class="panel panel-full" id="panel-fx-converter" aria-label="FX Converter">
+      <div class="fx-converter-fullrow" id="fx-converter">
+        <div class="fx-converter-left">
+          <div class="fx-converter-title">
             <span>FX Converter</span>
             <span id="fx-rate-trend" class="fx-rate-trend"></span>
           </div>
@@ -154,13 +100,65 @@
             <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
             <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
           </div>
-          <div class="fx-result-block">
-            <div class="fx-result" id="fx-result">--</div>
-            <div class="fx-rate-line" id="fx-rate-line"></div>
-            <div class="fx-reverse-rate" id="fx-reverse-rate"></div>
-          </div>
+        </div>
+        <div class="fx-converter-right">
+          <div class="fx-result" id="fx-result">--</div>
+          <div class="fx-rate-line" id="fx-rate-line"></div>
+          <div class="fx-reverse-rate" id="fx-reverse-rate"></div>
         </div>
       </div>
+    </section>
+
+    <!-- Row E: Calendar + News -->
+    <section class="panel" id="panel-calendar" aria-label="Economic Calendar">
+      <h2>Economic Calendar</h2>
+      <div id="calendar-content"></div>
+      <div class="panel-footer" id="calendar-fomc-footer"></div>
+    </section>
+
+    <section class="panel panel-news-wide" id="panel-news" aria-label="News and Intelligence">
+      <h2>News &amp; Intelligence <span id="news-count" class="badge"></span></h2>
+      <div id="news-content" class="news-feed"></div>
+    </section>
+
+    <!-- Row F: Yields (full-width chart, Bloomberg below) + Commodities (chart+toggle only) -->
+    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
+      <h2>Treasury Yields</h2>
+      <div class="metrics-grid cols-4" id="yields-grid"></div>
+      <div class="panel-footer" id="yields-footer"></div>
+      <div class="chart-container chart-container-full">
+        <canvas id="yield-curve-canvas" height="180"></canvas>
+      </div>
+      <div class="yields-bloomberg" id="panel-live">
+        <div class="strip-h2">
+          <span class="live-dot" id="live-dot-indicator"></span>
+          Bloomberg TV
+          <a href="https://www.youtube.com/@BloombergTelevision/live" target="_blank" rel="noopener"
+             style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>
+        </div>
+        <div class="live-streams" id="live-streams"></div>
+      </div>
+    </section>
+
+    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
+      <h2>Commodities</h2>
+      <div class="chart-container" id="tv-chart-wrap">
+        <div class="tv-chart-controls tv-chart-controls-prominent">
+          <span class="tv-chart-label">&#9881; Chart</span>
+          <select id="commodity-selector" class="commodity-select commodity-select-lg">
+            <option value="NYMEX:CL1!">WTI Crude  (CL1!)</option>
+            <option value="NYMEX:BZ1!">Brent Crude (BZ1!)</option>
+            <option value="NYMEX:RB1!">RBOB Gasoline (RB1!)</option>
+            <option value="NYMEX:HO1!">Heating Oil (HO1!)</option>
+          </select>
+        </div>
+        <div id="tradingview-widget"></div>
+      </div>
+    </section>
+
+    <!-- Strip G: Forex rates (compact chips, purple accent) -->
+    <section class="panel panel-full panel-strip panel-forex-strip" id="panel-forex" aria-label="Forex Rates">
+      <div id="forex-chips"></div>
     </section>
 
   </main>
