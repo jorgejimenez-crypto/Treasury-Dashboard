@@ -4,7 +4,7 @@
  * Endpoints:
  *   GET /api/market-data  -- Yahoo Finance + FRED + NY Fed + macro indicators
  *   GET /api/ticker       -- Lightweight: 9 Yahoo symbols only (10s ticker refresh)
- *   GET /api/news         -- Government RSS feeds (Federal Reserve, ECB, CNBC)
+ *   GET /api/news         -- All RSS feeds (Fed, ECB, CNBC, WSJ, Reuters, MarketWatch, Yahoo, Seeking Alpha)
  *   GET /                 -- Health check
  *
  * Secrets (set via `npx wrangler secret put <n>`):
@@ -95,11 +95,18 @@ var FOMC_2026 = [
 ];
 
 var RSS_FEEDS = [
+  // Government / Central Bank (always pinned)
   { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',     isGov: true  },
   { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
+  // Premium news (previously client-side via rss2json — now worker-side, no rate limits)
+  { url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml',             source: 'WSJ',             tag: 'MARKETS', isGov: false },
   { url: 'https://feeds.reuters.com/reuters/businessNews',           source: 'Reuters',         tag: 'MARKETS', isGov: false },
+  { url: 'https://feeds.marketwatch.com/marketwatch/topstories',     source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
+  { url: 'https://finance.yahoo.com/rss/topstories',                source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
+  { url: 'https://seekingalpha.com/feed.xml',                       source: 'Seeking Alpha',   tag: 'MARKETS', isGov: false },
+  // Broadcast / Wire
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS', isGov: false },
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', source: 'CNBC Economy', tag: 'FED', isGov: false },
 ];
@@ -278,11 +285,16 @@ async function handleNews(env) {
     }
   }
 
-  // Sort by date descending, cap at 40
+  // Pin recent gov sources (last 6h) to top; sort rest by date descending
+  var sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
   deduped.sort(function(a, b) {
+    var aPin = a.isGov && new Date(a.date || 0).getTime() > sixHoursAgo;
+    var bPin = b.isGov && new Date(b.date || 0).getTime() > sixHoursAgo;
+    if (aPin && !bPin) return -1;
+    if (!aPin && bPin) return 1;
     return new Date(b.date || 0) - new Date(a.date || 0);
   });
-  deduped = deduped.slice(0, 40);
+  deduped = deduped.slice(0, 50);
 
   return jsonResp({ timestamp: new Date().toISOString(), items: deduped });
 }
@@ -408,7 +420,7 @@ function parseRSS(xml, sourceName, tag, isGov) {
   var items = [];
   var itemRegex = /<item>([\s\S]*?)<\/item>/gi;
   var match;
-  while ((match = itemRegex.exec(xml)) !== null && items.length < 15) {
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 20) {
     var block = match[1];
     var title = extractXmlTag(block, 'title');
     var link = extractXmlTag(block, 'link');

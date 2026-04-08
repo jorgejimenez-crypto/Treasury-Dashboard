@@ -14,6 +14,9 @@
     <div id="ticker-content" class="ticker-content">Loading ticker...</div>
   </div>
 
+  <!-- TRADINGVIEW TICKER TAPE (professional real-time tape) -->
+  <div id="tv-ticker-tape" class="tv-ticker-tape"></div>
+
   <!-- TOP BAR -->
   <header id="header">
     <div class="header-left">
@@ -50,11 +53,15 @@
     <!-- Row 1: Calendar + Live Feed + News -->
     <section class="panel" id="panel-calendar">
       <h2>Economic Calendar</h2>
-      <div id="calendar-content"></div>
+      <div id="calendar-content">
+        <!-- TradingView Economic Calendar widget injected by JS -->
+      </div>
+      <div class="panel-footer" id="calendar-fomc-footer"></div>
     </section>
 
     <section class="panel" id="panel-live">
       <h2>Live Catalysts</h2>
+      <div class="live-channel-tabs" id="live-channel-tabs"></div>
       <div class="live-streams" id="live-streams"></div>
     </section>
 
@@ -120,7 +127,15 @@
       <div class="metrics-grid cols-2" id="credit-grid"></div>
     </section>
 
-    <!-- Row 4: Market Movers -->
+    <!-- Row 4: Market Heatmap (full width) -->
+    <section class="panel panel-full" id="panel-heatmap">
+      <h2>S&P 500 Heatmap</h2>
+      <div id="heatmap-content" class="tv-widget-container">
+        <!-- TradingView Heatmap widget injected by JS -->
+      </div>
+    </section>
+
+    <!-- Row 5: Market Movers -->
     <section class="panel" id="panel-movers">
       <h2>Energy Movers</h2>
       <div id="movers-content"></div>

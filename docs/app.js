@@ -69,41 +69,8 @@ var MACRO_DISPLAY = [
   { id: 'WM2NS',           label: 'M2 YoY',        suffix: '%',  dec: 1 },
 ];
 
-// High-impact calendar events get urgency coloring
-var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
-
-var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment'];
-
-function isMediumImpact(eventName) {
-  for (var i = 0; i < MEDIUM_IMPACT_KEYWORDS.length; i++) {
-    if (eventName.indexOf(MEDIUM_IMPACT_KEYWORDS[i]) !== -1) return true;
-  }
-  return false;
-}
-
-var ECON_CALENDAR = [
-  { date: '2026-04-06', time: '10:00', event: 'ISM Services PMI (Mar)', consensus: '54.8', prior: '56.1' },
-  { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)', consensus: null, prior: null, fomc: true },
-  { date: '2026-04-09', time: '08:30', event: 'Core PCE Price Index YoY (Feb)', consensus: '2.7%', prior: '2.6%' },
-  { date: '2026-04-09', time: '08:30', event: 'Initial Jobless Claims', consensus: '225K', prior: '219K' },
-  { date: '2026-04-10', time: '08:30', event: 'CPI MoM (Mar)', consensus: '+0.3%', prior: '+0.2%' },
-  { date: '2026-04-10', time: '08:30', event: 'CPI YoY (Mar)', consensus: '3.2%', prior: '2.8%' },
-  { date: '2026-04-10', time: '10:00', event: 'UMich Consumer Sentiment (Apr Prelim)', consensus: null, prior: null },
-  { date: '2026-04-17', time: '08:30', event: 'Initial Jobless Claims', consensus: null, prior: null },
-  { date: '2026-04-17', time: '08:30', event: 'Retail Sales (Mar)', consensus: null, prior: null },
-  { date: '2026-04-24', time: '08:30', event: 'Initial Jobless Claims', consensus: null, prior: null },
-  { date: '2026-04-24', time: '08:30', event: 'Durable Goods Orders (Mar)', consensus: null, prior: null },
-  { date: '2026-04-29', time: 'ALL', event: 'FOMC Meeting Begins', consensus: null, prior: null, fomc: true },
-  { date: '2026-04-30', time: '08:30', event: 'GDP Advance (Q1)', consensus: null, prior: null },
-  { date: '2026-04-30', time: '14:00', event: 'FOMC Decision', consensus: 'Hold', prior: '4.25-4.50%', fomc: true },
-  { date: '2026-05-01', time: '08:30', event: 'Nonfarm Payrolls (Apr)', consensus: null, prior: null },
-  { date: '2026-05-01', time: '10:00', event: 'ISM Manufacturing PMI (Apr)', consensus: null, prior: null },
-  { date: '2026-05-07', time: '14:00', event: 'FOMC Decision (if scheduled)', consensus: null, prior: null, fomc: true },
-  { date: '2026-05-13', time: '08:30', event: 'CPI (Apr)', consensus: null, prior: null },
-  { date: '2026-05-14', time: '08:30', event: 'PPI (Apr)', consensus: null, prior: null },
-  { date: '2026-05-29', time: '08:30', event: 'GDP 2nd Estimate (Q1)', consensus: null, prior: null },
-  { date: '2026-05-29', time: '08:30', event: 'PCE Price Index (Apr)', consensus: null, prior: null },
-];
+// Economic calendar now handled by TradingView widget (auto-updating).
+// FOMC dates provided by the worker (FOMC_2026 array) for the header badge/alerts.
 
 // ============================================
 // STATE
@@ -164,6 +131,57 @@ function initTradingView() {
   container.appendChild(script);
 
   wrap.innerHTML = '';
+  wrap.appendChild(container);
+}
+
+// ============================================
+// TRADINGVIEW TICKER TAPE (real-time, free widget)
+// ============================================
+
+var tvTickerInitialized = false;
+
+function initTVTickerTape() {
+  if (tvTickerInitialized) return;
+  var wrap = document.getElementById('tv-ticker-tape');
+  if (!wrap) return;
+  tvTickerInitialized = true;
+
+  var container = document.createElement('div');
+  container.className = 'tradingview-widget-container';
+
+  var inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  container.appendChild(inner);
+
+  var config = {
+    symbols: [
+      { proName: 'FOREXCOM:SPXUSD',   title: 'S&P 500' },
+      { proName: 'FOREXCOM:NSXUSD',   title: 'Nasdaq' },
+      { proName: 'NYMEX:CL1!',        title: 'WTI Crude' },
+      { proName: 'NYMEX:BZ1!',        title: 'Brent' },
+      { proName: 'NYMEX:NG1!',        title: 'Nat Gas' },
+      { proName: 'NYMEX:HO1!',        title: 'Heat Oil' },
+      { proName: 'COMEX:GC1!',        title: 'Gold' },
+      { proName: 'TVC:VIX',           title: 'VIX' },
+      { proName: 'TVC:DXY',           title: 'US Dollar' },
+      { proName: 'TVC:US10Y',         title: '10Y Yield' },
+      { proName: 'FX:EURUSD',         title: 'EUR/USD' },
+      { proName: 'FX:USDJPY',         title: 'USD/JPY' }
+    ],
+    showSymbolLogo: true,
+    isTransparent: true,
+    displayMode: 'adaptive',
+    colorTheme: 'dark',
+    locale: 'en'
+  };
+
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
+  script.async = true;
+  script.textContent = JSON.stringify(config);
+  container.appendChild(script);
+
   wrap.appendChild(container);
 }
 
@@ -233,12 +251,6 @@ function formatTime(dateStr) {
   } catch (e) { return ''; }
 }
 
-function isHighImpact(eventName) {
-  for (var i = 0; i < HIGH_IMPACT_KEYWORDS.length; i++) {
-    if (eventName.indexOf(HIGH_IMPACT_KEYWORDS[i]) !== -1) return true;
-  }
-  return false;
-}
 
 // ============================================
 // LOCALSTORAGE CACHE (instant load on refresh)
@@ -773,60 +785,126 @@ function renderMacro(macro) {
   }
 }
 
-function renderCalendar(fomc) {
+// ============================================
+// TRADINGVIEW ECONOMIC CALENDAR WIDGET
+// ============================================
+// Replaces the hardcoded ECON_CALENDAR. Auto-updates, shows high-impact events.
+// FOMC badge in header still uses worker-provided dates (FOMC_2026).
+
+var tvCalendarInitialized = false;
+
+function initTVCalendar() {
+  if (tvCalendarInitialized) return;
   var container = document.getElementById('calendar-content');
+  if (!container) return;
+  tvCalendarInitialized = true;
+
   container.innerHTML = '';
-  var legend = document.createElement('div');
-  legend.className = 'cal-legend';
-  legend.innerHTML =
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High Impact</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-medium"></span>Medium</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-today"></span>Today</span>';
-  container.appendChild(legend);
-  var todayStr = new Date().toISOString().split('T')[0];
-  var upcoming = [];
-  for (var i = 0; i < ECON_CALENDAR.length; i++) {
-    var ev = ECON_CALENDAR[i];
-    if (ev.date >= todayStr) upcoming.push(ev);
-  }
-  upcoming = upcoming.slice(0, 12);
-  if (upcoming.length === 0) {
-    container.innerHTML = '<div class="news-empty">No upcoming events. Update ECON_CALENDAR in app.js.</div>';
-    return;
-  }
-  var table = document.createElement('table');
-  table.className = 'cal-table';
-  var thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th></tr>';
-  table.appendChild(thead);
-  var tbody = document.createElement('tbody');
-  for (var j = 0; j < upcoming.length; j++) {
-    var e = upcoming[j];
-    var tr = document.createElement('tr');
-    if (e.date === todayStr) tr.className = 'today';
-    // Color-code high-impact events
-    if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
-    else if (isMediumImpact(e.event)) tr.classList.add('cal-urgency-medium');
-    var d = new Date(e.date + 'T12:00:00');
-    var dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
-    if (e.time && e.time !== 'ALL') dateLabel += ' ' + e.time;
-    var eventCell = e.event;
-    if (e.fomc) eventCell = '<span class="cal-fomc">' + e.event + '</span>';
-    if (e.date === todayStr) eventCell += ' <span class="cal-tag cal-tag-today">TODAY</span>';
-    tr.innerHTML = '<td class="cal-date">' + dateLabel + '</td>'
-      + '<td class="cal-event">' + eventCell + '</td>'
-      + '<td class="cal-values">' + (e.consensus || '--') + '</td>'
-      + '<td class="cal-values">' + (e.prior || '--') + '</td>';
-    tbody.appendChild(tr);
-  }
-  table.appendChild(tbody);
-  container.appendChild(table);
+  var widgetDiv = document.createElement('div');
+  widgetDiv.className = 'tradingview-widget-container';
+  widgetDiv.style.height = '100%';
+  widgetDiv.style.width = '100%';
+
+  var inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  widgetDiv.appendChild(inner);
+
+  var config = {
+    width: '100%',
+    height: 400,
+    colorTheme: 'dark',
+    isTransparent: true,
+    locale: 'en',
+    importanceFilter: '0,1',
+    countryFilter: 'us'
+  };
+
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-events.js';
+  script.async = true;
+  script.textContent = JSON.stringify(config);
+  widgetDiv.appendChild(script);
+
+  container.appendChild(widgetDiv);
+}
+
+function renderCalendarFooter(fomc) {
+  var footer = document.getElementById('calendar-fomc-footer');
+  if (!footer) return;
   if (fomc && fomc.next) {
-    var fomcDiv = document.createElement('div');
-    fomcDiv.className = 'panel-footer';
-    fomcDiv.textContent = 'Next FOMC: ' + fomc.next + ' (' + fomc.daysAway + ' days)';
-    container.appendChild(fomcDiv);
+    footer.textContent = 'Next FOMC: ' + fomc.next + ' (' + fomc.daysAway + ' days)';
+  } else {
+    footer.textContent = '';
+  }
+}
+
+// ============================================
+// TRADINGVIEW S&P 500 HEATMAP
+// ============================================
+// Full-width panel, lazy-loaded via IntersectionObserver for performance.
+
+var tvHeatmapInitialized = false;
+
+function initTVHeatmap() {
+  if (tvHeatmapInitialized) return;
+  var container = document.getElementById('heatmap-content');
+  if (!container) return;
+  tvHeatmapInitialized = true;
+
+  container.innerHTML = '';
+  var widgetDiv = document.createElement('div');
+  widgetDiv.className = 'tradingview-widget-container';
+  widgetDiv.style.height = '100%';
+  widgetDiv.style.width = '100%';
+
+  var inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  widgetDiv.appendChild(inner);
+
+  var config = {
+    dataSource: 'SPX500',
+    blockSize: 'market_cap_basic',
+    blockColor: 'change',
+    grouping: 'sector',
+    locale: 'en',
+    symbolUrl: '',
+    colorTheme: 'dark',
+    hasTopBar: false,
+    isDataSet498Enabled: false,
+    isZoomEnabled: true,
+    hasSymbolTooltip: true,
+    isMonoSize: false,
+    width: '100%',
+    height: 400
+  };
+
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
+  script.async = true;
+  script.textContent = JSON.stringify(config);
+  widgetDiv.appendChild(script);
+
+  container.appendChild(widgetDiv);
+}
+
+// Lazy-load heatmap when panel scrolls into view
+function lazyLoadHeatmap() {
+  var panel = document.getElementById('panel-heatmap');
+  if (!panel || tvHeatmapInitialized) return;
+
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function(entries) {
+      if (entries[0].isIntersecting) {
+        initTVHeatmap();
+        observer.disconnect();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(panel);
+  } else {
+    // Fallback: init after short delay
+    setTimeout(initTVHeatmap, 2000);
   }
 }
 
@@ -840,23 +918,23 @@ function renderNews(items) {
     return;
   }
   countBadge.textContent = items.length;
-  // Last-updated timestamp (inside news-content so it hides when collapsed)
-  var existingTs = document.getElementById('news-updated');
-  if (existingTs) existingTs.remove();
+  // Last-updated timestamp
   if (items.length > 0 && items[0].date) {
     var tsSpan = document.createElement('div');
-    tsSpan.id = 'news-updated';
     tsSpan.className = 'news-updated';
     tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
     container.appendChild(tsSpan);
   }
-  for (var i = 0; i < items.length && i < 20; i++) {
+  // Show up to 30 items (increased from 20 — worker now provides 50)
+  for (var i = 0; i < items.length && i < 30; i++) {
     var item = items[i];
     var div = document.createElement('div');
     div.className = 'news-item';
+    // Category tag
     var tagSpan = document.createElement('span');
     tagSpan.className = 'news-tag news-tag-' + (item.tag || 'MARKETS');
     tagSpan.textContent = item.tag || 'NEWS';
+    // Article body
     var body = document.createElement('div');
     body.className = 'news-body';
     var titleDiv = document.createElement('div');
@@ -871,12 +949,14 @@ function renderNews(items) {
     } else {
       titleDiv.textContent = item.title;
     }
+    // Source badge + timestamp meta line
     var metaDiv = document.createElement('div');
     metaDiv.className = 'news-meta';
-    var metaText = item.source || '';
-    if (item.isGov) metaText = '<span class="news-gov">GOV</span> ' + metaText;
-    if (item.date) metaText += ' · ' + formatTime(item.date);
-    metaDiv.innerHTML = metaText;
+    var metaParts = '';
+    if (item.isGov) metaParts += '<span class="news-gov">GOV</span> ';
+    if (item.source) metaParts += '<span class="news-source-badge">' + item.source + '</span>';
+    if (item.date) metaParts += ' <span class="news-time">' + formatTime(item.date) + '</span>';
+    metaDiv.innerHTML = metaParts;
     body.appendChild(titleDiv);
     body.appendChild(metaDiv);
     div.appendChild(tagSpan);
@@ -937,7 +1017,7 @@ function renderDashboard(data) {
   renderCommodities(data.yahoo);
   renderForex(data.yahoo);
   renderMacro(data.macro);
-  renderCalendar(data.fomc);
+  renderCalendarFooter(data.fomc);
   renderMovers(data.yahoo);
 
   // Source attribution
@@ -948,11 +1028,13 @@ function renderDashboard(data) {
   addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
   addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
   addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
-  addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
-  addSourceAttribution('panel-news', 'Fed / ECB / CNBC RSS', null);
+  addSourceAttribution('panel-calendar', 'TradingView', null);
+  addSourceAttribution('panel-news', 'Fed / ECB / WSJ / Reuters / CNBC / MarketWatch / Yahoo / Seeking Alpha', null);
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
   initTradingView();
+  initTVCalendar();
+  lazyLoadHeatmap();
 
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dashboard').style.display = 'grid';
@@ -985,141 +1067,25 @@ function fetchData() {
     });
 }
 
-// Premium RSS feeds fetched client-side via rss2json.com (free, 10K req/day)
-// PREMIUM_FEEDS: fetched client-side via rss2json.com (CORS proxy).
-// Register free account at rss2json.com and paste your key below to avoid shared rate limits.
-// Anonymous key shares a 10K/day limit with all users -- a personal key gives you your own 10K.
-var RSS2JSON_KEY = '';  // paste your free rss2json.com API key here (optional but recommended)
-// RSS2JSON_BASE: CORS proxy for RSS feeds. api_key used when provided (personal 10K/day limit).
-var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json'
-  + (RSS2JSON_KEY ? '?api_key=' + RSS2JSON_KEY + '&rss_url=' : '?rss_url=');
-var PREMIUM_FEEDS = [
-  { url: 'https://feeds.reuters.com/reuters/financialMarketsNews', source: 'Reuters Markets', tag: 'MARKETS' },
-  { url: 'https://feeds.reuters.com/reuters/businessNews',         source: 'Reuters Business',tag: 'MARKETS' },
-  { url: 'https://finance.yahoo.com/news/rssindex',               source: 'Yahoo Finance',   tag: 'MARKETS' },
-  { url: 'https://www.investing.com/rss/news_25.rss',             source: 'Investing.com',   tag: 'MARKETS' },
-  { url: 'https://www.marketwatch.com/rss/realtimeheadlines',     source: 'MarketWatch',     tag: 'MARKETS' },
-];
-
-function classifyClientArticle(title, desc) {
-  var t = ((title || '') + ' ' + (desc || '')).toLowerCase();
-  if (/inflation|\bcpi\b|price index|\bpce\b|\bppi\b/.test(t)) return 'INFLATION';
-  if (/\bfomc\b|federal open market|interest rate|monetary policy|fed funds/.test(t)) return 'FED';
-  if (/employment|\bjobs\b|unemployment|payroll|\bicsa\b|jobless/.test(t)) return 'LABOR';
-  if (/\bgdp\b|gross domestic|economic growth/.test(t)) return 'GDP';
-  if (/treasury|\byield\b|\bbond\b|\bdgs\b|note auction/.test(t)) return 'RATES';
-  if (/\boil\b|crude|\benergy\b|opec|nat.?gas|heating oil|\bgold\b|\bsilver\b|\bcopper\b|\bmetal/.test(t)) return 'COMMODITIES';
-  if (/\bdollar\b|currency|forex|yuan|euro|yen|sterling/.test(t)) return 'FX';
-  if (/credit spread|\boas\b|high.yield|investment.grade/.test(t)) return 'CREDIT';
-  if (/tariff|trade war|sanction|import|export duty|\brecession\b|stimulus|shutdown|sequester/.test(t)) return 'MACRO';
-  return 'MARKETS';
-}
-
-// Financial relevance keywords — client-side filter matches worker filter
-var CLIENT_FIN_KEYWORDS = [
-  'fed','fomc','rate','yield','bond','treasury','inflation','cpi','ppi',
-  'gdp','economy','economic','market','stock','equity','dollar','currency',
-  'oil','crude','energy','commodity','gold','silver','trade','tariff',
-  'bank','credit','debt','fiscal','monetary','employment','jobs','payroll',
-  'recession','growth','earnings','revenue','opec','ecb','interest','spread'
-];
-
-function isFinanciallyRelevant(title, summary) {
-  var text = ((title || '') + ' ' + (summary || '')).toLowerCase();
-  for (var k = 0; k < CLIENT_FIN_KEYWORDS.length; k++) {
-    if (text.indexOf(CLIENT_FIN_KEYWORDS[k]) !== -1) return true;
-  }
-  return false;
-}
-
-function fetchSingleFeed(feed) {
-  var apiUrl = RSS2JSON_BASE + encodeURIComponent(feed.url);
-  return fetch(apiUrl)
-    .then(function(resp) { return resp.json(); })
-    .then(function(data) {
-      if (data.status !== 'ok' || !data.items) return [];
-      var cutoff = Date.now() - (72 * 60 * 60 * 1000);
-      var results = [];
-      for (var i = 0; i < data.items.length && results.length < 8; i++) {
-        var item = data.items[i];
-        var title = item.title || '';
-        var summary = (item.description || '').replace(/<[^>]*>/g, '').substring(0, 150);
-        var pubDate = item.pubDate || '';
-        // Age filter: skip if older than 72 hours
-        if (pubDate) {
-          var d = new Date(pubDate);
-          if (!isNaN(d.getTime()) && d.getTime() < cutoff) continue;
-        }
-        // Relevance filter: must contain a financial keyword
-        if (!isFinanciallyRelevant(title, summary)) continue;
-        results.push({
-          title: title,
-          link: item.link || '',
-          date: pubDate,
-          summary: summary,
-          source: feed.source,
-          tag: classifyClientArticle(title, summary),
-          isGov: false
-        });
-      }
-      return results;
-    })
-    .catch(function() { return []; });
-}
-
+// All news now fetched worker-side (Fed, ECB, CNBC, WSJ, Reuters, MarketWatch,
+// Yahoo Finance, Seeking Alpha). No rss2json dependency, no client-side rate limits.
 function fetchNews() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
 
-  // Fetch Worker news (Fed/ECB/CNBC RSS) + premium feeds in parallel
-  var workerPromise = fetch(WORKER_URL + '/api/news')
+  fetch(WORKER_URL + '/api/news')
     .then(function(resp) {
-      if (!resp.ok) throw new Error('Worker news failed');
+      if (!resp.ok) throw new Error('Worker news ' + resp.status);
       return resp.json();
     })
-    .then(function(data) { return data.items || []; })
-    .catch(function() { return []; });
-
-  var premiumPromises = PREMIUM_FEEDS.map(fetchSingleFeed);
-
-  Promise.all([workerPromise].concat(premiumPromises))
-    .then(function(results) {
-      var allItems = [];
-      for (var i = 0; i < results.length; i++) {
-        allItems = allItems.concat(results[i]);
-      }
-
-      // Age filter on worker items (72h) -- premium feeds already filtered in fetchSingleFeed
-      var cutoffMs = Date.now() - (72 * 60 * 60 * 1000);
-      allItems = allItems.filter(function(item) {
-        if (!item.date) return true;
-        var d = new Date(item.date);
-        return isNaN(d.getTime()) || d.getTime() >= cutoffMs;
-      });
-
-      // Deduplicate by normalized title (first 50 chars)
-      var seen = {};
-      var deduped = [];
-      for (var j = 0; j < allItems.length; j++) {
-        var norm = allItems[j].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
-        if (norm && !seen[norm]) {
-          seen[norm] = true;
-          deduped.push(allItems[j]);
-        }
-      }
-
-      // Pin recent gov sources (last 6h) to top; sort rest by date descending
-      var sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
-      deduped.sort(function(a, b) {
-        var aPin = a.isGov && new Date(a.date || 0).getTime() > sixHoursAgo;
-        var bPin = b.isGov && new Date(b.date || 0).getTime() > sixHoursAgo;
-        if (aPin && !bPin) return -1;
-        if (!aPin && bPin) return 1;
-        return new Date(b.date || 0) - new Date(a.date || 0);
-      });
-
-      deduped = deduped.slice(0, 40);
-      cacheData('news', deduped);
-      renderNews(deduped);
+    .then(function(data) {
+      var items = data.items || [];
+      cacheData('news', items);
+      renderNews(items);
+    })
+    .catch(function(err) {
+      // Fall back to cached news on failure
+      var cached = getCachedData('news', 7200000); // 2hr stale cache for fallback
+      if (cached) renderNews(cached);
     });
 }
 
@@ -1194,63 +1160,99 @@ function initNotes() {
 }
 
 // ============================================
-// LIVE CATALYSTS
+// LIVE CATALYSTS — Multi-channel tabbed streams
 // ============================================
 //
 // Strategy: Use YouTube's /live_stream?channel=CHANNEL_ID embed URL.
-// This always resolves to the channel's CURRENT live stream if one is active.
-// If the channel is not live, YouTube shows the channel page -- no broken embeds.
-// This eliminates rss2json dependency for live streams entirely.
-//
-// The animated live dot only pulses during market hours (isMarketOpen()).
-// "Open channel" link provides escape hatch to watch directly on YouTube.
+// Only the active tab loads an iframe (lazy). Switching tabs swaps the iframe src.
+// autoplay=1&mute=1 is required by browser autoplay policy.
 
 var LIVE_CHANNELS = [
-  {
-    label: 'Bloomberg TV',
-    channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
-    link: 'https://www.youtube.com/@BloombergTelevision/live'
-  }
+  { id: 'bloomberg', label: 'Bloomberg',     channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' },
+  { id: 'yahoo',     label: 'Yahoo Finance', channelId: 'UCEAZeUIeJs0IjQiqTCQoqmA', link: 'https://www.youtube.com/@YahooFinance/live' },
+  { id: 'cnbc',      label: 'CNBC',          channelId: 'UCvJJ_dzjViJCoLf5uKUTwoA', link: 'https://www.youtube.com/@CNBC/live' },
+  { id: 'fox',       label: 'Fox Business',  channelId: 'UCceHTOQ2VVRlK0TAauKGHoQ', link: 'https://www.youtube.com/@FoxBusiness/live' },
 ];
 
+var activeChannelIdx = 0;
+
+function buildEmbedSrc(ch) {
+  return 'https://www.youtube.com/embed/live_stream?channel='
+    + ch.channelId + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+}
+
 function initLiveStreams() {
-  var container = document.getElementById('live-streams');
-  if (!container) return;
-  container.innerHTML = '';
+  var tabsContainer = document.getElementById('live-channel-tabs');
+  var streamContainer = document.getElementById('live-streams');
+  if (!tabsContainer || !streamContainer) return;
 
   var live = isMarketOpen();
 
+  // Build tabs
+  tabsContainer.innerHTML = '';
   for (var i = 0; i < LIVE_CHANNELS.length; i++) {
-    var ch = LIVE_CHANNELS[i];
+    var btn = document.createElement('button');
+    btn.className = 'live-tab' + (i === 0 ? ' live-tab-active' : '');
+    btn.setAttribute('data-idx', i);
+    btn.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span> ' + LIVE_CHANNELS[i].label;
+    btn.addEventListener('click', function() {
+      var idx = parseInt(this.getAttribute('data-idx'));
+      switchChannel(idx);
+    });
+    tabsContainer.appendChild(btn);
+  }
 
-    var slot = document.createElement('div');
-    slot.className = 'live-stream-slot';
+  // Build stream slot (single iframe, swapped on tab click)
+  streamContainer.innerHTML = '';
+  var slot = document.createElement('div');
+  slot.className = 'live-stream-slot';
+  slot.id = 'live-stream-active';
 
-    // Label bar with live indicator
-    var labelDiv = document.createElement('div');
-    labelDiv.className = 'live-stream-label';
-    labelDiv.innerHTML = '<span class="live-dot' + (live ? '' : ' live-dot-off') + '"></span>'
-      + ' ' + ch.label
-      + ' <a href="' + ch.link + '" target="_blank" rel="noopener"'
-      + ' style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">'
-      + 'Open &#x2197;</a>';
+  var linkDiv = document.createElement('div');
+  linkDiv.className = 'live-stream-link';
+  linkDiv.id = 'live-stream-link';
+  slot.appendChild(linkDiv);
 
-    // Embed src: YouTube resolves /live_stream?channel=ID to the active live stream.
-    // autoplay=1&mute=1 is required by browser autoplay policy (muted autoplay allowed).
-    var embedSrc = 'https://www.youtube.com/embed/live_stream?channel='
-      + ch.channelId
-      + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  var iframe = document.createElement('iframe');
+  iframe.id = 'live-stream-iframe';
+  iframe.title = LIVE_CHANNELS[0].label + ' Live';
+  iframe.loading = 'lazy';
+  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+  iframe.setAttribute('allowfullscreen', '');
+  iframe.src = buildEmbedSrc(LIVE_CHANNELS[0]);
+  slot.appendChild(iframe);
 
-    var iframe = document.createElement('iframe');
-    iframe.src = embedSrc;
+  streamContainer.appendChild(slot);
+  updateStreamLink(0);
+}
+
+function switchChannel(idx) {
+  if (idx === activeChannelIdx) return;
+  activeChannelIdx = idx;
+  var ch = LIVE_CHANNELS[idx];
+
+  // Update tabs
+  var tabs = document.querySelectorAll('.live-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].className = 'live-tab' + (i === idx ? ' live-tab-active' : '');
+  }
+
+  // Swap iframe src (lazy load — only active channel loads)
+  var iframe = document.getElementById('live-stream-iframe');
+  if (iframe) {
+    iframe.src = buildEmbedSrc(ch);
     iframe.title = ch.label + ' Live';
-    iframe.loading = 'lazy';
-    iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-    iframe.setAttribute('allowfullscreen', '');
+  }
 
-    slot.appendChild(labelDiv);
-    slot.appendChild(iframe);
-    container.appendChild(slot);
+  updateStreamLink(idx);
+}
+
+function updateStreamLink(idx) {
+  var ch = LIVE_CHANNELS[idx];
+  var linkDiv = document.getElementById('live-stream-link');
+  if (linkDiv) {
+    linkDiv.innerHTML = '<a href="' + ch.link + '" target="_blank" rel="noopener">'
+      + 'Open ' + ch.label + ' on YouTube &#x2197;</a>';
   }
 }
 
@@ -1408,3 +1410,6 @@ tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
 initLiveStreams();
+
+// 6. Init TradingView Ticker Tape (runs once, independent of data)
+initTVTickerTape();
