@@ -418,6 +418,13 @@ function computeAlerts(data) {
     alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps -- wider than ' + THRESHOLDS.igOasWide + ' bps' });
   }
 
+  // FRED data availability check
+  var fredDown = data.fred && data.fred.DGS10 && data.fred.DGS10.current == null
+    && data.fred.DGS2 && data.fred.DGS2.current == null;
+  if (fredDown) {
+    alerts.push({ level: 'yellow', msg: 'FRED data unavailable — yields, macro, and credit panels showing N/A. Check FRED API key.' });
+  }
+
   return alerts;
 }
 
@@ -1060,9 +1067,16 @@ function fetchData() {
       renderDashboard(data);
     })
     .catch(function(err) {
+      // Show cached data if available, even on fetch failure
+      var cached = getCachedData('market', 3600000); // 1hr stale fallback
+      if (cached) {
+        try { renderDashboard(cached); return; } catch (e) {}
+      }
       var loading = document.getElementById('loading');
       if (loading.style.display !== 'none') {
-        loading.innerHTML = '<div class="error-msg">Failed to fetch data: ' + err.message + '<br><small>Check Worker URL and deployment.</small></div>';
+        loading.innerHTML = '<div class="error-msg">Failed to load market data: ' + err.message
+          + '<br><small>Worker: ' + WORKER_URL + '</small>'
+          + '<br><small>Will retry in 15 minutes. Press R to retry now.</small></div>';
       }
     });
 }
