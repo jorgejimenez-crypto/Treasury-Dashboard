@@ -1,203 +1,172 @@
 /**
- * Treasury Intelligence Dashboard — Client Application
+ * ══════════════════════════════════════════════════════════════
+ *  Treasury Desk — Funding Intelligence  |  app.js
+ *  Redesigned: focused short-term treasury / funding desk tool
  *
- * Fetches market data + news from the Cloudflare Worker proxy,
- * computes alerts, renders all panels, manages yield curve chart.
+ *  WHAT'S HERE (focused scope):
+ *    • Treasury Yields — hero grouped bar chart + data table
+ *    • Funding & Liquidity — 6 metric cards (SOFR, EFFR, etc.)
+ *    • FX Converter — polished notional converter
+ *    • Silent alert computation (threshold monitoring)
  *
- * REFRESH STRATEGY:
- *   - Energy ticker: 10s during market hours, 60s overnight (via Worker fast endpoint)
- *   - Full dashboard: 15 min (via Worker /api/market-data)
- *   - News: 30 min (via Worker /api/news)
- *   - localStorage cache: instant display on load, background refresh
- *   - Exponential backoff on errors: 10s → 15s → 30s → 60s
+ *  REMOVED FROM UI (logic kept for alerts where noted):
+ *    • Commodities / Energy movers / Macro chips
+ *    • Economic Calendar / News feed
+ *    • Risk & Credit (alert logic preserved silently)
+ *    • TradingView widgets / Bloomberg live stream
+ *
+ *  REFRESH STRATEGY:
+ *    Full dashboard : every 15 min (FRED + NY Fed + Yahoo)
+ *    FX rate ticker : every 10s market hours, 60s off-hours
+ *    localStorage   : instant render on page load
+ * ══════════════════════════════════════════════════════════════
  */
 
-// ============================================
+// ============================================================
 // CONFIG
-// ============================================
+// ============================================================
 
 var WORKER_URL = 'https://treasury-proxy.treasurydashboard.workers.dev';
 
-var REFRESH_MS = 15 * 60 * 1000;        // 15 min full dashboard
-var NEWS_REFRESH_MS = 30 * 60 * 1000;    // 30 min news
-var TICKER_REFRESH_MS = 10 * 1000;       // 10s energy ticker (market hours)
-var TICKER_REFRESH_SLOW = 60 * 1000;     // 60s ticker (off hours)
+var REFRESH_MS       = 15 * 60 * 1000;   // 15 min full data
+var TICKER_REFRESH_MS   = 10 * 1000;     // 10s fast ticker
+var TICKER_REFRESH_SLOW = 60 * 1000;     // 60s off-hours
 
+// Silent alert thresholds (background monitoring only)
 var THRESHOLDS = {
-  commodityPct: 2.0,
-  multiBooksMin: 2,
-  vixHigh: 30,
-  vixPctSpike: 15,
-  dxyLow: 99,
-  dxyHigh: 105,
+  commodityPct: 2.0, multiBooksMin: 2,
+  vixHigh: 30, vixPctSpike: 15,
+  dxyLow: 99, dxyHigh: 105,
   yield10YHigh: 5.0,
-  igOasWide: 150,
-  hyOasWide: 500
+  igOasWide: 150, hyOasWide: 500
 };
 
-// Labels
-var COMMODITY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver'];
-var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry Hub', HeatOil: 'Heating Oil', Copper: 'Copper', Gold: 'Gold', Silver: 'Silver' };
-var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
-var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'USDCNH'];
-var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', USDCNH: 'USD/CNH' };
-var FX_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH'];
-var FX_YAHOO_MAP = { EUR: 'EURUSD', GBP: 'GBPUSD', AUD: 'AUDUSD', JPY: 'USDJPY', CAD: 'USDCAD', CHF: 'USDCHF', CNH: 'USDCNH' };
-var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true };
-var YIELD_KEYS = ['DGS2', 'DGS5', 'DGS10', 'DGS30'];
-var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '30Y UST' };
-var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
+// ── Yield curve maturities ──────────────────────────────────
+var CURVE_KEYS   = ['DGS3MO','DGS6MO','DGS1','DGS2','DGS5','DGS10','DGS30'];
 var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
 
-// Scrolling energy + risk + equity ticker
-var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY', 'SP500', 'DOW', 'NASDAQ'];
-var TICKER_LABELS = {
-  WTI: 'WTI Crude (CL=F)', Brent: 'Brent Crude (BZ=F)', NatGas: 'Nat Gas (NG=F)',
-  HeatOil: 'Heating Oil (HO=F)', Gold: 'Gold (GC=F)', Silver: 'Silver (SI=F)',
-  VIX: 'CBOE VIX', DXY: 'US Dollar (DXY)', SP500: 'S&P 500 (SPX)',
-  DOW: 'Dow Jones', NASDAQ: 'Nasdaq'
+// ── FX configuration ────────────────────────────────────────
+var FOREX_KEYS    = ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','USDCHF','USDCNH'];
+var FOREX_LABELS  = { EURUSD:'EUR/USD', GBPUSD:'GBP/USD', USDJPY:'USD/JPY',
+                      AUDUSD:'AUD/USD', USDCAD:'USD/CAD', USDCHF:'USD/CHF', USDCNH:'USD/CNH' };
+var FX_CURRENCIES = ['USD','EUR','GBP','JPY','AUD','CAD','CHF','CNH'];
+var FX_YAHOO_MAP  = { EUR:'EURUSD', GBP:'GBPUSD', AUD:'AUDUSD',
+                      JPY:'USDJPY', CAD:'USDCAD', CHF:'USDCHF', CNH:'USDCNH' };
+var FX_INVERTED   = { JPY:true, CAD:true, CHF:true, CNH:true };
+
+// Full currency names for the converter selects
+var FX_CURRENCY_NAMES = {
+  USD: 'USD — US Dollar',
+  EUR: 'EUR — Euro',
+  GBP: 'GBP — British Pound',
+  JPY: 'JPY — Japanese Yen',
+  AUD: 'AUD — Australian Dollar',
+  CAD: 'CAD — Canadian Dollar',
+  CHF: 'CHF — Swiss Franc',
+  CNH: 'CNH — Chinese Renminbi'
 };
 
-var MACRO_DISPLAY = [
-  { id: 'FEDFUNDS',        label: 'Fed Funds',     suffix: '%',  dec: 2 },
-  { id: 'CPIAUCSL',        label: 'CPI YoY',       suffix: '%',  dec: 1 },
-  { id: 'CPILFESL',        label: 'Core CPI YoY',  suffix: '%',  dec: 1 },
-  { id: 'PPIACO',          label: 'PPI YoY',        suffix: '%',  dec: 1 },
-  { id: 'UNRATE',          label: 'Unemployment',   suffix: '%',  dec: 1 },
-  { id: 'ICSA',            label: 'Init. Claims',   suffix: 'K',  dec: 0, divideBy: 1000 },
-  { id: 'A191RL1Q225SBEA', label: 'Real GDP',       suffix: '%',  dec: 1 },
-  { id: 'WM2NS',           label: 'M2 YoY',        suffix: '%',  dec: 1 },
-];
+// ── Minimal ticker (FX + key rates only) ───────────────────
+var TICKER_SYMBOLS = ['EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','DXY','VIX'];
+var TICKER_LABELS  = {
+  EURUSD:'EUR/USD', GBPUSD:'GBP/USD', USDJPY:'USD/JPY',
+  USDCAD:'USD/CAD', USDCHF:'USD/CHF', DXY:'DXY', VIX:'VIX'
+};
 
-// High-impact calendar events get urgency coloring
-var HIGH_IMPACT_KEYWORDS = ['CPI', 'PCE', 'FOMC', 'Nonfarm', 'GDP', 'PPI'];
-var MEDIUM_IMPACT_KEYWORDS = ['PMI', 'Retail', 'Durable', 'UMich', 'Claims', 'Sentiment'];
+// ── Keys still needed for alert computation ─────────────────
+var ENERGY_KEYS     = ['WTI','Brent','NatGas','HeatOil'];
+var COMMODITY_KEYS  = ['WTI','Brent','NatGas','HeatOil','Copper','Gold','Silver'];
+var COMMODITY_LABELS= { WTI:'WTI Crude', Brent:'Brent Crude', NatGas:'Henry Hub',
+                        HeatOil:'Heating Oil', Copper:'Copper', Gold:'Gold', Silver:'Silver' };
 
-function isHighImpact(eventName) {
-  for (var i = 0; i < HIGH_IMPACT_KEYWORDS.length; i++) {
-    if (eventName.indexOf(HIGH_IMPACT_KEYWORDS[i]) !== -1) return true;
-  }
-  return false;
-}
-function isMediumImpact(eventName) {
-  for (var i = 0; i < MEDIUM_IMPACT_KEYWORDS.length; i++) {
-    if (eventName.indexOf(MEDIUM_IMPACT_KEYWORDS[i]) !== -1) return true;
-  }
-  return false;
-}
 
-// ECON_CALENDAR — update 'actual' and 'actualBeat' as results print:
-//   actual: '3.2%'    — the printed number
-//   actualBeat: true  — green (beat/in-line)  |  false — red (miss)
-//   actualBeat: null  — no coloring (not yet released)
-var ECON_CALENDAR = [
-  // TO ADD ACTUAL RESULTS: set actual:'2.8%' and actualBeat:true (green) or false (red)
-  { date: '2026-04-08', time: '14:00', event: 'FOMC Minutes (Mar 18-19)',        consensus: null,    prior: null,          fomc: true,  actual: null, actualBeat: null },
-  { date: '2026-04-09', time: '08:30', event: 'Core PCE Price Index YoY (Feb)', consensus: '2.7%',  prior: '2.6%',                     actual: null, actualBeat: null },
-  { date: '2026-04-09', time: '08:30', event: 'Initial Jobless Claims',          consensus: '225K',  prior: '219K',                     actual: null, actualBeat: null },
-  { date: '2026-04-10', time: '08:30', event: 'CPI MoM (Mar)',                   consensus: '+0.3%', prior: '+0.2%',                    actual: null, actualBeat: null },
-  { date: '2026-04-10', time: '08:30', event: 'CPI YoY (Mar)',                   consensus: '3.2%',  prior: '2.8%',                     actual: null, actualBeat: null },
-  { date: '2026-04-10', time: '10:00', event: 'UMich Consumer Sentiment (Apr)', consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-17', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-17', time: '08:30', event: 'Retail Sales (Mar)',              consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-24', time: '08:30', event: 'Initial Jobless Claims',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-24', time: '08:30', event: 'Durable Goods Orders (Mar)',      consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-29', time: 'ALL',   event: 'FOMC Meeting Begins',             consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-  { date: '2026-04-30', time: '08:30', event: 'GDP Advance (Q1)',                consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-04-30', time: '14:00', event: 'FOMC Decision',                  consensus: 'Hold',  prior: '4.25-4.50%', fomc: true,    actual: null, actualBeat: null },
-  { date: '2026-05-01', time: '08:30', event: 'Nonfarm Payrolls (Apr)',          consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-05-01', time: '10:00', event: 'ISM Manufacturing PMI (Apr)',     consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-05-13', time: '08:30', event: 'CPI (Apr)',                       consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-05-14', time: '08:30', event: 'PPI (Apr)',                       consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-05-29', time: '08:30', event: 'GDP 2nd Estimate (Q1)',           consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-05-29', time: '08:30', event: 'PCE Price Index (Apr)',           consensus: null,    prior: null,                        actual: null, actualBeat: null },
-  { date: '2026-06-18', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-  { date: '2026-07-30', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-  { date: '2026-09-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-  { date: '2026-11-05', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-  { date: '2026-12-17', time: '14:00', event: 'FOMC Decision',                  consensus: null,    prior: null,  fomc: true,            actual: null, actualBeat: null },
-];
-
-// ============================================
+// ============================================================
 // STATE
-// ============================================
+// ============================================================
 
-var tvInitialized = false;
+var yieldBarChart      = null;   // Chart.js instance for grouped bar chart
+var refreshTimer       = null;
+var tickerTimer        = null;
+var cachedYahoo        = null;
+var cachedFred         = null;
+var tickerBackoff      = TICKER_REFRESH_MS;
+var lastManualRefresh  = 0;
+var fxConverterInitialized = false;
+var fetchRetryCount    = 0;
+var lastRefreshTime    = 0;
+var fetchInFlight      = 0;
 
-// Currently active commodity symbol for the TradingView chart
-var tvCurrentSymbol = 'NYMEX:CL1!';
 
-function initTradingView(symbol) {
-  if (symbol) tvCurrentSymbol = symbol;
-  if (tvInitialized) return;
-  var wrap = document.getElementById('tradingview-widget');
-  if (!wrap) return;
-  tvInitialized = true;
-  renderTVChart(tvCurrentSymbol);
+// ============================================================
+// PERSISTENCE HELPERS (localStorage)
+// ============================================================
+
+function cacheData(key, data) {
+  try { localStorage.setItem('td_' + key, JSON.stringify({ t: Date.now(), d: data })); } catch(e){}
+}
+function getCachedData(key, maxAgeMs) {
+  try {
+    var raw = localStorage.getItem('td_' + key);
+    if (!raw) return null;
+    var p = JSON.parse(raw);
+    if (Date.now() - p.t > (maxAgeMs || 300000)) return null;
+    return p.d;
+  } catch(e){ return null; }
+}
+function loadLastKnown(key) {
+  try { var r = localStorage.getItem('td_lk_' + key); return r ? JSON.parse(r) : null; }
+  catch(e){ return null; }
+}
+function saveLastKnown(key, data) {
+  try { localStorage.setItem('td_lk_' + key, JSON.stringify(data)); } catch(e){}
 }
 
-function renderTVChart(symbol) {
-  var wrap = document.getElementById('tradingview-widget');
-  if (!wrap) return;
-  wrap.innerHTML = '';
+// Persisted last-known values (survive page reloads + weekends)
+var lastKnownFunding = loadLastKnown('funding') || { sofr:null, effr:null, onrrp:null };
+var lastKnownYields  = loadLastKnown('yields');
 
-  var container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-  container.style.width = '100%';
-  container.style.height = '350px';
 
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  inner.style.width = '100%';
-  inner.style.height = '100%';
-  container.appendChild(inner);
+// ============================================================
+// MATH HELPERS
+// ============================================================
 
-  var config = {
-    symbol: symbol || 'NYMEX:CL1!',
-    width: '100%',
-    height: 350,
-    interval: 'D',
-    timezone: 'America/New_York',
-    theme: 'dark',
-    style: '1',
-    locale: 'en',
-    backgroundColor: 'rgba(10, 14, 20, 1)',
-    gridColor: 'rgba(30, 42, 58, 0.5)',
-    allow_symbol_change: true,
-    watchlist: ['NYMEX:CL1!', 'NYMEX:BZ1!', 'NYMEX:RB1!', 'NYMEX:HO1!'],
-    details: false,
-    hotlist: false,
-    calendar: false,
-    show_popup_button: false
-  };
+function pctChange(cur, prev) {
+  if (cur == null || prev == null || prev === 0) return null;
+  return ((cur - prev) / prev) * 100;
+}
+function bpsChange(cur, prev) {
+  if (cur == null || prev == null) return null;
+  return Math.round((cur - prev) * 100);
+}
+function sign(v) { return (v != null && v >= 0) ? '+' : ''; }
 
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  container.appendChild(script);
-  wrap.appendChild(container);
+function nowET() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+}
+function isMarketOpen() {
+  var n = nowET(), day = n.getDay();
+  if (day === 0 || day === 6) return false;
+  var m = n.getHours() * 60 + n.getMinutes();
+  return m >= 570 && m < 960;   // 9:30 – 16:00 ET
+}
+function fmtRate(v, dec) {
+  if (v == null || isNaN(v)) return '—';
+  return v.toFixed(dec != null ? dec : 2) + '%';
+}
+function fmtBps(bps) {
+  if (bps == null) return '—';
+  return (bps >= 0 ? '+' : '') + bps + ' bps';
+}
+function fmtBillion(v) {
+  if (v == null || isNaN(v)) return '—';
+  return '$' + (v / 1000).toFixed(1) + 'B';
 }
 
-function switchCommodityChart(symbol) {
-  tvCurrentSymbol = symbol;
-  tvInitialized = false;   // allow re-render
-  renderTVChart(symbol);
-  tvInitialized = true;    // restore guard
-}
 
-function initCommoditySelector() {
-  var sel = document.getElementById('commodity-selector');
-  if (!sel) return;
-  sel.addEventListener('change', function() {
-    switchCommodityChart(sel.value);
-  });
-}
-
-// ============================================
+// ============================================================
 // SCROLLING TICKER BAR
-// ============================================
+// (FX rates + DXY + VIX only — strips energy/equity noise)
+// ============================================================
 
 function renderTicker(yahoo) {
   if (!yahoo) return;
@@ -208,605 +177,527 @@ function renderTicker(yahoo) {
     var key = TICKER_SYMBOLS[i];
     var d = yahoo[key];
     if (!d || d.current == null) continue;
-    var pct = pctChange(d.current, d.prior);
-    var cls = pct == null ? 'ticker-flat' : (pct >= 0 ? 'ticker-up' : 'ticker-down');
-    var pctStr = pct != null ? (' ' + sign(pct) + pct.toFixed(2) + '%') : '';
-    var prefix = (key === 'VIX' || key === 'DXY' || key === 'SP500' || key === 'DOW' || key === 'NASDAQ') ? '' : '$';
-    html += '<span class="ticker-item">'
-      + '<span class="ticker-symbol">' + TICKER_LABELS[key] + '</span>'
-      + '<span class="ticker-price">' + prefix + d.current.toFixed(2) + '</span>'
-      + '<span class="' + cls + '">' + pctStr + '</span>'
+    var pct    = pctChange(d.current, d.prior);
+    var cls    = pct == null ? 'tk-flat' : (pct >= 0 ? 'tk-up' : 'tk-dn');
+    var pctStr = pct != null ? (sign(pct) + Math.abs(pct).toFixed(2) + '%') : '';
+    var noPrefix = key === 'DXY' || key === 'VIX';
+    var dec    = (key === 'USDJPY' || key === 'USDCNH') ? 2 : 4;
+    var valStr = noPrefix ? d.current.toFixed(2) : d.current.toFixed(dec);
+    html += '<span class="tk-item">'
+      + '<span class="tk-lbl">' + TICKER_LABELS[key] + '</span>'
+      + '<span class="tk-val">' + valStr + '</span>'
+      + (pctStr ? '<span class="' + cls + '">' + pctStr + '</span>' : '')
       + '</span>';
   }
-  // Duplicate content for seamless scroll loop
-  container.innerHTML = html + html;
-}
-
-var yieldCurveChart = null;
-var refreshTimer = null;
-var newsTimer = null;
-var tickerTimer = null;
-var cachedYahoo = null;
-var cachedFred = null;                   // preserved across ticker refreshes
-var tickerBackoff = TICKER_REFRESH_MS;   // exponential backoff tracker
-var lastManualRefresh = 0;               // debounce R key / refresh button
-var fxConverterInitialized = false;      // track if event listeners are attached
-
-// ============================================
-// HELPERS
-// ============================================
-
-function fmt(val, dec, prefix) {
-  if (dec === undefined) dec = 2;
-  if (prefix === undefined) prefix = '$';
-  if (val == null || isNaN(val)) return 'N/A';
-  return prefix + Number(val).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-
-function pctChange(cur, prev) {
-  if (cur == null || prev == null || prev === 0) return null;
-  return ((cur - prev) / prev) * 100;
-}
-
-function bpsChange(cur, prev) {
-  if (cur == null || prev == null) return null;
-  return Math.round((cur - prev) * 100);
-}
-
-function sign(val) {
-  if (val == null) return '';
-  return val >= 0 ? '+' : '';
-}
-
-function deltaClass(val) {
-  if (val == null) return 'delta-flat';
-  if (Math.abs(val) < 0.01) return 'delta-flat';
-  return val > 0 ? 'delta-up' : 'delta-down';
-}
-
-function nowET() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-}
-
-function isMarketOpen() {
-  var n = nowET();
-  var day = n.getDay();
-  if (day === 0 || day === 6) return false;
-  var mins = n.getHours() * 60 + n.getMinutes();
-  return mins >= 570 && mins < 960;
-}
-
-function formatTime(dateStr) {
-  try {
-    var d = new Date(dateStr);
-    if (isNaN(d)) return '';
-    var diff = new Date() - d;
-    if (diff < 60000) return 'just now';
-    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch (e) { return ''; }
+  container.innerHTML = html + html;   // duplicate for seamless loop
 }
 
 
-// ============================================
-// LOCALSTORAGE CACHE (instant load on refresh)
-// ============================================
-
-function cacheData(key, data) {
-  try { localStorage.setItem('td_' + key, JSON.stringify({ t: Date.now(), d: data })); } catch (e) {}
-}
-
-function getCachedData(key, maxAgeMs) {
-  try {
-    var raw = localStorage.getItem('td_' + key);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw);
-    if (Date.now() - parsed.t > (maxAgeMs || 300000)) return null;
-    return parsed.d;
-  } catch (e) { return null; }
-}
-
-// ============================================
-// METRIC RENDERING
-// ============================================
-
-function renderMetric(label, value, delta, dateStr, opts) {
-  if (!opts) opts = {};
-  var div = document.createElement('div');
-  div.className = 'metric' + (opts.inverse ? ' inverse' : '') + (opts.secondary ? ' metric-secondary' : '');
-  div.tabIndex = 0;
-
-  // Tooltip: source + raw value
-  var tip = label + ': ' + value;
-  if (delta) tip += ' (' + delta + ')';
-  if (dateStr) tip += ' — ' + dateStr;
-  if (opts.stale) tip += ' [stale]';
-  div.title = tip;
-  div.setAttribute('aria-label', tip);
-
-  // Status dot
-  var status = opts.stale ? 'yellow' : (value === 'N/A' ? 'red' : 'green');
-  if (opts.status) status = opts.status;
-
-  var lbl = document.createElement('div');
-  lbl.className = 'metric-label';
-  var dot = document.createElement('span');
-  dot.className = 'status-dot dot-' + status;
-  dot.setAttribute('aria-hidden', 'true');
-  lbl.appendChild(dot);
-  lbl.appendChild(document.createTextNode(label));
-  div.appendChild(lbl);
-
-  var val = document.createElement('div');
-  val.className = 'metric-value' + (value === 'N/A' ? ' value-na' : '') + (opts.sm ? ' sm' : '') + (opts.primary ? ' primary' : '');
-  val.textContent = value;
-  div.appendChild(val);
-
-  if (opts.stale) {
-    var badge = document.createElement('span');
-    badge.className = 'stale-badge';
-    badge.textContent = 'stale';
-    val.appendChild(document.createTextNode(' '));
-    val.appendChild(badge);
-  }
-
-  if (delta != null && delta !== '') {
-    var del = document.createElement('div');
-    del.className = 'metric-delta ' + deltaClass(opts.deltaNum);
-    // Add directional arrow for accessibility (not color-only)
-    var arrow = '';
-    var srText = '';
-    if (opts.deltaNum != null && Math.abs(opts.deltaNum) >= 0.01) {
-      arrow = opts.deltaNum > 0 ? '\u25B2 ' : '\u25BC ';
-      srText = opts.deltaNum > 0 ? 'increasing' : 'decreasing';
-    }
-    if (arrow) {
-      var arrowSpan = document.createElement('span');
-      arrowSpan.className = 'delta-arrow';
-      arrowSpan.setAttribute('aria-hidden', 'true');
-      arrowSpan.textContent = arrow;
-      del.appendChild(arrowSpan);
-      var srSpan = document.createElement('span');
-      srSpan.className = 'sr-only';
-      srSpan.textContent = srText;
-      del.appendChild(srSpan);
-    }
-    del.appendChild(document.createTextNode(delta));
-    div.appendChild(del);
-  }
-
-  if (dateStr) {
-    var dt = document.createElement('div');
-    dt.className = 'metric-date';
-    dt.textContent = dateStr;
-    div.appendChild(dt);
-  }
-
-  return div;
-}
-
-// ============================================
-// SOURCE ATTRIBUTION
-// ============================================
-
-function addSourceAttribution(panelId, provider, lastDate) {
-  var panel = document.getElementById(panelId);
-  if (!panel) return;
-  var existing = panel.querySelector('.panel-source');
-  if (existing) existing.remove();
-  var div = document.createElement('div');
-  div.className = 'panel-source';
-  var provSpan = document.createElement('span');
-  provSpan.className = 'panel-source-provider';
-  provSpan.textContent = provider;
-  div.appendChild(provSpan);
-  if (lastDate) {
-    var timeSpan = document.createElement('span');
-    timeSpan.className = 'panel-source-time';
-    timeSpan.textContent = 'As of ' + lastDate;
-    div.appendChild(timeSpan);
-  }
-  panel.appendChild(div);
-}
-
-
-// ============================================
-// ALERT COMPUTATION
-// ============================================
+// ============================================================
+// SILENT ALERT COMPUTATION
+// (runs in background; results shown only if threshold hit)
+// ============================================================
 
 function computeAlerts(data) {
   var alerts = [];
-  var yahoo = data.yahoo;
+  var yahoo = data.yahoo || {};
 
-  // Commodity price surge detection (reframed from margin pressure)
-  var signals = [];
+  // Commodity surge (energy)
+  var sigs = [];
   for (var i = 0; i < ENERGY_KEYS.length; i++) {
-    var k = ENERGY_KEYS[i];
-    var d = yahoo[k];
+    var k = ENERGY_KEYS[i], d = yahoo[k];
     if (d && d.current != null && d.prior != null) {
       var pct = pctChange(d.current, d.prior);
-      if (pct != null && Math.abs(pct) >= THRESHOLDS.commodityPct) {
-        signals.push(COMMODITY_LABELS[k] + ' ' + (pct > 0 ? 'up' : 'down') + ' ' + Math.abs(pct).toFixed(1) + '%');
-      }
+      if (Math.abs(pct) >= THRESHOLDS.commodityPct)
+        sigs.push(COMMODITY_LABELS[k] + ' ' + (pct > 0 ? '↑' : '↓') + Math.abs(pct).toFixed(1) + '%');
     }
   }
-  if (signals.length >= THRESHOLDS.multiBooksMin) {
-    alerts.push({ level: 'red', msg: 'COMMODITY SURGE: ' + signals.join(', ') + '. Broad-based input cost pressure.' });
-  } else if (signals.length === 1) {
-    alerts.push({ level: 'yellow', msg: 'COMMODITY WATCH: ' + signals[0] + '. Rising input cost trend.' });
-  }
+  if (sigs.length >= THRESHOLDS.multiBooksMin)
+    alerts.push({ level:'red', msg:'COMMODITY SURGE: ' + sigs.join(', ') });
+  else if (sigs.length === 1)
+    alerts.push({ level:'yellow', msg:'COMMODITY WATCH: ' + sigs[0] });
 
   // VIX
   var vix = yahoo.VIX;
   if (vix && vix.current != null) {
-    if (vix.current > THRESHOLDS.vixHigh) {
-      alerts.push({ level: 'red', msg: 'VIX at ' + vix.current.toFixed(1) + ' — above ' + THRESHOLDS.vixHigh + ' threshold' });
-    } else {
-      var vpct = pctChange(vix.current, vix.prior);
-      if (vpct != null && Math.abs(vpct) > THRESHOLDS.vixPctSpike) {
-        alerts.push({ level: 'yellow', msg: 'VIX moved ' + sign(vpct) + vpct.toFixed(1) + '% DoD' });
-      }
+    if (vix.current > THRESHOLDS.vixHigh)
+      alerts.push({ level:'red', msg:'VIX ' + vix.current.toFixed(1) + ' — elevated volatility' });
+    else {
+      var vp = pctChange(vix.current, vix.prior);
+      if (vp != null && Math.abs(vp) > THRESHOLDS.vixPctSpike)
+        alerts.push({ level:'yellow', msg:'VIX moved ' + sign(vp) + vp.toFixed(1) + '% DoD' });
     }
   }
 
   // DXY
   var dxy = yahoo.DXY;
-  if (dxy && dxy.current != null) {
-    if (dxy.current < THRESHOLDS.dxyLow || dxy.current > THRESHOLDS.dxyHigh) {
-      alerts.push({ level: 'yellow', msg: 'DXY at ' + dxy.current.toFixed(2) + ' — outside ' + THRESHOLDS.dxyLow + '-' + THRESHOLDS.dxyHigh + ' range' });
-    }
-  }
+  if (dxy && dxy.current != null &&
+      (dxy.current < THRESHOLDS.dxyLow || dxy.current > THRESHOLDS.dxyHigh))
+    alerts.push({ level:'yellow', msg:'DXY ' + dxy.current.toFixed(2) + ' — outside ' +
+      THRESHOLDS.dxyLow + '–' + THRESHOLDS.dxyHigh + ' range' });
 
   // 10Y yield
   var y10 = data.fred && data.fred.DGS10;
-  if (y10 && y10.current != null && y10.current > THRESHOLDS.yield10YHigh) {
-    alerts.push({ level: 'red', msg: '10Y yield at ' + y10.current.toFixed(2) + '% — above ' + THRESHOLDS.yield10YHigh + '% threshold' });
-  }
+  if (y10 && y10.current != null && y10.current > THRESHOLDS.yield10YHigh)
+    alerts.push({ level:'red', msg:'10Y yield ' + y10.current.toFixed(2) + '% — above ' + THRESHOLDS.yield10YHigh + '%' });
 
-  // Credit spreads
+  // IG credit
   var ig = data.fred && data.fred.BAMLC0A0CM;
-  if (ig && ig.current != null && ig.current * 100 > THRESHOLDS.igOasWide) {
-    alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps -- wider than ' + THRESHOLDS.igOasWide + ' bps' });
-  }
-
-  // FRED data availability check
-  var fredDown = data.fred && data.fred.DGS10 && data.fred.DGS10.current == null
-    && data.fred.DGS2 && data.fred.DGS2.current == null;
-  if (fredDown) {
-    alerts.push({ level: 'yellow', msg: 'FRED data unavailable — yields, macro, and credit panels showing N/A. Check FRED API key.' });
-  }
+  if (ig && ig.current != null && ig.current * 100 > THRESHOLDS.igOasWide)
+    alerts.push({ level:'yellow', msg:'IG OAS ' + Math.round(ig.current * 100) + ' bps — widening' });
 
   return alerts;
 }
 
-// ============================================
-// PANEL RENDERERS
-// ============================================
-
-function renderYields(fred) {
-  var grid = document.getElementById('yields-grid');
-  grid.innerHTML = '';
-  var anyLive = false;
-  for (var i = 0; i < YIELD_KEYS.length; i++) {
-    var sid = YIELD_KEYS[i];
-    var d = fred[sid];
-    if (d && d.current != null) {
-      anyLive = true;
-      var bps = bpsChange(d.current, d.prior);
-      var delta = bps != null ? sign(bps) + bps + ' bps' : '';
-      grid.appendChild(renderMetric(YIELD_LABELS[sid], d.current.toFixed(2) + '%', delta, d.date, { deltaNum: bps }));
-    } else if (lastKnownYields && lastKnownYields[sid]) {
-      var cached = lastKnownYields[sid];
-      grid.appendChild(renderMetric(YIELD_LABELS[sid], cached.value, '', cached.date, { stale: true }));
-    } else {
-      grid.appendChild(renderMetric(YIELD_LABELS[sid], 'N/A', '', ''));
-    }
+function renderAlerts(alerts) {
+  var bar = document.getElementById('alert-bar');
+  if (!bar) return;
+  if (!alerts || alerts.length === 0) {
+    bar.innerHTML = '';
+    bar.style.display = 'none';
+    return;
   }
-  // Save live data for next time
-  if (anyLive) {
-    var snapshot = {};
-    for (var j = 0; j < YIELD_KEYS.length; j++) {
-      var s2 = YIELD_KEYS[j];
-      var d2 = fred[s2];
-      if (d2 && d2.current != null) snapshot[s2] = { value: d2.current.toFixed(2) + '%', date: d2.date };
-    }
-    lastKnownYields = snapshot;
-    saveLastKnown('yields', snapshot);
-  }
-  var footer = document.getElementById('yields-footer');
-  var dgs2 = fred.DGS2;
-  var dgs10 = fred.DGS10;
-  if (dgs2 && dgs10 && dgs2.current != null && dgs10.current != null) {
-    var s = Math.round((dgs10.current - dgs2.current) * 100);
-    var shape = s < 0 ? 'inverted' : s < 20 ? 'flat' : 'positive';
-    footer.textContent = '2s10s: ' + sign(s) + s + ' bps (' + shape + ')';
-  } else {
-    footer.textContent = '';
-  }
+  bar.style.display = 'block';
+  bar.innerHTML = alerts.map(function(a) {
+    return '<div class="alert alert-' + a.level + '">'
+      + '<span class="alert-dot"></span>' + a.msg + '</div>';
+  }).join('');
 }
 
-function renderYieldCurve(fred) {
-  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [], valuesT3 = [];
+
+// ============================================================
+// SECTION 1 — TREASURY YIELDS (HERO)
+//
+// Grouped bar chart:
+//   X-axis  : 7 maturity groups (3M | 6M | 1Y | 2Y | 5Y | 10Y | 30Y)
+//   3 bars  : Today (bright blue) | T-1 (indigo) | T-2 (slate)
+//
+// Data table below chart:
+//   Rows: Today | T-1 | T-2 | Δ 1d (bps) | Δ 2d (bps)
+//   Color-coded bps deltas
+// ============================================================
+
+function renderYieldsHero(fred) {
+  if (!fred) return;
+
+  // ── Collect data for all 7 maturities ──────────────────────
+  var valuesT  = [], valuesT1 = [], valuesT2 = [], dates = [];
   for (var i = 0; i < CURVE_KEYS.length; i++) {
     var d = fred[CURVE_KEYS[i]];
-    labels.push(CURVE_LABELS[i]);
-    valuesT.push(d && d.current != null ? d.current : null);
+    valuesT.push( d && d.current != null ? d.current : null);
     valuesT1.push(d && d.prior   != null ? d.prior   : null);
     valuesT2.push(d && d.t2      != null ? d.t2      : null);
-    valuesT3.push(d && d.t3      != null ? d.t3      : null);
+    dates.push(d ? (d.date || '') : '');
   }
-  var canvas = document.getElementById('yield-curve-canvas');
+
+  // ── Persist for offline use ────────────────────────────────
+  var anyLive = valuesT.some(function(v){ return v != null; });
+  if (anyLive) {
+    var snap = {};
+    for (var j = 0; j < CURVE_KEYS.length; j++) {
+      if (valuesT[j] != null)
+        snap[CURVE_KEYS[j]] = { value: valuesT[j].toFixed(2) + '%', date: dates[j] };
+    }
+    lastKnownYields = snap;
+    saveLastKnown('yields', snap);
+  }
+
+  // ── Fill N/A from cache if live data missing ────────────────
+  for (var k = 0; k < CURVE_KEYS.length; k++) {
+    if (valuesT[k] == null && lastKnownYields && lastKnownYields[CURVE_KEYS[k]]) {
+      var cached = parseFloat(lastKnownYields[CURVE_KEYS[k]].value);
+      if (!isNaN(cached)) valuesT[k] = cached;
+    }
+  }
+
+  // ── Build / update grouped bar chart ───────────────────────
+  buildYieldBarChart(valuesT, valuesT1, valuesT2);
+
+  // ── Build compact data table ────────────────────────────────
+  buildYieldTable(valuesT, valuesT1, valuesT2);
+
+  // ── 2s10s spread badge ──────────────────────────────────────
+  var d2  = fred.DGS2,  d10 = fred.DGS10;
+  var el  = document.getElementById('yields-2s10s');
+  if (el && d2 && d10 && d2.current != null && d10.current != null) {
+    var s = Math.round((d10.current - d2.current) * 100);
+    var shape = s < 0 ? 'inverted' : s < 20 ? 'flat' : 'positive';
+    el.textContent = '2s10s: ' + sign(s) + s + ' bps (' + shape + ')';
+    el.className = 'spread-badge spread-' + shape;
+  }
+
+  // ── Source label ────────────────────────────────────────────
+  var src = document.getElementById('yields-source-label');
+  if (src && d10 && d10.date) src.textContent = 'FRED · As of ' + d10.date;
+}
+
+function buildYieldBarChart(valuesT, valuesT1, valuesT2) {
+  var canvas = document.getElementById('yield-bar-canvas');
+  if (!canvas) return;
   var ctx = canvas.getContext('2d');
 
   var datasets = [
     {
       label: 'Today',
       data: valuesT,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.07)',
-      fill: true, tension: 0.3, pointRadius: 4,
-      pointBackgroundColor: '#3b82f6',
-      pointBorderColor: '#0a0e14',
-      pointBorderWidth: 2,
-      borderWidth: 2,
+      backgroundColor: 'rgba(59,130,246,0.85)',
+      borderColor: 'rgba(59,130,246,1)',
+      borderWidth: 1,
+      borderRadius: 3,
       datalabels: {
         display: true,
-        color: '#e6edf3',
         anchor: 'end', align: 'top', offset: 2,
-        font: { size: 10, family: 'Consolas, monospace', weight: '600' },
-        formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
+        color: '#e2e8f0',
+        font: { size: 10, weight: '600', family: 'var(--font-mono)' },
+        formatter: function(v) { return v != null ? v.toFixed(2) : ''; }
       }
     },
     {
-      label: 'T-1',
+      label: 'T−1',
       data: valuesT1,
-      borderColor: '#6366f1',
-      backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
-      borderDash: [5, 3], borderWidth: 1.5,
+      backgroundColor: 'rgba(99,102,241,0.60)',
+      borderColor: 'rgba(99,102,241,0.85)',
+      borderWidth: 1,
+      borderRadius: 2,
       datalabels: { display: false }
     },
     {
-      label: 'T-2',
+      label: 'T−2',
       data: valuesT2,
-      borderColor: '#64748b',
-      backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
-      borderDash: [3, 4], borderWidth: 1.5,
-      datalabels: { display: false }
-    },
-    {
-      label: 'T-3',
-      data: valuesT3,
-      borderColor: '#374151',
-      backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
-      borderDash: [2, 5], borderWidth: 1,
+      backgroundColor: 'rgba(71,85,105,0.45)',
+      borderColor: 'rgba(71,85,105,0.7)',
+      borderWidth: 1,
+      borderRadius: 2,
       datalabels: { display: false }
     }
   ];
 
-  if (yieldCurveChart) {
-    yieldCurveChart.data.labels = labels;
-    yieldCurveChart.data.datasets = datasets;
-    yieldCurveChart.update();
-  } else {
-    yieldCurveChart = new Chart(ctx, {
-      type: 'line',
-      plugins: [ChartDataLabels],
-      data: { labels: labels, datasets: datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 20 } },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) {
-                return ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) + '%' : 'N/A');
-              }
+  var chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 28, bottom: 4, left: 4, right: 4 } },
+    plugins: {
+      legend: { display: false },
+      datalabels: {},
+      tooltip: {
+        callbacks: {
+          title: function(items) { return items[0].label + ' UST'; },
+          label: function(ctx) {
+            var v   = ctx.parsed.y;
+            var ds  = ctx.dataset.label;
+            if (v == null) return ds + ': N/A';
+            var line = ds + ': ' + v.toFixed(2) + '%';
+            // Append bps delta vs Today for T-1 and T-2
+            if (ctx.datasetIndex === 1 && valuesT[ctx.dataIndex] != null) {
+              var bps = bpsChange(valuesT[ctx.dataIndex], v);
+              if (bps != null) line += '  (Δ ' + fmtBps(-bps) + ' vs Today)';
             }
+            if (ctx.datasetIndex === 2 && valuesT[ctx.dataIndex] != null) {
+              var bps2 = bpsChange(valuesT[ctx.dataIndex], v);
+              if (bps2 != null) line += '  (Δ ' + fmtBps(-bps2) + ' vs Today)';
+            }
+            if (ctx.datasetIndex === 0 && valuesT1[ctx.dataIndex] != null) {
+              var chg = bpsChange(v, valuesT1[ctx.dataIndex]);
+              line += '  Δ 1d: ' + fmtBps(chg);
+            }
+            return line;
           }
         },
-        scales: {
-          x: { ticks: { color: '#7d8da1', font: { size: 10 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
-          y: { ticks: { color: '#7d8da1', font: { size: 10 }, callback: function(v) { return v.toFixed(1) + '%'; } }, grid: { color: 'rgba(30,42,58,0.5)' } }
-        }
+        backgroundColor: 'rgba(17,24,39,0.96)',
+        titleColor: '#f1f5f9',
+        bodyColor: '#94a3b8',
+        borderColor: 'rgba(51,65,85,0.7)',
+        borderWidth: 1,
+        padding: 10
       }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false },
+        ticks: { color: '#94a3b8', font: { size: 11, weight: '500' } },
+        border: { display: false }
+      },
+      y: {
+        position: 'left',
+        grid: { color: 'rgba(30,41,59,0.5)', drawBorder: false },
+        ticks: {
+          color: '#94a3b8',
+          font: { size: 10 },
+          callback: function(v) { return v.toFixed(1) + '%'; }
+        },
+        border: { display: false }
+      }
+    }
+  };
+
+  if (yieldBarChart) {
+    // Update existing chart
+    yieldBarChart.data.labels   = CURVE_LABELS;
+    yieldBarChart.data.datasets = datasets;
+    yieldBarChart.update('active');
+  } else {
+    yieldBarChart = new Chart(ctx, {
+      type: 'bar',
+      plugins: [ChartDataLabels],
+      data: { labels: CURVE_LABELS, datasets: datasets },
+      options: chartOpts
     });
   }
 
-  // Inline legend below chart
-  var existingLegend = canvas.parentElement.parentElement.querySelector('.yield-curve-legend');
-  if (!existingLegend) {
-    var legendDiv = document.createElement('div');
-    legendDiv.className = 'yield-curve-legend';
-    legendDiv.innerHTML =
-      '<span><span class="ycl-swatch" style="background:#3b82f6"></span>Today</span>' +
-      '<span><span class="ycl-swatch" style="background:#6366f1;border-style:dashed"></span>T-1</span>' +
-      '<span><span class="ycl-swatch" style="background:#64748b;border-style:dashed"></span>T-2</span>' +
-      '<span><span class="ycl-swatch" style="background:#374151;border-style:dashed"></span>T-3</span>';
-    canvas.parentElement.parentElement.appendChild(legendDiv);
+  // Inline legend
+  var legendEl = document.getElementById('yield-bar-legend');
+  if (legendEl && !legendEl.hasChildNodes()) {
+    legendEl.innerHTML =
+      '<span class="ybl-item"><span class="ybl-swatch" style="background:rgba(59,130,246,0.85)"></span>Today</span>' +
+      '<span class="ybl-item"><span class="ybl-swatch" style="background:rgba(99,102,241,0.60)"></span>T−1</span>' +
+      '<span class="ybl-item"><span class="ybl-swatch" style="background:rgba(71,85,105,0.45)"></span>T−2</span>';
   }
 }
 
-// Cache last known values so FRED outages/weekends don't show all N/A.
-// Persisted to localStorage so they survive page reloads.
-var lastKnownFunding = loadLastKnown('funding') || { sofr: null, effr: null, onrrp: null };
+function buildYieldTable(valuesT, valuesT1, valuesT2) {
+  var table = document.getElementById('yield-data-table');
+  if (!table) return;
 
-function loadLastKnown(key) {
-  try {
-    var raw = localStorage.getItem('td_lk_' + key);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+  // Header row
+  var thead = table.querySelector('thead');
+  thead.innerHTML = '<tr>'
+    + '<th class="yt-label">Maturity</th>'
+    + CURVE_LABELS.map(function(l){ return '<th>' + l + '</th>'; }).join('')
+    + '</tr>';
+
+  // Compute deltas
+  var delta1d = [], delta2d = [];
+  for (var i = 0; i < CURVE_KEYS.length; i++) {
+    delta1d.push(bpsChange(valuesT[i], valuesT1[i]));
+    delta2d.push(bpsChange(valuesT[i], valuesT2[i]));
+  }
+
+  function makeRow(label, values, fmt, extraClass) {
+    var cells = values.map(function(v, idx) {
+      var text = (fmt === 'bps') ? fmtBps(v) : fmtRate(v);
+      var cls  = '';
+      if (fmt === 'bps' && v != null) cls = v > 0 ? 'bps-up' : v < 0 ? 'bps-dn' : '';
+      return '<td class="yt-val ' + cls + '">' + text + '</td>';
+    });
+    return '<tr class="' + (extraClass||'') + '">'
+      + '<td class="yt-label">' + label + '</td>'
+      + cells.join('') + '</tr>';
+  }
+
+  var tbody = table.querySelector('tbody');
+  tbody.innerHTML =
+    makeRow('Today',   valuesT,  'pct', 'yt-today') +
+    makeRow('T−1',     valuesT1, 'pct', 'yt-prior') +
+    makeRow('T−2',     valuesT2, 'pct', 'yt-prior yt-t2') +
+    makeRow('Δ 1d',    delta1d,  'bps', 'yt-delta') +
+    makeRow('Δ 2d',    delta2d,  'bps', 'yt-delta yt-delta2');
 }
-function saveLastKnown(key, data) {
-  try { localStorage.setItem('td_lk_' + key, JSON.stringify(data)); } catch (e) {}
-}
 
-var lastKnownYields = loadLastKnown('yields');
-var lastKnownMacro  = loadLastKnown('macro');
-var lastKnownCredit = loadLastKnown('credit');
 
-function renderFunding(nyfed, fred) {
+// ============================================================
+// SECTION 2 — FUNDING & LIQUIDITY
+//
+// 6 metric cards:
+//   SOFR   | EFFR   | Fed Funds
+//   ON RRP | 3M UST | 2s10s Spread
+//
+// Graceful N/A handling:
+//   SOFR/EFFR  — fall back to lastKnownFunding (persisted)
+//   Fed Funds  — from macro.FEDFUNDS (monthly, may lag)
+//   ON RRP     — from fred.RRPONTSYD
+//   3M UST     — from fred.DGS3MO
+//   2s10s      — computed from DGS2 / DGS10
+// ============================================================
+
+function renderFunding(nyfed, fred, macro) {
   var grid = document.getElementById('funding-grid');
+  if (!grid) return;
   grid.innerHTML = '';
 
-  // Prefer live data; fall back to last known (persisted across page loads via localStorage)
-  var sofrLive = nyfed.sofr && nyfed.sofr.rate != null;
-  var effrLive = nyfed.effr && nyfed.effr.rate != null;
-  var sofr = sofrLive ? nyfed.sofr : lastKnownFunding.sofr;
-  var effr = effrLive ? nyfed.effr : lastKnownFunding.effr;
+  // ── SOFR ─────────────────────────────────────────────────
+  var sofrLive = nyfed && nyfed.sofr && nyfed.sofr.rate != null;
+  var sofr     = sofrLive ? nyfed.sofr : lastKnownFunding.sofr;
+  if (sofrLive) { lastKnownFunding.sofr = nyfed.sofr; saveLastKnown('funding', lastKnownFunding); }
 
-  // ON RRP comes from FRED — persist it too so weekends don't blank the panel
-  var onrrp = (fred.RRPONTSYD && fred.RRPONTSYD.current != null)
-    ? fred.RRPONTSYD
-    : lastKnownFunding.onrrp;
+  // ── EFFR ─────────────────────────────────────────────────
+  var effrLive = nyfed && nyfed.effr && nyfed.effr.rate != null;
+  var effr     = effrLive ? nyfed.effr : lastKnownFunding.effr;
+  if (effrLive) { lastKnownFunding.effr = nyfed.effr; saveLastKnown('funding', lastKnownFunding); }
 
-  // Update in-memory + localStorage when we get fresh data
-  var changed = false;
-  if (sofrLive)                                    { lastKnownFunding.sofr  = nyfed.sofr;      changed = true; }
-  if (effrLive)                                    { lastKnownFunding.effr  = nyfed.effr;      changed = true; }
-  if (fred.RRPONTSYD && fred.RRPONTSYD.current != null) { lastKnownFunding.onrrp = fred.RRPONTSYD; changed = true; }
-  if (changed) saveLastKnown('funding', lastKnownFunding);
+  // ── ON RRP (Fed's overnight reverse repo, floor signal) ──
+  var onrrpLive = fred && fred.RRPONTSYD && fred.RRPONTSYD.current != null;
+  var onrrp     = onrrpLive ? fred.RRPONTSYD : lastKnownFunding.onrrp;
+  if (onrrpLive) { lastKnownFunding.onrrp = fred.RRPONTSYD; saveLastKnown('funding', lastKnownFunding); }
 
-  if (sofr && sofr.rate != null) {
-    var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
-    // Append * when showing a cached (stale) value so user knows source age
-    var sofrNote = volNote + (!sofrLive && sofr ? ' *' : '');
-    grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', sofrNote, sofr.date));
-  } else {
-    grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
+  // ── Fed Funds target (from macro, monthly FRED) ──────────
+  var ff = macro && macro.FEDFUNDS;
+
+  // ── 3M T-Bill (short-term benchmark) ─────────────────────
+  var tbill3m = fred && fred.DGS3MO;
+
+  // ── 2s10s spread ─────────────────────────────────────────
+  var d2  = fred && fred.DGS2,  d10 = fred && fred.DGS10;
+  var spread2s10s = (d2 && d10 && d2.current != null && d10.current != null)
+    ? Math.round((d10.current - d2.current) * 100) : null;
+
+  // ── SOFR-EFFR spread ──────────────────────────────────────
+  var sofrEffrBps = (sofr && effr && sofr.rate != null && effr.rate != null)
+    ? Math.round((sofr.rate - effr.rate) * 100) : null;
+  var spreadEl = document.getElementById('funding-sofr-effr');
+  if (spreadEl) {
+    spreadEl.textContent = sofrEffrBps != null
+      ? 'SOFR–EFFR: ' + sign(sofrEffrBps) + sofrEffrBps + ' bps'
+      : '';
   }
-  if (effr && effr.rate != null) {
-    var effrNote = !effrLive && effr ? '*' : '';
-    grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', effrNote, effr.date));
-  } else {
-    grid.appendChild(renderMetric('EFFR', 'N/A', '', ''));
-  }
-  if (onrrp && onrrp.current != null) {
-    var valB = (onrrp.current / 1000).toFixed(1);
-    var onrrpNote = (fred.RRPONTSYD && fred.RRPONTSYD.current != null) ? '' : '*';
-    grid.appendChild(renderMetric('ON RRP', '$' + valB + 'B', onrrpNote, onrrp.date));
-  } else {
-    grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
-  }
-  var footer = document.getElementById('funding-footer');
-  if (sofr && effr && sofr.rate != null && effr.rate != null) {
-    var spread = Math.round((sofr.rate - effr.rate) * 100);
-    footer.textContent = 'SOFR-EFFR: ' + sign(spread) + spread + ' bps';
-  } else {
-    footer.textContent = 'SOFR-EFFR: unavailable';
-  }
+
+  // ── Render 6 cards ────────────────────────────────────────
+  var cards = [
+    {
+      id: 'sofr',
+      label: 'SOFR',
+      sublabel: 'Secured Overnight',
+      value: sofr && sofr.rate != null ? sofr.rate.toFixed(2) + '%' : '—',
+      detail: sofr && sofr.volume ? '$' + sofr.volume.toFixed(0) + 'B vol' : '',
+      date:   sofr && sofr.date   ? sofr.date : '',
+      stale:  !sofrLive && sofr != null,
+      status: sofr && sofr.rate != null ? 'green' : 'red'
+    },
+    {
+      id: 'effr',
+      label: 'EFFR',
+      sublabel: 'Effective Fed Funds',
+      value: effr && effr.rate != null ? effr.rate.toFixed(2) + '%' : '—',
+      detail: '',
+      date:   effr && effr.date ? effr.date : '',
+      stale:  !effrLive && effr != null,
+      status: effr && effr.rate != null ? 'green' : 'red'
+    },
+    {
+      id: 'fedfunds',
+      label: 'Fed Target',
+      sublabel: 'FOMC Policy Rate',
+      value: ff && ff.current != null ? ff.current.toFixed(2) + '%' : '—',
+      detail: ff && ff.date ? 'As of ' + ff.date : 'Monthly',
+      date:   '',
+      stale:  false,
+      status: ff && ff.current != null ? 'green' : 'yellow'
+    },
+    {
+      id: 'onrrp',
+      label: 'ON RRP',
+      sublabel: 'Overnight Reverse Repo',
+      value: onrrp && onrrp.current != null ? fmtBillion(onrrp.current) : '—',
+      detail: 'Fed floor facility',
+      date:   onrrp && onrrp.date ? onrrp.date : '',
+      stale:  !onrrpLive && onrrp != null,
+      status: onrrp && onrrp.current != null ? 'green' : 'red'
+    },
+    {
+      id: 'tbill3m',
+      label: '3M T-Bill',
+      sublabel: 'Short-Term Benchmark',
+      value: tbill3m && tbill3m.current != null ? tbill3m.current.toFixed(2) + '%' : '—',
+      detail: tbill3m && tbill3m.prior != null
+        ? 'Δ ' + fmtBps(bpsChange(tbill3m.current, tbill3m.prior))
+        : '',
+      date:   tbill3m && tbill3m.date ? tbill3m.date : '',
+      stale:  false,
+      status: tbill3m && tbill3m.current != null ? 'green' : 'yellow',
+      bps:    tbill3m ? bpsChange(tbill3m.current, tbill3m.prior) : null
+    },
+    {
+      id: 'spread2s10s',
+      label: '2s10s Spread',
+      sublabel: 'Curve Shape',
+      value: spread2s10s != null ? sign(spread2s10s) + spread2s10s + ' bps' : '—',
+      detail: spread2s10s != null
+        ? (spread2s10s < 0 ? 'Inverted ↓' : spread2s10s < 30 ? 'Flat ↔' : 'Positive ↑')
+        : '',
+      date:   '',
+      stale:  false,
+      status: spread2s10s != null ? (spread2s10s < -20 ? 'red' : spread2s10s < 0 ? 'yellow' : 'green') : 'red',
+      signed: spread2s10s
+    }
+  ];
+
+  cards.forEach(function(c) {
+    var card = document.createElement('div');
+    card.className = 'fund-card' + (c.stale ? ' fund-card-stale' : '');
+
+    // Status dot
+    var dot = document.createElement('span');
+    dot.className = 'fund-dot fund-dot-' + c.status;
+
+    // Label
+    var lbl = document.createElement('div');
+    lbl.className = 'fund-label';
+    lbl.appendChild(dot);
+    lbl.appendChild(document.createTextNode(c.label));
+
+    // Sub-label
+    var sub = document.createElement('div');
+    sub.className = 'fund-sublabel';
+    sub.textContent = c.sublabel;
+
+    // Value
+    var val = document.createElement('div');
+    val.className = 'fund-value' + (c.value === '—' ? ' fund-na' : '');
+    // Color the spread / bps change
+    if (c.signed != null) {
+      val.className += c.signed < 0 ? ' val-red' : c.signed === 0 ? '' : ' val-green';
+    }
+    if (c.bps != null) {
+      val.className += c.bps < 0 ? ' val-red' : c.bps > 0 ? ' val-green' : '';
+    }
+    val.textContent = c.value;
+    if (c.stale) {
+      var sb = document.createElement('span');
+      sb.className = 'fund-stale-badge';
+      sb.textContent = '*';
+      sb.title = 'Cached value — live data unavailable';
+      val.appendChild(sb);
+    }
+
+    // Detail / delta
+    var detail = document.createElement('div');
+    detail.className = 'fund-detail';
+    detail.textContent = c.detail;
+
+    card.appendChild(lbl);
+    card.appendChild(sub);
+    card.appendChild(val);
+    card.appendChild(detail);
+    if (c.date) {
+      var datEl = document.createElement('div');
+      datEl.className = 'fund-date';
+      datEl.textContent = c.date;
+      card.appendChild(datEl);
+    }
+
+    grid.appendChild(card);
+  });
 }
 
-function renderRisk(yahoo, fred) {
-  var riskGrid = document.getElementById('risk-grid');
-  riskGrid.innerHTML = '';
-  var dxy = yahoo.DXY;
-  if (dxy && dxy.current != null) {
-    var dpct = pctChange(dxy.current, dxy.prior);
-    var dd = dpct != null ? sign(dpct) + dpct.toFixed(1) + '%' : '';
-    riskGrid.appendChild(renderMetric('DXY', dxy.current.toFixed(2), dd, dxy.date, { deltaNum: dpct }));
-  } else {
-    riskGrid.appendChild(renderMetric('DXY', 'N/A', '', ''));
-  }
-  var vix = yahoo.VIX;
-  if (vix && vix.current != null) {
-    var vpct = pctChange(vix.current, vix.prior);
-    var vd = vpct != null ? sign(vpct) + vpct.toFixed(1) + '%' : '';
-    riskGrid.appendChild(renderMetric('VIX', vix.current.toFixed(2), vd, vix.date, { inverse: true, deltaNum: vpct }));
-  } else {
-    riskGrid.appendChild(renderMetric('VIX', 'N/A', '', ''));
-  }
-  var creditGrid = document.getElementById('credit-grid');
-  creditGrid.innerHTML = '';
-  var anyCreditLive = false;
-  var ig = fred.BAMLC0A0CM;
-  if (ig && ig.current != null) {
-    anyCreditLive = true;
-    var igBps = Math.round(ig.current * 100);
-    var igChg = ig.prior != null ? Math.round((ig.current - ig.prior) * 100) : null;
-    var igD = igChg != null ? sign(igChg) + igChg + ' bps' : '';
-    creditGrid.appendChild(renderMetric('IG OAS', igBps + ' bps', igD, ig.date, { deltaNum: igChg }));
-  } else if (lastKnownCredit && lastKnownCredit.ig) {
-    creditGrid.appendChild(renderMetric('IG OAS', lastKnownCredit.ig.value, '', lastKnownCredit.ig.date, { stale: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('IG OAS', 'N/A', '', ''));
-  }
-  var hy = fred.BAMLH0A0HYM2;
-  if (hy && hy.current != null) {
-    anyCreditLive = true;
-    var hyBps = Math.round(hy.current * 100);
-    var hyChg = hy.prior != null ? Math.round((hy.current - hy.prior) * 100) : null;
-    var hyD = hyChg != null ? sign(hyChg) + hyChg + ' bps' : '';
-    creditGrid.appendChild(renderMetric('HY OAS', hyBps + ' bps', hyD, hy.date, { deltaNum: hyChg }));
-  } else if (lastKnownCredit && lastKnownCredit.hy) {
-    creditGrid.appendChild(renderMetric('HY OAS', lastKnownCredit.hy.value, '', lastKnownCredit.hy.date, { stale: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('HY OAS', 'N/A', '', ''));
-  }
-  if (anyCreditLive) {
-    var snap = {};
-    if (ig && ig.current != null) snap.ig = { value: Math.round(ig.current * 100) + ' bps', date: ig.date };
-    if (hy && hy.current != null) snap.hy = { value: Math.round(hy.current * 100) + ' bps', date: hy.date };
-    lastKnownCredit = snap;
-    saveLastKnown('credit', snap);
-  }
-}
 
-function renderCommodities(yahoo) {
-  // Metric chips and footer removed — panel shows chart + toggle only.
-  // Alert computation still runs via computeAlerts() which uses yahoo directly.
-  // No DOM updates needed here; chart is managed by initTradingView/renderTVChart.
-}
-
-function fxDecimals(key) {
-  if (key === 'USDJPY' || key === 'USDCNH') return 2;
-  return 4;
-}
-
-function renderForex(yahoo) {
-  // Render FX pairs as mover-style chips into the forex strip
-  renderForexStrip(yahoo);
-  // Always (re-)initialize the converter — it lives in its own promoted panel
-  initFxConverter();
-}
-
-function renderForexStrip(yahoo) {
-  var container = document.getElementById('forex-chips');
-  if (!container) return;
-  var chips = [];
-  for (var i = 0; i < FOREX_KEYS.length; i++) {
-    var k = FOREX_KEYS[i];
-    var d = yahoo[k];
-    if (!d || d.current == null) continue;
-    var pct = pctChange(d.current, d.prior);
-    var pctCls  = pct == null ? 'delta-flat' : (pct >= 0 ? 'delta-up' : 'delta-down');
-    var pctStr  = pct != null ? sign(pct) + pct.toFixed(2) + '%' : '';
-    chips.push(
-      '<span class="forex-chip">'
-      + '<span class="forex-chip-name">' + FOREX_LABELS[k] + '</span>'
-      + '<span class="forex-chip-price">' + d.current.toFixed(fxDecimals(k)) + '</span>'
-      + (pctStr ? '<span class="forex-chip-pct ' + pctCls + '">' + pctStr + '</span>' : '')
-      + '</span>'
-    );
-  }
-  container.innerHTML = chips.join('');
-}
-
-// ============================================
-// FX CONVERTER (FIXED: uses cachedYahoo, not stale closure)
-// ============================================
+// ============================================================
+// SECTION 3 — FX CONVERTER
+// (two-row presets, full currency names, bidirectional rates)
+// ============================================================
 
 function getToUSD(ccy) {
   if (ccy === 'USD') return 1;
   if (!cachedYahoo) return null;
-  var key = FX_YAHOO_MAP[ccy];
+  var key  = FX_YAHOO_MAP[ccy];
   if (!key || !cachedYahoo[key] || cachedYahoo[key].current == null) return null;
   var rate = cachedYahoo[key].current;
+  return FX_INVERTED[ccy] ? 1 / rate : rate;
+}
+function getToUSDPrior(ccy) {
+  if (ccy === 'USD') return 1;
+  if (!cachedYahoo) return null;
+  var key  = FX_YAHOO_MAP[ccy];
+  if (!key || !cachedYahoo[key] || cachedYahoo[key].prior == null) return null;
+  var rate = cachedYahoo[key].prior;
   return FX_INVERTED[ccy] ? 1 / rate : rate;
 }
 
@@ -814,22 +705,27 @@ function initFxConverter() {
   var baseSelect  = document.getElementById('fx-base');
   var quoteSelect = document.getElementById('fx-quote');
   var amountInput = document.getElementById('fx-amount');
+  if (!baseSelect || !quoteSelect) return;
+
   if (!fxConverterInitialized) {
     fxConverterInitialized = true;
+
+    // Populate selects with full currency names
     baseSelect.innerHTML = '';
     quoteSelect.innerHTML = '';
-    for (var i = 0; i < FX_CURRENCIES.length; i++) {
-      var c = FX_CURRENCIES[i];
-      baseSelect.appendChild(new Option(c, c));
-      quoteSelect.appendChild(new Option(c, c));
-    }
+    FX_CURRENCIES.forEach(function(c) {
+      var name = FX_CURRENCY_NAMES[c] || c;
+      baseSelect.appendChild(new Option(name, c));
+      quoteSelect.appendChild(new Option(name, c));
+    });
     baseSelect.value  = 'USD';
     quoteSelect.value = 'EUR';
 
+    // ── Event listeners ──────────────────────────────────────
     var compute = function() { computeFxConversion(); };
     baseSelect.addEventListener('change', compute);
     quoteSelect.addEventListener('change', compute);
-    amountInput.addEventListener('input', compute);
+    amountInput.addEventListener('input',  compute);
 
     document.getElementById('fx-swap').addEventListener('click', function() {
       var tmp = baseSelect.value;
@@ -838,473 +734,180 @@ function initFxConverter() {
       computeFxConversion();
     });
 
-    // Preset amount buttons
+    // ── Preset buttons (both rows) ───────────────────────────
     var presetBtns = document.querySelectorAll('.fx-preset-btn');
-    for (var j = 0; j < presetBtns.length; j++) {
-      (function(btn) {
-        btn.addEventListener('click', function() {
-          amountInput.value = btn.getAttribute('data-amount');
-          // Active state
-          for (var k = 0; k < presetBtns.length; k++) presetBtns[k].classList.remove('active');
-          btn.classList.add('active');
-          computeFxConversion();
-        });
-      })(presetBtns[j]);
+    presetBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        amountInput.value = btn.getAttribute('data-amount');
+        presetBtns.forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        computeFxConversion();
+      });
+    });
+
+    // ── "Custom" button — focus the amount input ──────────────
+    var customBtn = document.getElementById('fx-custom-trigger');
+    if (customBtn) {
+      customBtn.addEventListener('click', function() {
+        presetBtns.forEach(function(b){ b.classList.remove('active'); });
+        customBtn.classList.add('active');
+        amountInput.focus();
+        amountInput.select();
+      });
+      amountInput.addEventListener('focus', function() {
+        presetBtns.forEach(function(b){ b.classList.remove('active'); });
+        customBtn.classList.add('active');
+      });
     }
   }
+
   computeFxConversion();
 }
 
 function computeFxConversion() {
-  var amount = parseFloat(document.getElementById('fx-amount').value);
-  var base = document.getElementById('fx-base').value;
-  var quote = document.getElementById('fx-quote').value;
-  var resultEl   = document.getElementById('fx-result');
-  var rateEl     = document.getElementById('fx-rate-line');
-  var reverseEl  = document.getElementById('fx-reverse-rate');
-  var trendEl    = document.getElementById('fx-rate-trend');
-
+  var amount    = parseFloat(document.getElementById('fx-amount').value);
+  var base      = document.getElementById('fx-base').value;
+  var quote     = document.getElementById('fx-quote').value;
+  var resultEl  = document.getElementById('fx-result');
+  var fwdEl     = document.getElementById('fx-rate-line');
+  var revEl     = document.getElementById('fx-reverse-rate');
+  var trendEl   = document.getElementById('fx-rate-trend');
   if (!resultEl) return;
 
-  if (isNaN(amount) || base === quote) {
-    resultEl.textContent = base === quote ? fmt(amount, 2, '') + ' ' + quote : '--';
-    if (rateEl)    rateEl.textContent = '';
-    if (reverseEl) reverseEl.textContent = '';
-    if (trendEl)   trendEl.textContent = '';
-    return;
+  function clear(msg) {
+    resultEl.textContent = msg || '--';
+    if (fwdEl)   fwdEl.textContent   = '';
+    if (revEl)   revEl.textContent   = '';
+    if (trendEl) { trendEl.textContent = ''; trendEl.className = 'fx-trend-badge'; }
   }
-  var baseUSD  = getToUSD(base);
-  var quoteUSD = getToUSD(quote);
-  if (!baseUSD || !quoteUSD) {
-    resultEl.textContent = 'Rate unavailable';
-    if (rateEl)    rateEl.textContent = '';
-    if (reverseEl) reverseEl.textContent = '';
-    if (trendEl)   trendEl.textContent = '';
-    return;
-  }
-  var crossRate    = baseUSD / quoteUSD;
-  var crossRateRev = 1 / crossRate;
-  var result = amount * crossRate;
 
-  // Main result — animated via CSS class toggle
-  var newText = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
+  if (isNaN(amount) || amount <= 0) return clear('—');
+  if (base === quote) {
+    resultEl.textContent = amount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + quote;
+    if (fwdEl) fwdEl.textContent = '1:1'; if (revEl) revEl.textContent = '';
+    return;
+  }
+
+  var baseUSD  = getToUSD(base),  quoteUSD = getToUSD(quote);
+  if (!baseUSD || !quoteUSD) return clear('Rate unavailable');
+
+  var cross    = baseUSD / quoteUSD;
+  var crossRev = 1 / cross;
+  var result   = amount * cross;
+
+  // Flash on change
+  var newText = result.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + quote;
   if (resultEl.textContent !== newText) {
-    resultEl.classList.remove('fx-result-flash');
-    void resultEl.offsetWidth; // force reflow
-    resultEl.classList.add('fx-result-flash');
+    resultEl.classList.remove('fx-flash');
+    void resultEl.offsetWidth;
+    resultEl.classList.add('fx-flash');
     resultEl.textContent = newText;
   }
 
-  // Forward rate line
-  var dec = crossRate > 10 ? 2 : 4;
-  if (rateEl) rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(dec) + ' ' + quote;
+  // Forward / reverse rates
+  var dec  = cross    > 10 ? 2 : 4;
+  var decR = crossRev > 10 ? 2 : 4;
+  if (fwdEl) fwdEl.textContent = '1 ' + base  + ' = ' + cross.toFixed(dec)    + ' ' + quote;
+  if (revEl) revEl.textContent = '1 ' + quote + ' = ' + crossRev.toFixed(decR) + ' ' + base;
 
-  // Reverse rate line
-  var decRev = crossRateRev > 10 ? 2 : 4;
-  if (reverseEl) reverseEl.textContent = '1 ' + quote + ' = ' + crossRateRev.toFixed(decRev) + ' ' + base;
-
-  // Trend vs yesterday (rate change direction)
-  if (trendEl && cachedYahoo) {
-    // Try to find prior rate for this pair
-    var baseUSDPrior  = getToUSDPrior(base);
-    var quoteUSDPrior = getToUSDPrior(quote);
-    if (baseUSDPrior && quoteUSDPrior) {
-      var priorCross = baseUSDPrior / quoteUSDPrior;
-      var pct = ((crossRate - priorCross) / priorCross) * 100;
-      var sign = pct >= 0 ? '+' : '';
-      trendEl.textContent = sign + pct.toFixed(2) + '% vs prev';
-      trendEl.className = 'fx-rate-trend ' + (pct > 0 ? 'trend-up' : pct < 0 ? 'trend-down' : 'trend-flat');
+  // Trend vs yesterday
+  if (trendEl) {
+    var bP = getToUSDPrior(base), qP = getToUSDPrior(quote);
+    if (bP && qP) {
+      var priorCross = bP / qP;
+      var pct = ((cross - priorCross) / priorCross) * 100;
+      trendEl.textContent = sign(pct) + pct.toFixed(2) + '% vs prev';
+      trendEl.className   = 'fx-trend-badge ' + (pct > 0 ? 'trend-up' : pct < 0 ? 'trend-dn' : 'trend-flat');
     } else {
-      trendEl.textContent = '';
+      trendEl.textContent = ''; trendEl.className = 'fx-trend-badge';
     }
   }
 }
 
-function getToUSDPrior(ccy) {
-  if (ccy === 'USD') return 1;
-  if (!cachedYahoo) return null;
-  var key = FX_YAHOO_MAP[ccy];
-  if (!key || !cachedYahoo[key] || cachedYahoo[key].prior == null) return null;
-  var rate = cachedYahoo[key].prior;
-  return FX_INVERTED[ccy] ? 1 / rate : rate;
-}
 
-function renderMacro(macro) {
-  var container = document.getElementById('macro-chips');
-  if (!container) return;
+// ============================================================
+// HEADER UPDATE
+// ============================================================
 
-  var chips = [];
-  var anyLive = false;
+function updateHeader(data) {
+  var now       = nowET();
+  var dateStr   = now.toLocaleDateString('en-US',
+    { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+  var timeStr   = now.toLocaleTimeString('en-US',
+    { hour:'numeric', minute:'2-digit', hour12:true }) + ' ET';
 
-  for (var i = 0; i < MACRO_DISPLAY.length; i++) {
-    var m = MACRO_DISPLAY[i];
-    var d = macro[m.id];
-    var valStr = 'N/A';
-    var delta = '';
-    var deltaNum = null;
-    var stale = false;
-
-    if (d && d.current != null) {
-      anyLive = true;
-      var val = m.divideBy ? d.current / m.divideBy : d.current;
-      valStr = val.toFixed(m.dec) + m.suffix;
-      var priorVal = d.prior != null ? (m.divideBy ? d.prior / m.divideBy : d.prior) : null;
-      if (priorVal != null) {
-        var diff = val - priorVal;
-        deltaNum = diff;
-        delta = m.suffix === 'K'
-          ? sign(diff) + diff.toFixed(0) + 'K'
-          : sign(diff) + diff.toFixed(m.dec) + (m.suffix === '%' ? 'pp' : '');
-      }
-    } else if (lastKnownMacro && lastKnownMacro[m.id]) {
-      valStr = lastKnownMacro[m.id].value;
-      stale = true;
-    }
-
-    var deltaClass = deltaNum == null ? 'delta-flat'
-      : (deltaNum > 0 ? 'delta-up' : (deltaNum < 0 ? 'delta-down' : 'delta-flat'));
-
-    chips.push(
-      '<span class="macro-chip' + (stale ? ' macro-chip-stale' : '') + '">'
-      + '<span class="macro-chip-name">' + m.label + '</span>'
-      + '<span class="macro-chip-value">' + valStr + '</span>'
-      + (delta ? '<span class="macro-chip-delta ' + deltaClass + '">' + delta + '</span>' : '')
-      + '</span>'
-    );
-  }
-
-  // Duplicate for seamless scroll (same pattern as ticker/movers)
-  var html = chips.join('');
-  container.innerHTML = html + html;
-
-  if (anyLive) {
-    var snapshot = {};
-    for (var j = 0; j < MACRO_DISPLAY.length; j++) {
-      var m2 = MACRO_DISPLAY[j];
-      var d2 = macro[m2.id];
-      if (d2 && d2.current != null) {
-        var v2 = m2.divideBy ? d2.current / m2.divideBy : d2.current;
-        snapshot[m2.id] = { value: v2.toFixed(m2.dec) + m2.suffix, date: d2.date };
-      }
-    }
-    lastKnownMacro = snapshot;
-    saveLastKnown('macro', snapshot);
-  }
-}
-
-// ============================================
-// CUSTOM ECONOMIC CALENDAR
-// ============================================
-// Hardcoded upcoming events with color-coded urgency tiers.
-// FOMC badge in header uses worker-provided FOMC_2026 dates.
-
-function renderCalendar(fomc) {
-  var container = document.getElementById('calendar-content');
-  if (!container) return;
-  container.innerHTML = '';
-
-  // Legend
-  var legend = document.createElement('div');
-  legend.className = 'cal-legend';
-  legend.innerHTML =
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-high"></span>High Impact</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-medium"></span>Medium</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-fomc"></span>FOMC</span>' +
-    '<span class="cal-legend-item"><span class="cal-legend-dot dot-today"></span>Today</span>';
-  container.appendChild(legend);
-
-  var todayStr = new Date().toISOString().split('T')[0];
-  var upcoming = [];
-  for (var i = 0; i < ECON_CALENDAR.length; i++) {
-    if (ECON_CALENDAR[i].date >= todayStr) upcoming.push(ECON_CALENDAR[i]);
-  }
-  upcoming = upcoming.slice(0, 12);
-
-  if (upcoming.length === 0) {
-    container.innerHTML += '<div class="news-empty">No upcoming events. Update ECON_CALENDAR in app.js.</div>';
-    return;
-  }
-
-  var table = document.createElement('table');
-  table.className = 'cal-table';
-  var thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Event</th><th>Est.</th><th>Prior</th><th>Actual</th></tr>';
-  table.appendChild(thead);
-  var tbody = document.createElement('tbody');
-
-  for (var j = 0; j < upcoming.length; j++) {
-    var e = upcoming[j];
-    var tr = document.createElement('tr');
-    if (e.date === todayStr) tr.className = 'today';
-    if (isHighImpact(e.event) || e.fomc) tr.classList.add('cal-urgency-high');
-    else if (isMediumImpact(e.event))    tr.classList.add('cal-urgency-medium');
-
-    var d = new Date(e.date + 'T12:00:00');
-    var dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
-    if (e.time && e.time !== 'ALL') dateLabel += ' ' + e.time;
-
-    var eventCell = e.event;
-    if (e.fomc) eventCell = '<span class="cal-fomc">' + e.event + '</span>';
-    if (e.date === todayStr) eventCell += ' <span class="cal-tag cal-tag-today">TODAY</span>';
-
-    var actualCell = '--';
-    if (e.actual != null) {
-      var actualClass = e.actualBeat === true  ? 'cal-actual-beat' :
-                        e.actualBeat === false ? 'cal-actual-miss' : 'cal-actual-pending';
-      actualCell = '<span class="' + actualClass + '">' + e.actual + '</span>';
-    }
-    tr.innerHTML = '<td class="cal-date">' + dateLabel + '</td>'
-      + '<td class="cal-event">' + eventCell + '</td>'
-      + '<td class="cal-values">' + (e.consensus || '--') + '</td>'
-      + '<td class="cal-values">' + (e.prior    || '--') + '</td>'
-      + '<td class="cal-values cal-actual">' + actualCell + '</td>';
-    tbody.appendChild(tr);
-  }
-  table.appendChild(tbody);
-  container.appendChild(table);
-
-  if (fomc && fomc.next) {
-    var fomcDiv = document.createElement('div');
-    fomcDiv.className = 'panel-footer';
-    fomcDiv.textContent = 'Next FOMC: ' + fomc.next + ' (' + fomc.daysAway + ' days)';
-    container.appendChild(fomcDiv);
-  }
-}
-
-// ============================================
-// TRADINGVIEW S&P 500 HEATMAP
-// ============================================
-// Full-width panel, lazy-loaded via IntersectionObserver for performance.
-
-var tvHeatmapLoaded = false;
-
-function initTVHeatmap() {
-  var container = document.getElementById('heatmap-content');
-  if (!container) return;
-
-  // Clear and rebuild — TV heatmap widgets don't auto-refresh; must re-inject script
-  container.innerHTML = '';
-  var widgetDiv = document.createElement('div');
-  widgetDiv.className = 'tradingview-widget-container';
-  widgetDiv.style.height = '100%';
-  widgetDiv.style.width = '100%';
-
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  widgetDiv.appendChild(inner);
-
-  var config = {
-    dataSource: 'SPX500',
-    blockSize: 'market_cap_basic',
-    blockColor: 'change',
-    grouping: 'sector',
-    locale: 'en',
-    symbolUrl: '',
-    colorTheme: 'dark',
-    hasTopBar: false,
-    isDataSet498Enabled: false,
-    isZoomEnabled: true,
-    hasSymbolTooltip: true,
-    isMonoSize: false,
-    width: '100%',
-    height: 400
-  };
-
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  widgetDiv.appendChild(script);
-
-  container.appendChild(widgetDiv);
-
-  // Timestamp label
-  var ts = document.createElement('div');
-  ts.className = 'heatmap-timestamp';
-  var now = new Date();
-  ts.textContent = 'Updated ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  container.appendChild(ts);
-  tvHeatmapLoaded = true;
-}
-
-// Lazy-load heatmap when panel scrolls into view
-function lazyLoadHeatmap() {
-  var panel = document.getElementById('panel-heatmap');
-  if (!panel) return;
-
-  if (!tvHeatmapLoaded) {
-    if ('IntersectionObserver' in window) {
-      var observer = new IntersectionObserver(function(entries) {
-        if (entries[0].isIntersecting) {
-          initTVHeatmap();
-          observer.disconnect();
-        }
-      }, { rootMargin: '200px' });
-      observer.observe(panel);
-    } else {
-      setTimeout(initTVHeatmap, 2000);
-    }
-  } else {
-    // Already loaded once — refresh the widget by rebuilding it
-    initTVHeatmap();
-  }
-}
-
-function renderNews(items) {
-  var container = document.getElementById('news-content');
-  var countBadge = document.getElementById('news-count');
-  container.innerHTML = '';
-  if (!items || items.length === 0) {
-    container.innerHTML = '<div class="news-empty">No news available. Refreshes every 30 min.</div>';
-    countBadge.textContent = '';
-    return;
-  }
-  countBadge.textContent = items.length;
-  // Last-updated timestamp
-  if (items.length > 0 && items[0].date) {
-    var tsSpan = document.createElement('div');
-    tsSpan.className = 'news-updated';
-    tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
-    container.appendChild(tsSpan);
-  }
-  // Show up to 30 items (increased from 20 — worker now provides 50)
-  for (var i = 0; i < items.length && i < 30; i++) {
-    var item = items[i];
-    var div = document.createElement('div');
-    div.className = 'news-item';
-    // Category tag
-    var tagSpan = document.createElement('span');
-    tagSpan.className = 'news-tag news-tag-' + (item.tag || 'MARKETS');
-    tagSpan.textContent = item.tag || 'NEWS';
-    // Article body
-    var body = document.createElement('div');
-    body.className = 'news-body';
-    var titleDiv = document.createElement('div');
-    titleDiv.className = 'news-title';
-    if (item.link) {
-      var a = document.createElement('a');
-      a.href = item.link;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.textContent = item.title;
-      titleDiv.appendChild(a);
-    } else {
-      titleDiv.textContent = item.title;
-    }
-    // Source badge + timestamp meta line
-    var metaDiv = document.createElement('div');
-    metaDiv.className = 'news-meta';
-    var metaParts = '';
-    if (item.isGov) metaParts += '<span class="news-gov">GOV</span> ';
-    if (item.source) metaParts += '<span class="news-source-badge">' + item.source + '</span>';
-    if (item.date) metaParts += ' <span class="news-time">' + formatTime(item.date) + '</span>';
-    metaDiv.innerHTML = metaParts;
-    body.appendChild(titleDiv);
-    body.appendChild(metaDiv);
-    div.appendChild(tagSpan);
-    div.appendChild(body);
-    container.appendChild(div);
-  }
-}
-
-// ============================================
-// MAIN RENDER
-// ============================================
-
-function renderDashboard(data) {
-  var now = nowET();
-  var dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  var timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
-  var refreshLabel = isMarketOpen() ? 'Ticker: 10s' : 'Ticker: 60s';
-  document.getElementById('header-meta').textContent = dateStr + '  |  Last refresh: ' + timeStr + '  |  ' + refreshLabel + '  |  Full: 15 min';
+  var metaEl = document.getElementById('header-meta');
+  if (metaEl) metaEl.textContent = dateStr + '  ·  ' + timeStr + '  ·  Refresh: 15min';
 
   var statusEl = document.getElementById('market-status');
-  if (isMarketOpen()) {
-    statusEl.textContent = 'MARKET OPEN';
-    statusEl.className = 'market-badge open';
-  } else {
-    statusEl.textContent = 'MARKET CLOSED';
-    statusEl.className = 'market-badge closed';
+  if (statusEl) {
+    var open = isMarketOpen();
+    statusEl.textContent = open ? 'MARKET OPEN' : 'MARKET CLOSED';
+    statusEl.className   = 'market-badge ' + (open ? 'open' : 'closed');
   }
 
-  var fomcEl = document.getElementById('fomc-badge');
-  if (data.fomc && data.fomc.next) {
-    fomcEl.textContent = 'FOMC: ' + data.fomc.daysAway + 'd';
-    fomcEl.title = 'Next FOMC: ' + data.fomc.next;
-    fomcEl.className = data.fomc.daysAway <= 7 ? 'fomc-badge imminent' : 'fomc-badge';
-  }
-
-  var alertBar = document.getElementById('alert-bar');
-  alertBar.innerHTML = '';
-  var alerts = computeAlerts(data);
-  if (alerts.length === 0) {
-    alertBar.innerHTML = '<div class="alert alert-green"><span class="alert-icon"></span> All systems normal — no threshold breaches.</div>';
-  } else {
-    for (var i = 0; i < alerts.length; i++) {
-      alertBar.innerHTML += '<div class="alert alert-' + alerts[i].level + '"><span class="alert-icon"></span> ' + alerts[i].msg + '</div>';
+  if (data && data.fomc && data.fomc.next) {
+    var fe = document.getElementById('fomc-badge');
+    if (fe) {
+      fe.textContent = 'FOMC: ' + data.fomc.daysAway + 'd';
+      fe.title       = 'Next FOMC: ' + data.fomc.next;
+      fe.className   = 'fomc-badge' + (data.fomc.daysAway <= 7 ? ' imminent' : '');
     }
   }
-
-  // Cache for FX converter + ticker + risk panel preservation
-  cachedYahoo = data.yahoo;
-  cachedFred = data.fred;
-  cacheData('market', data);
-
-  // Render all panels
-  renderYields(data.fred);
-  renderYieldCurve(data.fred);
-  renderFunding(data.nyfed, data.fred);
-  renderRisk(data.yahoo, data.fred);
-  renderCommodities(data.yahoo);
-  renderForex(data.yahoo);
-  renderMacro(data.macro);
-  renderCalendar(data.fomc);
-  renderTicker(data.yahoo);
-  renderMovers(data.yahoo);
-
-  // Source attribution
-  var yDate = data.fred.DGS10 ? data.fred.DGS10.date : null;
-  addSourceAttribution('panel-yields', 'FRED', yDate);
-  addSourceAttribution('panel-funding', 'NY Fed / FRED', data.nyfed.sofr ? data.nyfed.sofr.date : null);
-  addSourceAttribution('panel-risk', 'Yahoo / FRED', data.yahoo.VIX ? data.yahoo.VIX.date : null);
-  addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
-  addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
-  addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
-  addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
-  addSourceAttribution('panel-news', 'Fed / ECB / WSJ / Reuters / CNBC / MarketWatch / Yahoo / Seeking Alpha', null);
-  addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
-
-  initTradingView();
-  initCommoditySelector();
-
-  // Clear error states on successful render
-  var allPanels = document.querySelectorAll('.panel-error');
-  for (var pe = 0; pe < allPanels.length; pe++) allPanels[pe].classList.remove('panel-error');
-
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'grid';
 }
 
-// ============================================
-// DATA FETCHING (with localStorage cache + backoff)
-// ============================================
+
+// ============================================================
+// MAIN RENDER (focused — only 3 sections)
+// ============================================================
+
+function renderDashboard(data) {
+  updateHeader(data);
+
+  // Silent background alerts
+  var alerts = computeAlerts(data);
+  renderAlerts(alerts);
+
+  // Cache for FX converter
+  cachedYahoo = data.yahoo;
+  cachedFred  = data.fred;
+  cacheData('market', data);
+
+  // ── Section 1: Treasury Yields ──────────────────────────
+  renderYieldsHero(data.fred);
+
+  // ── Section 2: Funding & Liquidity ──────────────────────
+  renderFunding(data.nyfed, data.fred, data.macro);
+
+  // ── Section 3: FX Converter ─────────────────────────────
+  renderTicker(data.yahoo);
+  initFxConverter();
+
+  // ── Hide loading, show dashboard ────────────────────────
+  document.getElementById('loading').style.display  = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+}
+
+
+// ============================================================
+// DATA FETCHING (unchanged infrastructure)
+// ============================================================
 
 function fetchData() {
-  if (WORKER_URL.indexOf('YOUR_SUBDOMAIN') !== -1 || WORKER_URL.indexOf('YOUR_') !== -1) {
-    document.getElementById('loading').style.display = 'none';
+  if (WORKER_URL.indexOf('YOUR_') !== -1) {
+    document.getElementById('loading').style.display   = 'none';
     document.getElementById('setup-banner').style.display = 'block';
     return;
   }
   beginFetch();
   fetch(WORKER_URL + '/api/market-data')
-    .then(function(resp) {
-      if (!resp.ok) throw new Error('Worker returned ' + resp.status);
-      return resp.json();
+    .then(function(r) {
+      if (!r.ok) throw new Error('Worker ' + r.status);
+      return r.json();
     })
     .then(function(data) {
       fetchRetryCount = 0;
-      tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
+      tickerBackoff   = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
       lastRefreshTime = Date.now();
       renderDashboard(data);
       updateAgoCounter();
@@ -1312,63 +915,20 @@ function fetchData() {
     .catch(function(err) {
       fetchRetryCount++;
       var cached = getCachedData('market', 3600000);
-      if (cached) {
-        try { renderDashboard(cached); return; } catch (e) {}
-      }
-      // After 3 retries, show error state on panels
-      if (fetchRetryCount >= 3) {
-        var panels = document.querySelectorAll('.panel');
-        for (var p = 0; p < panels.length; p++) panels[p].classList.add('panel-error');
-      }
-      var loading = document.getElementById('loading');
-      if (loading.style.display !== 'none') {
-        loading.innerHTML = '<div class="error-msg">Failed to load market data: ' + err.message
-          + '<br><small>Worker: ' + WORKER_URL + '</small>'
-          + '<br><small>Will retry in 15 minutes. Press R to retry now.</small></div>';
-      }
+      if (cached) { try { renderDashboard(cached); } catch(e){} return; }
+      var el = document.getElementById('loading');
+      if (el) el.innerHTML = '<div class="error-msg">Failed to load: ' + err.message + '<br><small>Will retry. Press R to retry now.</small></div>';
     })
     .finally(endFetch);
 }
 
-// All news now fetched worker-side (Fed, ECB, CNBC, WSJ, Reuters, MarketWatch,
-// Yahoo Finance, Seeking Alpha). No rss2json dependency, no client-side rate limits.
-function fetchNews() {
-  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-
-  fetch(WORKER_URL + '/api/news')
-    .then(function(resp) {
-      if (!resp.ok) throw new Error('Worker news ' + resp.status);
-      return resp.json();
-    })
-    .then(function(data) {
-      var items = data.items || [];
-      cacheData('news', items);
-      renderNews(items);
-    })
-    .catch(function(err) {
-      // Fall back to cached news on failure
-      var cached = getCachedData('news', 7200000); // 2hr stale cache for fallback
-      if (cached) renderNews(cached);
-    });
-}
-
-// Smart ticker refresh -- hits lightweight /api/ticker endpoint (9 symbols only).
-// Full /api/market-data stays on the 15-min timer -- no FRED/NY Fed overhead every 10s.
 function tickerRefresh() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
   fetch(WORKER_URL + '/api/ticker')
-    .then(function(resp) {
-      if (!resp.ok) throw new Error(resp.status);
-      return resp.json();
-    })
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(data) {
-      // Merge ticker symbols into cached full dataset so other panels stay intact
-      cachedYahoo = Object.assign(cachedYahoo || {}, data.yahoo);
+      cachedYahoo   = Object.assign(cachedYahoo || {}, data.yahoo);
       renderTicker(cachedYahoo);
-      renderCommodities(cachedYahoo);
-      renderRisk(cachedYahoo, cachedFred || {});
-      renderMovers(cachedYahoo);
-      renderForexStrip(cachedYahoo);
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
     })
     .catch(function() {
@@ -1380,236 +940,12 @@ function tickerRefresh() {
     });
 }
 
-// ============================================
-// QUICK NOTES (localStorage trading journal)
-// ============================================
 
-function initNotes() {
-  var panel = document.getElementById('notes-panel');
-  var textarea = document.getElementById('notes-text');
-  var savedMsg = document.getElementById('notes-saved');
+// ============================================================
+// UTILITY: refresh indicator
+// ============================================================
 
-  // Load saved notes
-  var saved = localStorage.getItem('td_notes') || '';
-  textarea.value = saved;
-
-  // Auto-save on input
-  var saveTimeout = null;
-  textarea.addEventListener('input', function() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(function() {
-      localStorage.setItem('td_notes', textarea.value);
-      savedMsg.textContent = 'Saved';
-      setTimeout(function() { savedMsg.textContent = ''; }, 1500);
-    }, 500);
-  });
-
-  // Close button
-  document.getElementById('notes-close').addEventListener('click', function() {
-    panel.style.display = 'none';
-  });
-
-  // Clear button
-  document.getElementById('notes-clear').addEventListener('click', function() {
-    if (confirm('Clear all notes?')) {
-      textarea.value = '';
-      localStorage.removeItem('td_notes');
-    }
-  });
-
-  // Toggle button in header
-  document.getElementById('btn-notes').addEventListener('click', function() {
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  });
-}
-
-// ============================================
-// LIVE CATALYSTS — Bloomberg TV + CNBC (dual-screen, stacked)
-// ============================================
-
-// Bloomberg only — live stream now embedded inside the Treasury Yields panel
-var LIVE_CHANNELS = [
-  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' }
-];
-
-function initLiveStreams() {
-  var container = document.getElementById('live-streams');
-  if (!container) return;
-  container.innerHTML = '';
-
-  var live = isMarketOpen();
-
-  // Update the pre-rendered live dot in the Yields panel header
-  var dot = document.getElementById('live-dot-indicator');
-  if (dot) {
-    dot.className = 'live-dot' + (live ? '' : ' live-dot-off');
-  }
-
-  // Bloomberg only — single iframe, no loop needed
-  var ch = LIVE_CHANNELS[0];
-  var iframe = document.createElement('iframe');
-  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
-    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-  iframe.title = ch.label + ' Live';
-  iframe.loading = 'lazy';
-  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-  iframe.setAttribute('allowfullscreen', '');
-  container.appendChild(iframe);
-}
-
-// ============================================
-// ENERGY MOVERS (sorted by % change)
-// ============================================
-
-var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver', 'VIX', 'DXY'];
-var MOVERS_LABELS = {
-  WTI: 'WTI Crude', Brent: 'Brent', NatGas: 'Nat Gas', HeatOil: 'Heat Oil',
-  Copper: 'Copper', Gold: 'Gold', Silver: 'Silver', VIX: 'VIX', DXY: 'DXY'
-};
-
-function renderMovers(yahoo) {
-  var container = document.getElementById('movers-content');
-  if (!container) return;
-  var movers = [];
-  for (var i = 0; i < MOVERS_KEYS.length; i++) {
-    var k = MOVERS_KEYS[i];
-    var d = yahoo[k];
-    if (d && d.current != null && d.prior != null) {
-      var pct = pctChange(d.current, d.prior);
-      if (pct != null) movers.push({ key: k, price: d.current, pct: pct });
-    }
-  }
-  movers.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
-
-  var strip = document.createElement('div');
-  strip.className = 'movers-strip';
-  for (var j = 0; j < movers.length; j++) {
-    var m = movers[j];
-    var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
-    var prefix = isNonDollar ? '' : '$';
-    var chip = document.createElement('div');
-    chip.className = 'mover-chip ' + (m.pct >= 0 ? 'chip-up' : 'chip-down');
-    chip.innerHTML =
-      '<span class="mover-chip-name">' + MOVERS_LABELS[m.key] + '</span>' +
-      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2) + '</span>' +
-      '<span class="mover-chip-pct">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
-    strip.appendChild(chip);
-  }
-  container.innerHTML = '';
-  container.appendChild(strip);
-}
-
-// ============================================
-// KEYBOARD SHORTCUTS
-// ============================================
-
-function initShortcuts() {
-  document.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-      if (e.key === 'Escape') {
-        document.getElementById('notes-panel').style.display = 'none';
-        e.target.blur();
-      }
-      return;
-    }
-
-    var modal = document.getElementById('shortcuts-modal');
-
-    if (e.key === 'Escape') {
-      modal.style.display = 'none';
-      document.getElementById('notes-panel').style.display = 'none';
-      return;
-    }
-    if (e.key === '?' || e.key === '/') {
-      e.preventDefault();
-      modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
-      return;
-    }
-    if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      if (Date.now() - lastManualRefresh < 3000) return;
-      lastManualRefresh = Date.now();
-      fetchData();
-      fetchNews();
-      return;
-    }
-    if (e.key === 'n' || e.key === 'N') {
-      e.preventDefault();
-      document.getElementById('panel-news').classList.toggle('collapsed');
-      return;
-    }
-    if (e.key === 'c' || e.key === 'C') {
-      e.preventDefault();
-      document.getElementById('panel-calendar').classList.toggle('collapsed');
-      return;
-    }
-    if (e.key === 'j' || e.key === 'J') {
-      e.preventDefault();
-      var np = document.getElementById('notes-panel');
-      np.style.display = np.style.display === 'none' ? 'block' : 'none';
-      if (np.style.display === 'block') document.getElementById('notes-text').focus();
-      return;
-    }
-    if (e.key === 'l' || e.key === 'L') {
-      e.preventDefault();
-      var liveEl = document.getElementById('panel-live');
-      if (liveEl) liveEl.classList.toggle('collapsed');
-      return;
-    }
-  });
-
-  document.getElementById('btn-refresh').addEventListener('click', function() {
-    if (Date.now() - lastManualRefresh < 3000) return;
-    lastManualRefresh = Date.now();
-    fetchData();
-    fetchNews();
-  });
-  document.getElementById('btn-shortcuts').addEventListener('click', function() {
-    var modal = document.getElementById('shortcuts-modal');
-    modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
-  });
-  document.getElementById('modal-close').addEventListener('click', function() {
-    document.getElementById('shortcuts-modal').style.display = 'none';
-  });
-  document.getElementById('shortcuts-modal').addEventListener('click', function(e) {
-    if (e.target === this) this.style.display = 'none';
-  });
-
-  var panels = document.querySelectorAll('.panel h2');
-  for (var i = 0; i < panels.length; i++) {
-    panels[i].addEventListener('click', function() {
-      this.parentElement.classList.toggle('collapsed');
-      savePanelPrefs();
-    });
-  }
-}
-
-// ============================================
-// SKELETON LOADING (per-panel placeholders)
-// ============================================
-
-function showSkeletons() {
-  var grids = ['yields-grid', 'funding-grid', 'risk-grid', 'credit-grid'];
-  for (var i = 0; i < grids.length; i++) {
-    var g = document.getElementById(grids[i]);
-    if (!g || g.children.length > 0) continue;
-    var count = 4;
-    for (var j = 0; j < count; j++) {
-      var sk = document.createElement('div');
-      sk.className = 'metric';
-      sk.innerHTML = '<div class="skeleton-line sk-sm"></div><div class="skeleton-line sk-lg"></div><div class="skeleton-line sk-sm"></div>';
-      g.appendChild(sk);
-    }
-  }
-}
-
-// ============================================
-// REFRESH INDICATOR (spin button + updated-ago counter)
-// ============================================
-
-var lastRefreshTime = 0;
-var fetchInFlight = 0;
-
+var fetchInFlight2 = 0;
 function beginFetch() {
   fetchInFlight++;
   var btn = document.getElementById('btn-refresh');
@@ -1624,7 +960,7 @@ function endFetch() {
 }
 function updateAgoCounter() {
   if (!lastRefreshTime) return;
-  var secs = Math.round((Date.now() - lastRefreshTime) / 1000);
+  var secs  = Math.round((Date.now() - lastRefreshTime) / 1000);
   var label = secs < 60 ? secs + 's ago' : Math.floor(secs / 60) + 'm ago';
   var el = document.getElementById('updated-ago');
   if (!el) {
@@ -1633,115 +969,126 @@ function updateAgoCounter() {
     var meta = document.getElementById('header-meta');
     if (meta) meta.appendChild(el);
   }
-  el.textContent = ' | Updated ' + label;
+  el.textContent = '  ·  ' + label;
 }
 
-// ============================================
-// DENSITY TOGGLE
-// ============================================
 
-function initDensityToggle() {
-  var saved = localStorage.getItem('td_density');
-  if (saved === 'compact') document.body.classList.add('density-compact');
-  var btn = document.getElementById('btn-density');
-  if (!btn) return;
-  btn.textContent = document.body.classList.contains('density-compact') ? 'Comfortable' : 'Compact';
-  btn.addEventListener('click', function() {
-    document.body.classList.toggle('density-compact');
-    var isCompact = document.body.classList.contains('density-compact');
-    btn.textContent = isCompact ? 'Comfortable' : 'Compact';
-    localStorage.setItem('td_density', isCompact ? 'compact' : 'comfortable');
+// ============================================================
+// QUICK NOTES
+// ============================================================
+
+function initNotes() {
+  var panel   = document.getElementById('notes-panel');
+  var textarea = document.getElementById('notes-text');
+  var saved   = localStorage.getItem('td_notes') || '';
+  textarea.value = saved;
+
+  var saveT = null;
+  textarea.addEventListener('input', function() {
+    clearTimeout(saveT);
+    saveT = setTimeout(function() {
+      localStorage.setItem('td_notes', textarea.value);
+      var msg = document.getElementById('notes-saved');
+      if (msg) { msg.textContent = 'Saved'; setTimeout(function(){ msg.textContent=''; }, 1500); }
+    }, 500);
+  });
+  document.getElementById('notes-close').addEventListener('click', function(){
+    panel.style.display = 'none';
+  });
+  document.getElementById('notes-clear').addEventListener('click', function(){
+    if (confirm('Clear all notes?')) {
+      textarea.value = '';
+      localStorage.removeItem('td_notes');
+    }
+  });
+  document.getElementById('btn-notes').addEventListener('click', function(){
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (panel.style.display === 'block') textarea.focus();
   });
 }
 
-// ============================================
-// PANEL PREFS (persist collapsed state)
-// ============================================
 
-function loadPanelPrefs() {
-  try {
-    var prefs = JSON.parse(localStorage.getItem('td_panel_prefs') || '{}');
-    var ids = Object.keys(prefs);
-    for (var i = 0; i < ids.length; i++) {
-      if (prefs[ids[i]].collapsed) {
-        var el = document.getElementById(ids[i]);
-        if (el) el.classList.add('collapsed');
-      }
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+
+function initShortcuts() {
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' ||
+        e.target.tagName === 'SELECT') {
+      if (e.key === 'Escape') { e.target.blur(); }
+      return;
     }
-  } catch (e) {}
-}
-
-function savePanelPrefs() {
-  var panels = document.querySelectorAll('.panel[id]');
-  var prefs = {};
-  for (var i = 0; i < panels.length; i++) {
-    if (panels[i].classList.contains('collapsed')) {
-      prefs[panels[i].id] = { collapsed: true };
+    var modal = document.getElementById('shortcuts-modal');
+    if (e.key === 'Escape') {
+      modal.style.display = 'none';
+      document.getElementById('notes-panel').style.display = 'none';
+      return;
     }
-  }
-  try { localStorage.setItem('td_panel_prefs', JSON.stringify(prefs)); } catch (e) {}
+    if (e.key === '?' || e.key === '/') {
+      e.preventDefault();
+      modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+      return;
+    }
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
+      e.preventDefault();
+      if (Date.now() - lastManualRefresh < 3000) return;
+      lastManualRefresh = Date.now();
+      fetchData();
+      return;
+    }
+    if (e.key === 'j' || e.key === 'J') {
+      e.preventDefault();
+      var np = document.getElementById('notes-panel');
+      np.style.display = np.style.display === 'none' ? 'block' : 'none';
+      if (np.style.display === 'block') document.getElementById('notes-text').focus();
+      return;
+    }
+  });
+
+  document.getElementById('btn-refresh').addEventListener('click', function() {
+    if (Date.now() - lastManualRefresh < 3000) return;
+    lastManualRefresh = Date.now();
+    fetchData();
+  });
+  document.getElementById('btn-shortcuts').addEventListener('click', function() {
+    var modal = document.getElementById('shortcuts-modal');
+    modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+  });
+  document.getElementById('modal-close').addEventListener('click', function() {
+    document.getElementById('shortcuts-modal').style.display = 'none';
+  });
+  document.getElementById('shortcuts-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
 }
 
-// ============================================
-// LAZY INIT UTILITY (IntersectionObserver)
-// ============================================
 
-function lazyInit(panelId, initFn) {
-  var panel = document.getElementById(panelId);
-  if (!panel) { initFn(); return; }
-  if ('IntersectionObserver' in window) {
-    var obs = new IntersectionObserver(function(entries) {
-      if (entries[0].isIntersecting) { initFn(); obs.disconnect(); }
-    }, { rootMargin: '300px' });
-    obs.observe(panel);
-  } else {
-    setTimeout(initFn, 1500);
-  }
-}
-
-// ============================================
-// ERROR RETRY COUNTER
-// ============================================
-
-var fetchRetryCount = 0;
-
-// ============================================
+// ============================================================
 // INIT
-// ============================================
+// ============================================================
 
-// 0. Show dashboard grid immediately with skeletons
-document.getElementById('dashboard').style.display = 'grid';
-showSkeletons();
-loadPanelPrefs();
-initDensityToggle();
+// Show dashboard immediately (no skeleton — clean initial state)
+document.getElementById('dashboard').style.display = 'block';
 
-// 1. Show cached data instantly if available
-var cachedMarket = getCachedData('market', 600000); // 10 min cache
+// 1. Load from cache for instant display
+var cachedMarket = getCachedData('market', 600000);
 if (cachedMarket) {
-  try { renderDashboard(cachedMarket); } catch (e) {}
-}
-var cachedNews = getCachedData('news', 3600000); // 1 hr cache
-if (cachedNews) {
-  try { renderNews(cachedNews); } catch (e) {}
+  try { renderDashboard(cachedMarket); } catch(e) {}
 }
 
-// 2. Background fresh fetch
+// 2. Fresh fetch in background
 fetchData();
-fetchNews();
 
-// 3. Set up refresh timers
+// 3. Timers
 refreshTimer = setInterval(fetchData, REFRESH_MS);
-newsTimer = setInterval(fetchNews, NEWS_REFRESH_MS);
 
-// 4. Start smart ticker refresh (10s during market hours)
+// 4. Fast ticker refresh
 tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
 
-// 5. Init interactive features
+// 5. Interactivity
 initShortcuts();
 initNotes();
 
-// 6. Lazy-init heavy widgets
-lazyInit('panel-live', initLiveStreams);
-
-// 7. Updated-ago counter (ticks every 10s)
+// 6. Updated-ago counter
 setInterval(updateAgoCounter, 10000);
