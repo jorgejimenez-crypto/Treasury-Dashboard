@@ -216,17 +216,28 @@ function renderYieldsSection(fred, yieldsHist) {
   }
 
   // Persist for offline/weekend fallback
+  // Saves t1, t7, t14 per maturity so all three lines survive a FRED outage or
+  // stale localStorage cache. Note: cached t7/t14 become slightly stale day-on-day
+  // (a cached "T-7" is tomorrow's "T-8") but the visual comparison remains useful.
   var anyLive = t1.some(function(v){ return v!=null; });
   if (anyLive) {
     var snap = {};
-    for (var j=0; j<CURVE_KEYS.length; j++)
-      if (t1[j]!=null) snap[CURVE_KEYS[j]] = { value: t1[j].toFixed(2)+'%', date: t1Dates[j] };
+    for (var j=0; j<CURVE_KEYS.length; j++) {
+      snap[CURVE_KEYS[j]] = {
+        t1:  t1[j]  != null ? t1[j].toFixed(3)  : null,
+        t7:  t7[j]  != null ? t7[j].toFixed(3)  : null,
+        t14: t14[j] != null ? t14[j].toFixed(3) : null,
+        date: t1Dates[j] || ''
+      };
+    }
     knownYields = snap; saveKnown('yields', snap);
   }
-  // Fill gaps from cache
+  // Fill gaps from cache — T-1 always, T-7/T-14 only when yieldsHist returned null
   for (var k=0; k<CURVE_KEYS.length; k++) {
-    if (t1[k]==null && knownYields && knownYields[CURVE_KEYS[k]])
-      t1[k] = parseFloat(knownYields[CURVE_KEYS[k]].value) || null;
+    var ky = knownYields && knownYields[CURVE_KEYS[k]];
+    if (t1[k]==null  && ky && ky.t1  != null) t1[k]  = parseFloat(ky.t1)  || null;
+    if (t7[k]==null  && ky && ky.t7  != null) t7[k]  = parseFloat(ky.t7)  || null;
+    if (t14[k]==null && ky && ky.t14 != null) t14[k] = parseFloat(ky.t14) || null;
   }
 
   // ── Build column labels (use dates if available) ─────────────
@@ -447,7 +458,8 @@ function buildYieldTable(t1, t7, t14, col1, col7, col14) {
 
 // === SECTION 2 — FUNDING & LIQUIDITY ============================
 //
-// 6 cards: EFFR · SOFR · SOFR 30D · OBFR · TSY 1M · TSY 3M
+// 5 cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
+// OBFR removed. EFFR at position 3 (policy-rate reference).
 // Graceful fallback to knownFunding for weekend / outage resilience.
 
 function renderFunding(nyfed, fred) {
@@ -458,16 +470,13 @@ function renderFunding(nyfed, fred) {
   // Pull live values, fall back to persisted
   var effrLive = nyfed && nyfed.effr && nyfed.effr.rate != null;
   var sofrLive = nyfed && nyfed.sofr && nyfed.sofr.rate != null;
-  var obfrLive = nyfed && nyfed.obfr && nyfed.obfr.rate != null;
 
   var effr  = effrLive ? nyfed.effr  : knownFunding.effr;
   var sofr  = sofrLive ? nyfed.sofr  : knownFunding.sofr;
-  var obfr  = obfrLive ? nyfed.obfr  : knownFunding.obfr;
 
   if (effrLive) knownFunding.effr = nyfed.effr;
   if (sofrLive) knownFunding.sofr = nyfed.sofr;
-  if (obfrLive) knownFunding.obfr = nyfed.obfr;
-  if (effrLive || sofrLive || obfrLive) saveKnown('funding', knownFunding);
+  if (effrLive || sofrLive) saveKnown('funding', knownFunding);
 
   var sofr30 = fred && fred.SOFR30DAYAVG;
   var tsy1m  = fred && fred.DGS1MO;
@@ -482,16 +491,8 @@ function renderFunding(nyfed, fred) {
     spread.textContent = '';
   }
 
-  // Card definitions
+  // Card definitions — ordered: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
   var cards = [
-    {
-      label: 'EFFR',
-      sub:   'Effective Fed Funds',
-      value: effr  && effr.rate  != null ? effr.rate.toFixed(2)+'%'  : null,
-      date:  effr  && effr.date  ? effr.date  : '',
-      stale: !effrLive && !!effr,
-      ok:    effrLive
-    },
     {
       label: 'SOFR',
       sub:   'Secured Overnight',
@@ -510,12 +511,12 @@ function renderFunding(nyfed, fred) {
       ok:    sofr30 && sofr30.current != null
     },
     {
-      label: 'OBFR',
-      sub:   'Overnight Bank Funding',
-      value: obfr  && obfr.rate  != null ? obfr.rate.toFixed(2)+'%'  : null,
-      date:  obfr  && obfr.date  ? obfr.date  : '',
-      stale: !obfrLive && !!obfr,
-      ok:    obfrLive
+      label: 'EFFR',
+      sub:   'Effective Fed Funds',
+      value: effr  && effr.rate  != null ? effr.rate.toFixed(2)+'%'  : null,
+      date:  effr  && effr.date  ? effr.date  : '',
+      stale: !effrLive && !!effr,
+      ok:    effrLive
     },
     {
       label: 'TSY 1M',
@@ -690,7 +691,12 @@ function wireAutocomplete(input, listEl) {
   }
 
   input.addEventListener('focus', function(){ render(input.value); });
-  input.addEventListener('input', function(){ input.value=input.value.toUpperCase(); render(input.value); });
+  input.addEventListener('input', function(){
+    input.value = input.value.toUpperCase();
+    render(input.value);
+    // Recompute immediately when a valid 3-letter currency code is typed directly
+    if (FX_CURRENCIES.indexOf(input.value) !== -1) computeFx();
+  });
   input.addEventListener('blur',  function(){
     setTimeout(function(){
       listEl.style.display='none';
@@ -715,6 +721,10 @@ function computeFx() {
   var trendEl = document.getElementById('fx-rate-trend');
   if (!resEl) return;
 
+  // Update the base-currency badge next to the amount input
+  var badge = document.getElementById('fx-base-badge');
+  if (badge && FX_CURRENCIES.indexOf(base) !== -1) badge.textContent = base;
+
   function clear(msg) {
     resEl.textContent=msg||'—';
     if(fwdEl)   fwdEl.textContent='';
@@ -724,30 +734,31 @@ function computeFx() {
 
   if (isNaN(amount)||amount<=0) return clear('—');
   if (base===quote) {
-    resEl.textContent = amount.toLocaleString('en-US',{minimumFractionDigits:2})+' '+quote;
+    // Same currency: just echo with the currency code
+    resEl.textContent = amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+quote;
     if(fwdEl) fwdEl.textContent='1:1'; if(revEl) revEl.textContent=''; return;
   }
 
   var bUSD = getToUSD(base), qUSD = getToUSD(quote);
   if (!bUSD||!qUSD) return clear('Rate unavailable');
 
-  var cross = bUSD/qUSD;
+  var cross  = bUSD / qUSD;
   var result = amount * cross;
 
-  // Animated flash on change
+  // Result: "1,234,567.89 EUR" — number + output currency code
   var newTxt = result.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+quote;
   if (resEl.textContent !== newTxt) {
     resEl.classList.remove('fx-flash'); void resEl.offsetWidth;
     resEl.classList.add('fx-flash'); resEl.textContent = newTxt;
   }
 
-  // Rates
+  // Exchange rate lines
   var dec  = cross    > 10 ? 2 : 4;
   var decR = 1/cross  > 10 ? 2 : 4;
   if (fwdEl) fwdEl.textContent = '1 '+base+' = '+cross.toFixed(dec)+' '+quote;
   if (revEl) revEl.textContent = '1 '+quote+' = '+(1/cross).toFixed(decR)+' '+base;
 
-  // Trend vs prior
+  // Trend vs prior close
   if (trendEl) {
     var bP=getToUSDPrior(base), qP=getToUSDPrior(quote);
     if (bP&&qP) {

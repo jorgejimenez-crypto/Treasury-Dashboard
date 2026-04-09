@@ -438,10 +438,10 @@ body {
   font-family: var(--mono); color: var(--text-2);
 }
 
-/* 6-card responsive grid */
+/* 5-card responsive grid (OBFR removed) */
 .funding-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
 }
 @media (max-width:1080px) { .funding-grid { grid-template-columns: repeat(3,1fr); } }
@@ -562,8 +562,26 @@ body {
   margin-bottom: 5px;
 }
 .fx-amount-wrap { flex: 2; min-width: 120px; }
+/* Wrapper that positions the currency badge inside the amount field */
+.fx-amount-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.fx-base-badge {
+  position: absolute;
+  right: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
 .fx-amount {
   width: 100%;
+  padding-right: 42px; /* room for the currency badge */
   background: var(--bg-inset); border: 1px solid var(--border);
   color: var(--text); padding: 10px 13px;
   border-radius: var(--radius-sm);

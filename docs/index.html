@@ -173,8 +173,11 @@
       <div class="fx-inputs">
         <div class="fx-amount-wrap">
           <label class="fx-label">Amount</label>
-          <input type="number" id="fx-amount" class="fx-amount"
-                 value="1000000" step="250000" autocomplete="off">
+          <div class="fx-amount-inner">
+            <input type="number" id="fx-amount" class="fx-amount"
+                   value="1000000" step="250000" autocomplete="off">
+            <span id="fx-base-badge" class="fx-base-badge">USD</span>
+          </div>
         </div>
         <div class="fx-ccy-col">
           <label class="fx-label">From</label>
