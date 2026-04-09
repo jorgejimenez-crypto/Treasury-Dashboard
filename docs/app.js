@@ -18,6 +18,7 @@ var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev'
 var REFRESH_MS          = 15 * 60 * 1000;
 var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
+var NEWS_REFRESH_MS     = 30 * 60 * 1000;   // news refreshes every 30 min
 
 // Silent alert thresholds (kept for background risk monitoring)
 var THRESHOLDS = {
@@ -67,12 +68,14 @@ var COMMODITY_LABELS= {
 
 var yieldBarChart       = null;
 var refreshTimer        = null;
+var newsTimer           = null;    // 30-min news refresh
 var tickerTimer         = null;
 var cachedYahoo         = null;
 var cachedFred          = null;
 var tickerBackoff       = TICKER_REFRESH_MS;
 var lastManualRefresh   = 0;
 var fxConverterReady    = false;
+var liveStreamLoaded    = false;   // Bloomberg iframe injected once
 var lastRefreshTime     = 0;
 var fetchInFlight       = 0;
 var fetchRetryCount     = 0;
@@ -733,6 +736,128 @@ function computeFx() {
 }
 
 
+// === LIVE CATALYST — Bloomberg TV ===============================
+// Lazy-injects a muted YouTube live iframe once.
+// The outer wrapper uses padding-top: 56.25% for 16:9 aspect ratio.
+
+function initLiveStream() {
+  if (liveStreamLoaded) return;
+  var wrap = document.getElementById('catalyst-frame-wrap');
+  if (!wrap) return;
+  liveStreamLoaded = true;
+
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/live_stream'
+    + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
+    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  iframe.title       = 'Bloomberg Television Live';
+  iframe.loading     = 'lazy';
+  iframe.allow       = 'autoplay; encrypted-media; picture-in-picture';
+  iframe.allowFullscreen = true;
+  wrap.innerHTML = '';
+  wrap.appendChild(iframe);
+
+  // Live-dot: green if market hours, dim otherwise
+  var pip = document.getElementById('live-dot');
+  if (pip) pip.className = 'live-indicator ' + (isOpen() ? 'live-on' : 'live-off');
+}
+
+
+// === NEWS & INTELLIGENCE =========================================
+// Renders up to 8 news items: headline · source · timestamp.
+// Falls back to localStorage cache (2 hr) on fetch failure.
+
+function formatTime(dateStr) {
+  try {
+    var d    = new Date(dateStr);
+    if (isNaN(d)) return '';
+    var diff = Date.now() - d;
+    if (diff < 60000)    return 'just now';
+    if (diff < 3600000)  return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch(e) { return ''; }
+}
+
+function renderNews(items) {
+  var feed    = document.getElementById('news-list');
+  var counter = document.getElementById('news-count');
+  var updLbl  = document.getElementById('news-updated-lbl');
+  if (!feed) return;
+
+  if (!items || !items.length) {
+    feed.innerHTML = '<div class="news-empty">No news available — refreshes every 30 min.</div>';
+    if (counter) counter.textContent = '';
+    return;
+  }
+
+  var shown = items.slice(0, 8);   // max 8 items
+
+  if (counter) {
+    counter.textContent = items.length;
+  }
+  if (updLbl && shown[0] && shown[0].date) {
+    updLbl.textContent = formatTime(shown[0].date);
+  }
+
+  feed.innerHTML = '';
+  shown.forEach(function(item) {
+    var el  = document.createElement('article');
+    el.className = 'news-item';
+
+    // Tag pill
+    if (item.tag) {
+      var tag = document.createElement('span');
+      tag.className   = 'news-tag news-tag-' + item.tag.toUpperCase();
+      tag.textContent = item.tag;
+      el.appendChild(tag);
+    }
+
+    // Headline link
+    var title = document.createElement('div');
+    title.className = 'news-title';
+    if (item.link) {
+      var a     = document.createElement('a');
+      a.href    = item.link;
+      a.target  = '_blank';
+      a.rel     = 'noopener';
+      a.textContent = item.title;
+      title.appendChild(a);
+    } else {
+      title.textContent = item.title;
+    }
+    el.appendChild(title);
+
+    // Meta: source + time
+    var meta = document.createElement('div');
+    meta.className = 'news-meta';
+    var parts = [];
+    if (item.source) parts.push('<span class="news-source">' + item.source + '</span>');
+    if (item.date)   parts.push('<span class="news-time">'   + formatTime(item.date) + '</span>');
+    meta.innerHTML = parts.join('<span class="news-sep">·</span>');
+    el.appendChild(meta);
+
+    feed.appendChild(el);
+  });
+}
+
+function fetchNews() {
+  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
+  fetch(WORKER_URL + '/api/news')
+    .then(function(r) { if (!r.ok) throw new Error('news ' + r.status); return r.json(); })
+    .then(function(data) {
+      var items = (data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+      cacheData('news', items);
+      renderNews(items);
+    })
+    .catch(function() {
+      // Graceful fallback to cached news (up to 2 hr stale)
+      var cached = getCachedData('news', 7200000);
+      if (cached) renderNews(cached);
+    });
+}
+
+
 // === HEADER =====================================================
 
 function updateHeader(data) {
@@ -781,6 +906,13 @@ function renderDashboard(data) {
 
   // Section 3: FX Converter
   initFxConverter();
+
+  // Secondary: Bloomberg TV (lazy — injected once on first render)
+  initLiveStream();
+
+  // Secondary: News (uses cached data; live data fetched on separate timer)
+  var cachedNews = getCachedData('news', 7200000);
+  if (cachedNews) renderNews(cachedNews);
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
@@ -893,7 +1025,9 @@ var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
-refreshTimer = setInterval(fetchData, REFRESH_MS);
+fetchNews();    // initial news load (separate from market data)
+refreshTimer = setInterval(fetchData,  REFRESH_MS);
+newsTimer    = setInterval(fetchNews,  NEWS_REFRESH_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
