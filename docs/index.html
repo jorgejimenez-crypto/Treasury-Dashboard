@@ -39,6 +39,16 @@
   </div>
 </header>
 
+<!-- === MARKET TICKER ===========================
+     Slim continuously-scrolling live data strip.
+     SP500 · DXY · WTI · Gold · EUR/USD · VIX
+     + 2Y UST / 10Y UST from FRED daily data
+     Pauses on hover. Updates every 10s market hours.
+================================================ -->
+<div id="market-ticker" aria-hidden="true" title="Hover to pause">
+  <div id="ticker-content">Loading&hellip;</div>
+</div>
+
 <!-- === ALERT BAR ======================================
      Silent by default. Surfaces only on threshold breach.
 ======================================================= -->

@@ -535,7 +535,7 @@ async function fetchFREDYieldSeries(series, apiKey) {
   try {
     var url = 'https://api.stlouisfed.org/fred/series/observations'
       + '?series_id=' + series.id + '&api_key=' + apiKey
-      + '&file_type=json&sort_order=desc&limit=20';
+      + '&file_type=json&sort_order=desc&limit=30';
     var resp = await fetch(url);
     var data = await resp.json();
     var obs = (data.observations || []).filter(function(o) { return o.value !== '.'; });
@@ -564,7 +564,7 @@ function findClosestObs(obs, targetMs) {
     var diff = Math.abs(d - targetMs);
     if (diff < bestDiff) { bestDiff = diff; best = obs[i]; }
   }
-  return bestDiff <= 3 * 86400000 ? best : null;  // 3-day tolerance
+  return bestDiff <= 5 * 86400000 ? best : null;  // 5-day tolerance — handles 4-day holiday weekends
 }
 
 // ============================================

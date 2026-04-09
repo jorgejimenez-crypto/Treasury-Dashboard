@@ -78,6 +78,58 @@ body {
 ::-webkit-scrollbar-thumb:hover { background:var(--border-hi); }
 
 
+/* === MARKET TICKER ========================================= */
+/* Slim scrolling strip. Pauses on hover.                    */
+
+#market-ticker {
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  height: 34px;
+  overflow: hidden;
+  position: relative;
+  /* Edge fade for a clean look */
+  -webkit-mask-image: linear-gradient(90deg,transparent 0%,#000 4%,#000 96%,transparent 100%);
+  mask-image:         linear-gradient(90deg,transparent 0%,#000 4%,#000 96%,transparent 100%);
+}
+
+#ticker-content {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  white-space: nowrap;
+  /* Duration tuned to item count — 80s for comfortable reading */
+  animation: ticker-scroll 80s linear infinite;
+  will-change: transform;
+}
+#ticker-content:hover { animation-play-state: paused; cursor: default; }
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.tk-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 18px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.tk-lbl {
+  color: var(--text-3);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tk-val  { color: var(--text); font-weight: 600; }
+.tk-chg  { font-size: 10.5px; font-weight: 600; }
+.tk-up   { color: var(--green); }
+.tk-dn   { color: var(--red);   }
+.tk-flat { color: var(--text-3); }
+.tk-sep  { color: var(--border-md); font-size: 10px; padding: 0 4px; }
+
+
 /* === HEADER ================================================ */
 
 #app-header {
@@ -299,7 +351,7 @@ body {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
-/* Chart legend */
+/* Chart legend — line style swatches */
 .chart-legend {
   display: flex;
   gap: 18px;
@@ -311,9 +363,22 @@ body {
   font-size: 11px; color: var(--text-2);
   font-family: var(--mono);
 }
+/* Solid swatch for T-1 */
 .leg-swatch {
-  width: 14px; height: 11px;
-  border-radius: 3px; flex-shrink: 0;
+  width: 24px; height: 3px;
+  border-radius: 2px; flex-shrink: 0;
+}
+/* Dashed swatch for T-7 */
+.leg-dashed {
+  width: 24px; height: 0;
+  border-top: 2px dashed;
+  flex-shrink: 0;
+}
+/* Dotted swatch for T-14 */
+.leg-dotted {
+  width: 24px; height: 0;
+  border-top: 2px dotted;
+  flex-shrink: 0;
 }
 
 /* Precision data table */

@@ -33,6 +33,21 @@ var THRESHOLDS = {
 var CURVE_KEYS   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
 var CURVE_LABELS = ['1M', '3M', '6M'];
 
+// === TICKER ITEMS =====================================================
+// Sources: yahoo (10s live) + fred (daily, from 15-min full refresh)
+// Includes FRED 2Y/10Y for a complete treasury desk view.
+
+var TICKER_ITEMS = [
+  { key:'SP500',  label:'S&P 500', src:'yahoo', prefix:'',  fmt:0, suffix:'' },
+  { key:'DGS2',   label:'2Y UST',  src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
+  { key:'DGS10',  label:'10Y UST', src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
+  { key:'DXY',    label:'DXY',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
+  { key:'WTI',    label:'WTI',     src:'yahoo', prefix:'$', fmt:2, suffix:'' },
+  { key:'Gold',   label:'Gold',    src:'yahoo', prefix:'$', fmt:0, suffix:'' },
+  { key:'EURUSD', label:'EUR/USD', src:'yahoo', prefix:'',  fmt:4, suffix:'' },
+  { key:'VIX',    label:'VIX',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
+];
+
 // FX — expanded 16-currency list for converter
 var FX_CURRENCIES = [
   'USD','EUR','GBP','JPY','AUD','CAD','CHF','CNH',
@@ -66,7 +81,7 @@ var COMMODITY_LABELS= {
 
 // === STATE ======================================================
 
-var yieldBarChart       = null;
+var yieldChart          = null;   // Chart.js line chart instance
 var refreshTimer        = null;
 var newsTimer           = null;    // 30-min news refresh
 var tickerTimer         = null;
@@ -242,7 +257,13 @@ function renderYieldsSection(fred, yieldsHist) {
   if (src && sample && sample.t1Date) src.textContent = 'FRED · '+sample.t1Date;
 }
 
-// ── Chart.js grouped bar ─────────────────────────────────────
+// === SHORT-TERM TREASURY YIELDS — Line Chart ====================
+//
+// Maturity comparison chart: 3 x-axis points (1M · 3M · 6M)
+// 3 series: T-1 (solid blue, filled) · T-7 (dashed indigo) · T-14 (dotted slate)
+//
+// Not a time-series — this is a snapshot of the yield curve shape
+// across maturities at three different points in time.
 
 function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   var canvas = document.getElementById('yield-bar-canvas');
@@ -250,48 +271,59 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
 
   var datasets = [
     {
-      // T-1 (latest) — dominant, bright blue, value labels shown
+      // T-1 (latest) — most prominent: solid line, filled area, large points
       label: lbl1,
       data: t1,
-      backgroundColor: 'rgba(59,130,246,0.88)',
-      borderColor:     'rgba(96,165,250,1)',
-      borderWidth: 1,
-      borderRadius: 5,
-      borderSkipped: false,
-      barPercentage: 0.82,
-      categoryPercentage: 0.78,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.07)',
+      borderWidth: 2.5,
+      fill: true,
+      tension: 0,
+      pointRadius: 7,
+      pointHoverRadius: 9,
+      pointBackgroundColor: '#3b82f6',
+      pointBorderColor: 'var(--bg-inset, #0b0f17)',
+      pointBorderWidth: 2,
       datalabels: {
         display: true,
-        anchor: 'end', align: 'top', offset: 4,
+        anchor: 'end', align: 'top', offset: 6,
         color: '#e2e8f0',
         font: { size: 12, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
         formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
       }
     },
     {
-      // T-7 — secondary, indigo, no labels (tooltip only)
+      // T-7 — secondary: dashed indigo, medium points
       label: lbl7,
       data: t7,
-      backgroundColor: 'rgba(99,102,241,0.55)',
-      borderColor:     'rgba(129,140,248,0.7)',
-      borderWidth: 1,
-      borderRadius: 4,
-      borderSkipped: false,
-      barPercentage: 0.82,
-      categoryPercentage: 0.78,
+      borderColor: 'rgba(99,102,241,0.80)',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [6, 4],
+      fill: false,
+      tension: 0,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      pointBackgroundColor: '#6366f1',
+      pointBorderColor: 'var(--bg-inset, #0b0f17)',
+      pointBorderWidth: 1.5,
       datalabels: { display: false }
     },
     {
-      // T-14 — background reference, slate, no labels (tooltip only)
+      // T-14 — background reference: loosely dotted slate, small points
       label: lbl14,
       data: t14,
-      backgroundColor: 'rgba(100,116,139,0.38)',
-      borderColor:     'rgba(148,163,184,0.5)',
-      borderWidth: 1,
-      borderRadius: 4,
-      borderSkipped: false,
-      barPercentage: 0.82,
-      categoryPercentage: 0.78,
+      borderColor: 'rgba(100,116,139,0.60)',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [2, 5],
+      fill: false,
+      tension: 0,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      pointBackgroundColor: '#64748b',
+      pointBorderColor: 'var(--bg-inset, #0b0f17)',
+      pointBorderWidth: 1,
       datalabels: { display: false }
     }
   ];
@@ -299,11 +331,13 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   var opts = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: { padding: { top: 40, bottom: 8, left: 4, right: 4 } },
+    layout: { padding: { top: 40, bottom: 8, left: 8, right: 8 } },
     plugins: {
       legend: { display: false },
       datalabels: {},
       tooltip: {
+        mode: 'index',           // show all 3 series on hover
+        intersect: false,
         backgroundColor: 'rgba(10,14,22,0.97)',
         titleColor: '#f1f5f9',
         titleFont: { size: 13, weight: '700' },
@@ -321,6 +355,7 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
           label: function(ctx) {
             var v = ctx.parsed.y;
             if (v == null) return '  ' + ctx.dataset.label + ':  N/A';
+            // Show rate + bps delta vs T-1 for T-7 and T-14
             var t1val = ctx.chart.data.datasets[0].data[ctx.dataIndex];
             var line  = '  ' + ctx.dataset.label + ':  ' + v.toFixed(3) + '%';
             if (ctx.datasetIndex > 0 && t1val != null) {
@@ -328,17 +363,6 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
               line += '   ' + sgn(chg) + chg + ' bps vs T-1';
             }
             return line;
-          },
-          afterBody: function(items) {
-            // Show T-1 vs T-7 and T-1 vs T-14 summary for the first item
-            if (items[0].datasetIndex !== 0) return [];
-            var idx = items[0].dataIndex;
-            var ds  = items[0].chart.data.datasets;
-            var v1  = ds[0].data[idx], v7 = ds[1].data[idx], v14 = ds[2].data[idx];
-            var lines = [''];
-            if (v1!=null && v7!=null)  { var d7  = Math.round((v1-v7)*100);  lines.push('  Δ vs T-7:   '+sgn(d7)+d7+' bps'); }
-            if (v1!=null && v14!=null) { var d14 = Math.round((v1-v14)*100); lines.push('  Δ vs T-14:  '+sgn(d14)+d14+' bps'); }
-            return lines.length > 1 ? lines : [];
           }
         }
       }
@@ -354,30 +378,30 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
         border:{ display: false },
         ticks: {
           color: '#64748b', font: { size: 11 }, padding: 10,
-          callback: function(v) { return v.toFixed(1) + '%'; }
+          callback: function(v) { return v.toFixed(2) + '%'; }
         }
       }
     }
   };
 
-  if (yieldBarChart) {
-    yieldBarChart.data.labels   = CURVE_LABELS;
-    yieldBarChart.data.datasets = datasets;
-    yieldBarChart.update('active');
-  } else {
-    yieldBarChart = new Chart(
-      canvas.getContext('2d'),
-      { type:'bar', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
-    );
+  // Destroy old instance if it exists (handles type migration from bar → line)
+  if (yieldChart) {
+    yieldChart.destroy();
+    yieldChart = null;
   }
 
-  // Legend
+  yieldChart = new Chart(
+    canvas.getContext('2d'),
+    { type:'line', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
+  );
+
+  // Update legend swatches
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(59,130,246,0.90)"></span>'+(lbl1||'T-1')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(99,102,241,0.65)"></span>'+(lbl7||'T-7')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(100,116,139,0.48)"></span>'+(lbl14||'T-14')+'</span>';
+      '<span class="leg-item"><span class="leg-swatch leg-solid" style="background:#3b82f6"></span>'+(lbl1||'T-1')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch leg-dashed" style="border-color:rgba(99,102,241,0.80)"></span>'+(lbl7||'T-7')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch leg-dotted" style="border-color:rgba(100,116,139,0.60)"></span>'+(lbl14||'T-14')+'</span>';
   }
 }
 
@@ -858,6 +882,57 @@ function fetchNews() {
 }
 
 
+// === MARKET TICKER =============================================
+// Renders the slim scrolling strip above the dashboard.
+// Yahoo items update every 10s via tickerRefresh().
+// FRED items (2Y/10Y) update every 15 min via fetchData().
+
+function renderTicker(yahoo, fred) {
+  var el = document.getElementById('ticker-content');
+  if (!el) return;
+
+  var chips = [];
+
+  TICKER_ITEMS.forEach(function(item) {
+    var valStr = '', chgStr = '', chgCls = '';
+
+    if (item.src === 'yahoo') {
+      var d = yahoo && yahoo[item.key];
+      if (!d || d.current == null) return;
+      valStr = item.prefix + d.current.toFixed(item.fmt) + item.suffix;
+      var cp = pct(d.current, d.prior);
+      if (cp != null) {
+        chgCls = Math.abs(cp) < 0.005 ? 'tk-flat' : cp > 0 ? 'tk-up' : 'tk-dn';
+        chgStr = (cp >= 0 ? '+' : '') + cp.toFixed(2) + '%';
+      }
+    } else {
+      // FRED: show bps change (more natural for yields)
+      var f = fred && fred[item.key];
+      if (!f || f.current == null) return;
+      valStr = item.prefix + f.current.toFixed(item.fmt) + item.suffix;
+      var cb = bps(f.current, f.prior);
+      if (cb != null) {
+        chgCls = Math.abs(cb) < 1 ? 'tk-flat' : cb > 0 ? 'tk-up' : 'tk-dn';
+        chgStr = (cb >= 0 ? '+' : '') + cb + ' bps';
+      }
+    }
+
+    chips.push(
+      '<span class="tk-item">'
+      + '<span class="tk-lbl">' + item.label + '</span>'
+      + '<span class="tk-val">' + valStr + '</span>'
+      + (chgStr ? '<span class="tk-chg ' + chgCls + '">' + chgStr + '</span>' : '')
+      + '</span>'
+    );
+  });
+
+  if (!chips.length) return;
+  // Duplicate content for seamless infinite scroll loop
+  var single = chips.join('<span class="tk-sep">·</span>');
+  el.innerHTML = single + '<span class="tk-sep">·</span>' + single;
+}
+
+
 // === HEADER =====================================================
 
 function updateHeader(data) {
@@ -906,6 +981,9 @@ function renderDashboard(data) {
 
   // Section 3: FX Converter
   initFxConverter();
+
+  // Market ticker (top strip)
+  renderTicker(data.yahoo, data.fred);
 
   // Secondary: Bloomberg TV (lazy — injected once on first render)
   initLiveStream();
@@ -956,6 +1034,8 @@ function tickerRefresh() {
     .then(function(data){
       cachedYahoo   = Object.assign(cachedYahoo||{}, data.yahoo);
       tickerBackoff = isOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
+      // Update top ticker strip with fresh Yahoo prices
+      renderTicker(cachedYahoo, cachedFred);
       // Recompute FX if converter is visible
       if (fxConverterReady) computeFx();
     })
