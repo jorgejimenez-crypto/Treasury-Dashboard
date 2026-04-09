@@ -10,15 +10,15 @@
 
 :root {
   /* Backgrounds — layered depth */
-  --bg:          #0d1117;   /* page base — near-black, not pure black */
-  --bg-raised:   #161c26;   /* card / section surface */
-  --bg-inset:    #0a0e15;   /* inside cards — slightly deeper */
-  --bg-hover:    #1c2535;   /* hover state */
+  --bg:          #0f1217;   /* page base — deep charcoal, not pure black */
+  --bg-raised:   #171e2a;   /* card / section surface */
+  --bg-inset:    #0b0f17;   /* inside cards — slightly deeper */
+  --bg-hover:    #1e2840;   /* hover state */
 
   /* Borders */
-  --border:      #1e2d3d;
-  --border-md:   #2d3f52;
-  --border-hi:   #3d5268;
+  --border:      #1e2d40;
+  --border-md:   #2e4057;
+  --border-hi:   #3d5570;
 
   /* Typography */
   --text:        #e8edf3;   /* primary */
@@ -52,8 +52,8 @@
 
   /* Layout */
   --max-w:       1320px;
-  --section-gap: 52px;      /* generous breathing room between sections */
-  --section-pad: 32px;
+  --section-gap: 56px;      /* generous breathing room — institutional feel */
+  --section-pad: 36px;
   --card-radius: 10px;
   --radius-sm:   5px;
 }
@@ -248,10 +248,10 @@ body {
 }
 .section-hd-left { display:flex; flex-direction:column; gap:3px; }
 .section-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
   line-height: 1.1;
 }
 .section-desc {
@@ -287,15 +287,16 @@ body {
 .spread-flat     { background:var(--amber-bg);  color:var(--amber); border:1px solid var(--amber-border); }
 .spread-inverted { background:var(--red-bg);    color:var(--red);   border:1px solid var(--red-border);   }
 
-/* Chart shell — good height, dark backing */
+/* Chart shell — hero height, dark backing */
 .chart-shell {
   position: relative;
-  height: 320px;
+  height: 340px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 16px 14px 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
 /* Chart legend */
@@ -342,6 +343,7 @@ body {
   white-space: nowrap;
 }
 .yield-table .yt-hd-mat { text-align: left; padding-left: 20px; }
+.yield-table .yt-hd-latest { color: var(--blue-lt) !important; }
 .yield-table tbody tr { transition: background 0.12s; }
 .yield-table tbody tr:hover { background: var(--bg-hover); }
 .yield-table tbody td {
@@ -400,8 +402,8 @@ body {
 }
 .fund-card:hover {
   border-color: var(--border-md);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
 }
 .fund-card:hover::before { opacity: 1; }
 .fund-card-stale { opacity: 0.72; }
@@ -427,10 +429,10 @@ body {
   margin-bottom: 12px; line-height: 1.25;
 }
 .fund-value {
-  font-size: 26px; font-weight: 700;
+  font-size: 28px; font-weight: 700;
   font-family: var(--mono);
   color: var(--text);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
   line-height: 1;
   margin-bottom: 6px;
 }
@@ -560,8 +562,8 @@ body {
   flex-wrap: wrap;
 }
 .fx-result-main {
-  font-size: 32px; font-weight: 700; font-family: var(--mono);
-  color: var(--text); letter-spacing: -0.8px; line-height: 1;
+  font-size: 34px; font-weight: 700; font-family: var(--mono);
+  color: var(--text); letter-spacing: -1px; line-height: 1;
 }
 .fx-result-main.fx-flash { animation: fx-flash 0.4s ease-out; }
 @keyframes fx-flash { 0%{color:var(--blue-lt);} 100%{color:var(--text);} }
@@ -659,20 +661,20 @@ body {
 /* === RESPONSIVE ============================================ */
 
 @media (max-width: 900px) {
-  :root { --section-pad: 22px; --section-gap: 36px; }
+  :root { --section-pad: 24px; --section-gap: 40px; }
   #dashboard    { padding: 24px 20px 48px; }
   .header-inner { padding: 12px 20px; flex-wrap: wrap; }
   .header-status { order: 3; flex-basis: 100%; }
-  .chart-shell  { height: 260px; }
+  .chart-shell  { height: 280px; }
   #app-footer   { padding: 14px 20px 24px; }
 }
 
 @media (max-width: 640px) {
-  :root { --section-pad: 16px; --section-gap: 28px; }
+  :root { --section-pad: 18px; --section-gap: 32px; }
   #dashboard    { padding: 16px 14px 40px; }
-  .section-title { font-size: 16px; }
+  .section-title { font-size: 17px; }
   .section-hd   { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .chart-shell  { height: 220px; }
+  .chart-shell  { height: 230px; }
   .fx-inputs    { flex-direction: column; }
   .fx-amount-wrap,.fx-ccy-col { width: 100%; }
   .fx-swap      { width: 100%; height: 38px; }

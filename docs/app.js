@@ -30,7 +30,7 @@ var THRESHOLDS = {
 
 // Yield curve (short end: 1M · 3M · 6M)
 var CURVE_KEYS   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
-var CURVE_LABELS = ['1 Month', '3 Month', '6 Month'];
+var CURVE_LABELS = ['1M', '3M', '6M'];
 
 // FX — expanded 16-currency list for converter
 var FX_CURRENCIES = [
@@ -247,86 +247,95 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
 
   var datasets = [
     {
+      // T-1 (latest) — dominant, bright blue, value labels shown
       label: lbl1,
       data: t1,
-      backgroundColor: 'rgba(59,130,246,0.90)',
+      backgroundColor: 'rgba(59,130,246,0.88)',
       borderColor:     'rgba(96,165,250,1)',
+      borderWidth: 1,
+      borderRadius: 5,
+      borderSkipped: false,
+      barPercentage: 0.82,
+      categoryPercentage: 0.78,
+      datalabels: {
+        display: true,
+        anchor: 'end', align: 'top', offset: 4,
+        color: '#e2e8f0',
+        font: { size: 12, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
+        formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
+      }
+    },
+    {
+      // T-7 — secondary, indigo, no labels (tooltip only)
+      label: lbl7,
+      data: t7,
+      backgroundColor: 'rgba(99,102,241,0.55)',
+      borderColor:     'rgba(129,140,248,0.7)',
       borderWidth: 1,
       borderRadius: 4,
       borderSkipped: false,
-      datalabels: {
-        display: true,
-        anchor: 'end', align: 'top', offset: 3,
-        color: '#f1f5f9',
-        font: { size: 11, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
-        formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
-      }
+      barPercentage: 0.82,
+      categoryPercentage: 0.78,
+      datalabels: { display: false }
     },
     {
-      label: lbl7,
-      data: t7,
-      backgroundColor: 'rgba(99,102,241,0.65)',
-      borderColor:     'rgba(129,140,248,0.85)',
-      borderWidth: 1,
-      borderRadius: 3,
-      borderSkipped: false,
-      datalabels: {
-        display: true,
-        anchor: 'end', align: 'top', offset: 3,
-        color: '#a5b4fc',
-        font: { size: 10, family: "'Cascadia Code','Consolas',monospace" },
-        formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
-      }
-    },
-    {
+      // T-14 — background reference, slate, no labels (tooltip only)
       label: lbl14,
       data: t14,
-      backgroundColor: 'rgba(100,116,139,0.48)',
-      borderColor:     'rgba(148,163,184,0.6)',
+      backgroundColor: 'rgba(100,116,139,0.38)',
+      borderColor:     'rgba(148,163,184,0.5)',
       borderWidth: 1,
-      borderRadius: 3,
+      borderRadius: 4,
       borderSkipped: false,
-      datalabels: {
-        display: true,
-        anchor: 'end', align: 'top', offset: 3,
-        color: '#94a3b8',
-        font: { size: 10, family: "'Cascadia Code','Consolas',monospace" },
-        formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
-      }
+      barPercentage: 0.82,
+      categoryPercentage: 0.78,
+      datalabels: { display: false }
     }
   ];
 
   var opts = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: { padding: { top: 32, bottom: 8, left: 8, right: 8 } },
+    layout: { padding: { top: 40, bottom: 8, left: 4, right: 4 } },
     plugins: {
       legend: { display: false },
       datalabels: {},
       tooltip: {
-        backgroundColor: 'rgba(15,23,42,0.97)',
+        backgroundColor: 'rgba(10,14,22,0.97)',
         titleColor: '#f1f5f9',
+        titleFont: { size: 13, weight: '700' },
         bodyColor: '#94a3b8',
-        borderColor: 'rgba(51,65,85,0.8)',
+        bodyFont: { size: 12 },
+        borderColor: 'rgba(45,63,82,0.9)',
         borderWidth: 1,
-        padding: { x: 12, y: 10 },
+        padding: 14,
+        cornerRadius: 6,
+        displayColors: true,
         callbacks: {
           title: function(items) {
-            return items[0].label + ' UST';
+            return items[0].label + ' US Treasury';
           },
           label: function(ctx) {
             var v = ctx.parsed.y;
-            if (v == null) return ctx.dataset.label + ': N/A';
-            var line = ctx.dataset.label + ':  ' + v.toFixed(3) + '%';
-            // Show bps delta vs T-1 for T-7 and T-14
-            if (ctx.datasetIndex > 0) {
-              var ref = ctx.chart.data.datasets[0].data[ctx.dataIndex];
-              if (ref != null) {
-                var delta = Math.round((ref - v) * 100);
-                line += '   (' + sgn(delta) + delta + ' bps vs T-1)';
-              }
+            if (v == null) return '  ' + ctx.dataset.label + ':  N/A';
+            var t1val = ctx.chart.data.datasets[0].data[ctx.dataIndex];
+            var line  = '  ' + ctx.dataset.label + ':  ' + v.toFixed(3) + '%';
+            if (ctx.datasetIndex > 0 && t1val != null) {
+              var chg = Math.round((t1val - v) * 100);
+              line += '   ' + sgn(chg) + chg + ' bps vs T-1';
             }
             return line;
+          },
+          afterBody: function(items) {
+            // Show T-1 vs T-7 and T-1 vs T-14 summary for the first item
+            if (items[0].datasetIndex !== 0) return [];
+            var idx = items[0].dataIndex;
+            var ds  = items[0].chart.data.datasets;
+            var v1  = ds[0].data[idx], v7 = ds[1].data[idx], v14 = ds[2].data[idx];
+            var lines = [''];
+            if (v1!=null && v7!=null)  { var d7  = Math.round((v1-v7)*100);  lines.push('  Δ vs T-7:   '+sgn(d7)+d7+' bps'); }
+            if (v1!=null && v14!=null) { var d14 = Math.round((v1-v14)*100); lines.push('  Δ vs T-14:  '+sgn(d14)+d14+' bps'); }
+            return lines.length > 1 ? lines : [];
           }
         }
       }
@@ -335,13 +344,13 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
       x: {
         grid:  { display: false },
         border:{ display: false },
-        ticks: { color: '#94a3b8', font: { size: 13, weight: '600' }, padding: 8 }
+        ticks: { color: '#94a3b8', font: { size: 14, weight: '700' }, padding: 10 }
       },
       y: {
-        grid:  { color: 'rgba(30,41,59,0.6)', drawBorder: false },
-        border:{ display: false, dash: [4,4] },
+        grid:  { color: 'rgba(30,41,59,0.55)', drawBorder: false },
+        border:{ display: false },
         ticks: {
-          color: '#64748b', font: { size: 11 }, padding: 8,
+          color: '#64748b', font: { size: 11 }, padding: 10,
           callback: function(v) { return v.toFixed(1) + '%'; }
         }
       }
@@ -380,11 +389,11 @@ function buildYieldTable(t1, t7, t14, col1, col7, col14) {
 
   thead.innerHTML = '<tr>'
     + '<th class="yt-hd-mat">Maturity</th>'
-    + '<th class="yt-hd-val">'+col1+'</th>'
+    + '<th class="yt-hd-val yt-hd-latest">'+col1+'</th>'
     + '<th class="yt-hd-val">'+col7+'</th>'
     + '<th class="yt-hd-val">'+col14+'</th>'
-    + '<th class="yt-hd-delta">Δ 7d</th>'
-    + '<th class="yt-hd-delta">Δ 14d</th>'
+    + '<th class="yt-hd-delta">Δ 7d (bps)</th>'
+    + '<th class="yt-hd-delta">Δ 14d (bps)</th>'
     + '</tr>';
 
   tbody.innerHTML = '';
