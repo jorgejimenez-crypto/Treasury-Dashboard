@@ -30,9 +30,7 @@ var THRESHOLDS = {
   vixPctSpike: 15,
   dxyLow: 99,
   dxyHigh: 105,
-  yield10YHigh: 5.0,
-  igOasWide: 150,
-  hyOasWide: 500
+  yield10YHigh: 5.0
 };
 
 // Labels
@@ -41,13 +39,29 @@ var COMMODITY_LABELS = { WTI: 'WTI Crude', Brent: 'Brent Crude', NatGas: 'Henry 
 var ENERGY_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil'];
 var FOREX_KEYS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'USDCNH'];
 var FOREX_LABELS = { EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', AUDUSD: 'AUD/USD', USDCAD: 'USD/CAD', USDCHF: 'USD/CHF', USDCNH: 'USD/CNH' };
-var FX_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH'];
-var FX_YAHOO_MAP = { EUR: 'EURUSD', GBP: 'GBPUSD', AUD: 'AUDUSD', JPY: 'USDJPY', CAD: 'USDCAD', CHF: 'USDCHF', CNH: 'USDCNH' };
-var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true };
-var YIELD_KEYS = ['DGS2', 'DGS5', 'DGS10', 'DGS30'];
-var YIELD_LABELS = { DGS2: '2Y UST', DGS5: '5Y UST', DGS10: '10Y UST', DGS30: '30Y UST' };
-var CURVE_KEYS = ['DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS5', 'DGS10', 'DGS30'];
-var CURVE_LABELS = ['3M', '6M', '1Y', '2Y', '5Y', '10Y', '30Y'];
+
+// Expanded currency list for FX converter autocomplete
+var FX_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNH', 'NZD', 'MXN', 'BRL', 'SGD', 'HKD', 'INR', 'SEK', 'NOK'];
+var FX_CURRENCY_NAMES = {
+  USD: 'US Dollar', EUR: 'Euro', GBP: 'British Pound', JPY: 'Japanese Yen',
+  AUD: 'Australian Dollar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', CNH: 'Chinese Yuan',
+  NZD: 'New Zealand Dollar', MXN: 'Mexican Peso', BRL: 'Brazilian Real', SGD: 'Singapore Dollar',
+  HKD: 'Hong Kong Dollar', INR: 'Indian Rupee', SEK: 'Swedish Krona', NOK: 'Norwegian Krone'
+};
+var FX_YAHOO_MAP = {
+  EUR: 'EURUSD', GBP: 'GBPUSD', AUD: 'AUDUSD', JPY: 'USDJPY', CAD: 'USDCAD',
+  CHF: 'USDCHF', CNH: 'USDCNH', NZD: 'NZDUSD', MXN: 'USDMXN', BRL: 'USDBRL',
+  SGD: 'USDSGD', HKD: 'USDHKD', INR: 'USDINR', SEK: 'USDSEK', NOK: 'USDNOK'
+};
+var FX_INVERTED = { JPY: true, CAD: true, CHF: true, CNH: true, MXN: true, BRL: true, SGD: true, HKD: true, INR: true, SEK: true, NOK: true };
+
+// Yield keys: now 1M/3M/6M only (short-end treasury focus)
+var YIELD_KEYS = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
+var YIELD_LABELS = { DGS1MO: '1M UST', DGS3MO: '3M UST', DGS6MO: '6M UST' };
+
+// Yield curve chart: 1M/3M/6M with T-1/T-7/T-14 lookback
+var CURVE_KEYS = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
+var CURVE_LABELS = ['1M', '3M', '6M'];
 
 // Scrolling energy + risk + equity ticker
 var TICKER_SYMBOLS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Gold', 'Silver', 'VIX', 'DXY', 'SP500', 'DOW', 'NASDAQ'];
@@ -122,78 +136,15 @@ var ECON_CALENDAR = [
 // STATE
 // ============================================
 
-var tvInitialized = false;
-
-// Currently active commodity symbol for the TradingView chart
-var tvCurrentSymbol = 'NYMEX:CL1!';
-
-function initTradingView(symbol) {
-  if (symbol) tvCurrentSymbol = symbol;
-  if (tvInitialized) return;
-  var wrap = document.getElementById('tradingview-widget');
-  if (!wrap) return;
-  tvInitialized = true;
-  renderTVChart(tvCurrentSymbol);
-}
-
-function renderTVChart(symbol) {
-  var wrap = document.getElementById('tradingview-widget');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-
-  var container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-  container.style.width = '100%';
-  container.style.height = '350px';
-
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  inner.style.width = '100%';
-  inner.style.height = '100%';
-  container.appendChild(inner);
-
-  var config = {
-    symbol: symbol || 'NYMEX:CL1!',
-    width: '100%',
-    height: 350,
-    interval: 'D',
-    timezone: 'America/New_York',
-    theme: 'dark',
-    style: '1',
-    locale: 'en',
-    backgroundColor: 'rgba(10, 14, 20, 1)',
-    gridColor: 'rgba(30, 42, 58, 0.5)',
-    allow_symbol_change: true,
-    watchlist: ['NYMEX:CL1!', 'NYMEX:BZ1!', 'NYMEX:RB1!', 'NYMEX:HO1!'],
-    details: false,
-    hotlist: false,
-    calendar: false,
-    show_popup_button: false
-  };
-
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  container.appendChild(script);
-  wrap.appendChild(container);
-}
-
-function switchCommodityChart(symbol) {
-  tvCurrentSymbol = symbol;
-  tvInitialized = false;   // allow re-render
-  renderTVChart(symbol);
-  tvInitialized = true;    // restore guard
-}
-
-function initCommoditySelector() {
-  var sel = document.getElementById('commodity-selector');
-  if (!sel) return;
-  sel.addEventListener('change', function() {
-    switchCommodityChart(sel.value);
-  });
-}
+var yieldCurveChart = null;
+var refreshTimer = null;
+var newsTimer = null;
+var tickerTimer = null;
+var cachedYahoo = null;
+var cachedFred = null;
+var tickerBackoff = TICKER_REFRESH_MS;
+var lastManualRefresh = 0;
+var fxConverterInitialized = false;
 
 // ============================================
 // SCROLLING TICKER BAR
@@ -221,16 +172,6 @@ function renderTicker(yahoo) {
   // Duplicate content for seamless scroll loop
   container.innerHTML = html + html;
 }
-
-var yieldCurveChart = null;
-var refreshTimer = null;
-var newsTimer = null;
-var tickerTimer = null;
-var cachedYahoo = null;
-var cachedFred = null;                   // preserved across ticker refreshes
-var tickerBackoff = TICKER_REFRESH_MS;   // exponential backoff tracker
-var lastManualRefresh = 0;               // debounce R key / refresh button
-var fxConverterInitialized = false;      // track if event listeners are attached
 
 // ============================================
 // HELPERS
@@ -419,7 +360,7 @@ function computeAlerts(data) {
   var alerts = [];
   var yahoo = data.yahoo;
 
-  // Commodity price surge detection (reframed from margin pressure)
+  // Commodity price surge detection
   var signals = [];
   for (var i = 0; i < ENERGY_KEYS.length; i++) {
     var k = ENERGY_KEYS[i];
@@ -464,17 +405,11 @@ function computeAlerts(data) {
     alerts.push({ level: 'red', msg: '10Y yield at ' + y10.current.toFixed(2) + '% — above ' + THRESHOLDS.yield10YHigh + '% threshold' });
   }
 
-  // Credit spreads
-  var ig = data.fred && data.fred.BAMLC0A0CM;
-  if (ig && ig.current != null && ig.current * 100 > THRESHOLDS.igOasWide) {
-    alerts.push({ level: 'yellow', msg: 'IG OAS at ' + Math.round(ig.current * 100) + ' bps -- wider than ' + THRESHOLDS.igOasWide + ' bps' });
-  }
-
   // FRED data availability check
   var fredDown = data.fred && data.fred.DGS10 && data.fred.DGS10.current == null
-    && data.fred.DGS2 && data.fred.DGS2.current == null;
+    && data.fred.DGS1MO && data.fred.DGS1MO.current == null;
   if (fredDown) {
-    alerts.push({ level: 'yellow', msg: 'FRED data unavailable — yields, macro, and credit panels showing N/A. Check FRED API key.' });
+    alerts.push({ level: 'yellow', msg: 'FRED data unavailable — yields and macro panels showing N/A. Check FRED API key.' });
   }
 
   return alerts;
@@ -483,6 +418,23 @@ function computeAlerts(data) {
 // ============================================
 // PANEL RENDERERS
 // ============================================
+
+// Cache last known values so FRED outages/weekends don't show all N/A.
+var lastKnownFunding = loadLastKnown('funding') || {};
+var lastKnownYields = loadLastKnown('yields');
+var lastKnownMacro  = loadLastKnown('macro');
+
+function loadLastKnown(key) {
+  try {
+    var raw = localStorage.getItem('td_lk_' + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function saveLastKnown(key, data) {
+  try { localStorage.setItem('td_lk_' + key, JSON.stringify(data)); } catch (e) {}
+}
+
+// ---- Yields (1M / 3M / 6M metric cards) ----
 
 function renderYields(fred) {
   var grid = document.getElementById('yields-grid');
@@ -503,7 +455,6 @@ function renderYields(fred) {
       grid.appendChild(renderMetric(YIELD_LABELS[sid], 'N/A', '', ''));
     }
   }
-  // Save live data for next time
   if (anyLive) {
     var snapshot = {};
     for (var j = 0; j < YIELD_KEYS.length; j++) {
@@ -514,75 +465,78 @@ function renderYields(fred) {
     lastKnownYields = snapshot;
     saveLastKnown('yields', snapshot);
   }
+  // Footer: short-end spread (1M vs 6M)
   var footer = document.getElementById('yields-footer');
-  var dgs2 = fred.DGS2;
-  var dgs10 = fred.DGS10;
-  if (dgs2 && dgs10 && dgs2.current != null && dgs10.current != null) {
-    var s = Math.round((dgs10.current - dgs2.current) * 100);
-    var shape = s < 0 ? 'inverted' : s < 20 ? 'flat' : 'positive';
-    footer.textContent = '2s10s: ' + sign(s) + s + ' bps (' + shape + ')';
+  var dgs1m = fred.DGS1MO;
+  var dgs6m = fred.DGS6MO;
+  if (dgs1m && dgs6m && dgs1m.current != null && dgs6m.current != null) {
+    var s = Math.round((dgs6m.current - dgs1m.current) * 100);
+    var shape = s < 0 ? 'inverted' : s < 10 ? 'flat' : 'positive';
+    footer.textContent = '1M-6M spread: ' + sign(s) + s + ' bps (' + shape + ')';
   } else {
     footer.textContent = '';
   }
 }
 
-function renderYieldCurve(fred) {
-  var labels = [], valuesT = [], valuesT1 = [], valuesT2 = [], valuesT3 = [];
+// ---- Yield Curve Chart (1M/3M/6M × T-1/T-7/T-14) ----
+
+function renderYieldCurve(yieldsHist) {
+  if (!yieldsHist) return;
+  var labels = [];
+  var valuesT1 = [], valuesT7 = [], valuesT14 = [];
+
   for (var i = 0; i < CURVE_KEYS.length; i++) {
-    var d = fred[CURVE_KEYS[i]];
+    var d = yieldsHist[CURVE_KEYS[i]];
     labels.push(CURVE_LABELS[i]);
-    valuesT.push(d && d.current != null ? d.current : null);
-    valuesT1.push(d && d.prior   != null ? d.prior   : null);
-    valuesT2.push(d && d.t2      != null ? d.t2      : null);
-    valuesT3.push(d && d.t3      != null ? d.t3      : null);
+    valuesT1.push(d && d.t1 != null ? d.t1 : null);
+    valuesT7.push(d && d.t7 != null ? d.t7 : null);
+    valuesT14.push(d && d.t14 != null ? d.t14 : null);
   }
+
   var canvas = document.getElementById('yield-curve-canvas');
   var ctx = canvas.getContext('2d');
 
+  // Build date labels for legend
+  var sample = yieldsHist[CURVE_KEYS[0]];
+  var t1Label = sample && sample.t1Date ? 'T-1 (' + sample.t1Date + ')' : 'T-1';
+  var t7Label = sample && sample.t7Date ? 'T-7 (' + sample.t7Date + ')' : 'T-7';
+  var t14Label = sample && sample.t14Date ? 'T-14 (' + sample.t14Date + ')' : 'T-14';
+
   var datasets = [
     {
-      label: 'Today',
-      data: valuesT,
+      label: t1Label,
+      data: valuesT1,
       borderColor: '#3b82f6',
       backgroundColor: 'rgba(59,130,246,0.07)',
-      fill: true, tension: 0.3, pointRadius: 4,
+      fill: true, tension: 0.3, pointRadius: 5,
       pointBackgroundColor: '#3b82f6',
       pointBorderColor: '#0a0e14',
       pointBorderWidth: 2,
-      borderWidth: 2,
+      borderWidth: 2.5,
       datalabels: {
         display: true,
         color: '#e6edf3',
-        anchor: 'end', align: 'top', offset: 2,
-        font: { size: 10, family: 'Consolas, monospace', weight: '600' },
+        anchor: 'end', align: 'top', offset: 4,
+        font: { size: 11, family: 'Consolas, monospace', weight: '600' },
         formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
       }
     },
     {
-      label: 'T-1',
-      data: valuesT1,
+      label: t7Label,
+      data: valuesT7,
       borderColor: '#6366f1',
       backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
+      fill: false, tension: 0.3, pointRadius: 3,
       borderDash: [5, 3], borderWidth: 1.5,
       datalabels: { display: false }
     },
     {
-      label: 'T-2',
-      data: valuesT2,
+      label: t14Label,
+      data: valuesT14,
       borderColor: '#64748b',
       backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
+      fill: false, tension: 0.3, pointRadius: 3,
       borderDash: [3, 4], borderWidth: 1.5,
-      datalabels: { display: false }
-    },
-    {
-      label: 'T-3',
-      data: valuesT3,
-      borderColor: '#374151',
-      backgroundColor: 'transparent',
-      fill: false, tension: 0.3, pointRadius: 2,
-      borderDash: [2, 5], borderWidth: 1,
       datalabels: { display: false }
     }
   ];
@@ -599,7 +553,7 @@ function renderYieldCurve(fred) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 20 } },
+        layout: { padding: { top: 22 } },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -611,7 +565,7 @@ function renderYieldCurve(fred) {
           }
         },
         scales: {
-          x: { ticks: { color: '#7d8da1', font: { size: 10 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
+          x: { ticks: { color: '#7d8da1', font: { size: 11 } }, grid: { color: 'rgba(30,42,58,0.5)' } },
           y: { ticks: { color: '#7d8da1', font: { size: 10 }, callback: function(v) { return v.toFixed(1) + '%'; } }, grid: { color: 'rgba(30,42,58,0.5)' } }
         }
       }
@@ -620,72 +574,110 @@ function renderYieldCurve(fred) {
 
   // Inline legend below chart
   var existingLegend = canvas.parentElement.parentElement.querySelector('.yield-curve-legend');
-  if (!existingLegend) {
-    var legendDiv = document.createElement('div');
-    legendDiv.className = 'yield-curve-legend';
-    legendDiv.innerHTML =
-      '<span><span class="ycl-swatch" style="background:#3b82f6"></span>Today</span>' +
-      '<span><span class="ycl-swatch" style="background:#6366f1;border-style:dashed"></span>T-1</span>' +
-      '<span><span class="ycl-swatch" style="background:#64748b;border-style:dashed"></span>T-2</span>' +
-      '<span><span class="ycl-swatch" style="background:#374151;border-style:dashed"></span>T-3</span>';
-    canvas.parentElement.parentElement.appendChild(legendDiv);
+  if (existingLegend) existingLegend.remove();
+  var legendDiv = document.createElement('div');
+  legendDiv.className = 'yield-curve-legend';
+  legendDiv.innerHTML =
+    '<span><span class="ycl-swatch" style="background:#3b82f6"></span>' + t1Label + '</span>' +
+    '<span><span class="ycl-swatch" style="background:#6366f1;border-style:dashed"></span>' + t7Label + '</span>' +
+    '<span><span class="ycl-swatch" style="background:#64748b;border-style:dashed"></span>' + t14Label + '</span>';
+  canvas.parentElement.parentElement.appendChild(legendDiv);
+}
+
+// ---- Yield Comparison Table (1M/3M/6M × T-1/T-7/T-14) ----
+
+function renderYieldTable(yieldsHist) {
+  var wrap = document.getElementById('yields-table-wrap');
+  if (!wrap || !yieldsHist) return;
+  wrap.innerHTML = '';
+
+  var table = document.createElement('table');
+  table.className = 'yield-hist-table';
+
+  // Header
+  var thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>Maturity</th><th>T-1 (Latest)</th><th>T-7</th><th>T-14</th><th>\u0394 7d (bps)</th><th>\u0394 14d (bps)</th></tr>';
+  table.appendChild(thead);
+
+  var tbody = document.createElement('tbody');
+  for (var i = 0; i < CURVE_KEYS.length; i++) {
+    var d = yieldsHist[CURVE_KEYS[i]];
+    var tr = document.createElement('tr');
+    var t1 = d && d.t1 != null ? d.t1 : null;
+    var t7 = d && d.t7 != null ? d.t7 : null;
+    var t14 = d && d.t14 != null ? d.t14 : null;
+    var chg7 = (t1 != null && t7 != null) ? Math.round((t1 - t7) * 100) : null;
+    var chg14 = (t1 != null && t14 != null) ? Math.round((t1 - t14) * 100) : null;
+    var chg7Cls = chg7 != null ? (chg7 > 0 ? 'delta-up' : chg7 < 0 ? 'delta-down' : 'delta-flat') : '';
+    var chg14Cls = chg14 != null ? (chg14 > 0 ? 'delta-up' : chg14 < 0 ? 'delta-down' : 'delta-flat') : '';
+
+    tr.innerHTML =
+      '<td class="yht-maturity">' + CURVE_LABELS[i] + '</td>' +
+      '<td class="yht-val">' + (t1 != null ? t1.toFixed(2) + '%' : 'N/A') + '</td>' +
+      '<td class="yht-val">' + (t7 != null ? t7.toFixed(2) + '%' : 'N/A') + '</td>' +
+      '<td class="yht-val">' + (t14 != null ? t14.toFixed(2) + '%' : 'N/A') + '</td>' +
+      '<td class="yht-delta ' + chg7Cls + '">' + (chg7 != null ? sign(chg7) + chg7 : '--') + '</td>' +
+      '<td class="yht-delta ' + chg14Cls + '">' + (chg14 != null ? sign(chg14) + chg14 : '--') + '</td>';
+    tbody.appendChild(tr);
   }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
 }
 
-// Cache last known values so FRED outages/weekends don't show all N/A.
-// Persisted to localStorage so they survive page reloads.
-var lastKnownFunding = loadLastKnown('funding') || { sofr: null, effr: null, onrrp: null };
-
-function loadLastKnown(key) {
-  try {
-    var raw = localStorage.getItem('td_lk_' + key);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
-}
-function saveLastKnown(key, data) {
-  try { localStorage.setItem('td_lk_' + key, JSON.stringify(data)); } catch (e) {}
-}
-
-var lastKnownYields = loadLastKnown('yields');
-var lastKnownMacro  = loadLastKnown('macro');
-var lastKnownCredit = loadLastKnown('credit');
+// ---- Funding & Liquidity (6 rates: EFFR, SOFR, OBFR, TSY1M, TSY3M, ON RRP) ----
 
 function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
   grid.innerHTML = '';
 
-  // Prefer live data; fall back to last known (persisted across page loads via localStorage)
-  var sofrLive = nyfed.sofr && nyfed.sofr.rate != null;
+  // EFFR (FEDL01)
   var effrLive = nyfed.effr && nyfed.effr.rate != null;
-  var sofr = sofrLive ? nyfed.sofr : lastKnownFunding.sofr;
   var effr = effrLive ? nyfed.effr : lastKnownFunding.effr;
-
-  // ON RRP comes from FRED — persist it too so weekends don't blank the panel
-  var onrrp = (fred.RRPONTSYD && fred.RRPONTSYD.current != null)
-    ? fred.RRPONTSYD
-    : lastKnownFunding.onrrp;
-
-  // Update in-memory + localStorage when we get fresh data
-  var changed = false;
-  if (sofrLive)                                    { lastKnownFunding.sofr  = nyfed.sofr;      changed = true; }
-  if (effrLive)                                    { lastKnownFunding.effr  = nyfed.effr;      changed = true; }
-  if (fred.RRPONTSYD && fred.RRPONTSYD.current != null) { lastKnownFunding.onrrp = fred.RRPONTSYD; changed = true; }
-  if (changed) saveLastKnown('funding', lastKnownFunding);
-
-  if (sofr && sofr.rate != null) {
-    var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
-    // Append * when showing a cached (stale) value so user knows source age
-    var sofrNote = volNote + (!sofrLive && sofr ? ' *' : '');
-    grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', sofrNote, sofr.date));
-  } else {
-    grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
-  }
   if (effr && effr.rate != null) {
-    var effrNote = !effrLive && effr ? '*' : '';
-    grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', effrNote, effr.date));
+    grid.appendChild(renderMetric('EFFR', effr.rate.toFixed(2) + '%', !effrLive ? '*' : '', effr.date));
   } else {
     grid.appendChild(renderMetric('EFFR', 'N/A', '', ''));
   }
+
+  // SOFR
+  var sofrLive = nyfed.sofr && nyfed.sofr.rate != null;
+  var sofr = sofrLive ? nyfed.sofr : lastKnownFunding.sofr;
+  if (sofr && sofr.rate != null) {
+    var volNote = sofr.volume ? ' ($' + sofr.volume.toFixed(0) + 'B)' : '';
+    grid.appendChild(renderMetric('SOFR', sofr.rate.toFixed(2) + '%', volNote + (!sofrLive ? ' *' : ''), sofr.date));
+  } else {
+    grid.appendChild(renderMetric('SOFR', 'N/A', '', ''));
+  }
+
+  // OBFR
+  var obfrLive = nyfed.obfr && nyfed.obfr.rate != null;
+  var obfr = obfrLive ? nyfed.obfr : lastKnownFunding.obfr;
+  if (obfr && obfr.rate != null) {
+    grid.appendChild(renderMetric('OBFR', obfr.rate.toFixed(2) + '%', !obfrLive ? '*' : '', obfr.date));
+  } else {
+    grid.appendChild(renderMetric('OBFR', 'N/A', '', ''));
+  }
+
+  // TSY 1M (from FRED DGS1MO)
+  var tsy1m = fred.DGS1MO;
+  if (tsy1m && tsy1m.current != null) {
+    grid.appendChild(renderMetric('TSY 1M', tsy1m.current.toFixed(2) + '%', '', tsy1m.date));
+  } else {
+    grid.appendChild(renderMetric('TSY 1M', 'N/A', '', ''));
+  }
+
+  // TSY 3M (from FRED DGS3MO)
+  var tsy3m = fred.DGS3MO;
+  if (tsy3m && tsy3m.current != null) {
+    grid.appendChild(renderMetric('TSY 3M', tsy3m.current.toFixed(2) + '%', '', tsy3m.date));
+  } else {
+    grid.appendChild(renderMetric('TSY 3M', 'N/A', '', ''));
+  }
+
+  // ON RRP
+  var onrrp = (fred.RRPONTSYD && fred.RRPONTSYD.current != null)
+    ? fred.RRPONTSYD
+    : lastKnownFunding.onrrp;
   if (onrrp && onrrp.current != null) {
     var valB = (onrrp.current / 1000).toFixed(1);
     var onrrpNote = (fred.RRPONTSYD && fred.RRPONTSYD.current != null) ? '' : '*';
@@ -693,6 +685,16 @@ function renderFunding(nyfed, fred) {
   } else {
     grid.appendChild(renderMetric('ON RRP', 'N/A', '', ''));
   }
+
+  // Persist live data
+  var changed = false;
+  if (sofrLive) { lastKnownFunding.sofr = nyfed.sofr; changed = true; }
+  if (effrLive) { lastKnownFunding.effr = nyfed.effr; changed = true; }
+  if (obfrLive) { lastKnownFunding.obfr = nyfed.obfr; changed = true; }
+  if (fred.RRPONTSYD && fred.RRPONTSYD.current != null) { lastKnownFunding.onrrp = fred.RRPONTSYD; changed = true; }
+  if (changed) saveLastKnown('funding', lastKnownFunding);
+
+  // Footer: SOFR-EFFR spread
   var footer = document.getElementById('funding-footer');
   if (sofr && effr && sofr.rate != null && effr.rate != null) {
     var spread = Math.round((sofr.rate - effr.rate) * 100);
@@ -702,66 +704,7 @@ function renderFunding(nyfed, fred) {
   }
 }
 
-function renderRisk(yahoo, fred) {
-  var riskGrid = document.getElementById('risk-grid');
-  riskGrid.innerHTML = '';
-  var dxy = yahoo.DXY;
-  if (dxy && dxy.current != null) {
-    var dpct = pctChange(dxy.current, dxy.prior);
-    var dd = dpct != null ? sign(dpct) + dpct.toFixed(1) + '%' : '';
-    riskGrid.appendChild(renderMetric('DXY', dxy.current.toFixed(2), dd, dxy.date, { deltaNum: dpct }));
-  } else {
-    riskGrid.appendChild(renderMetric('DXY', 'N/A', '', ''));
-  }
-  var vix = yahoo.VIX;
-  if (vix && vix.current != null) {
-    var vpct = pctChange(vix.current, vix.prior);
-    var vd = vpct != null ? sign(vpct) + vpct.toFixed(1) + '%' : '';
-    riskGrid.appendChild(renderMetric('VIX', vix.current.toFixed(2), vd, vix.date, { inverse: true, deltaNum: vpct }));
-  } else {
-    riskGrid.appendChild(renderMetric('VIX', 'N/A', '', ''));
-  }
-  var creditGrid = document.getElementById('credit-grid');
-  creditGrid.innerHTML = '';
-  var anyCreditLive = false;
-  var ig = fred.BAMLC0A0CM;
-  if (ig && ig.current != null) {
-    anyCreditLive = true;
-    var igBps = Math.round(ig.current * 100);
-    var igChg = ig.prior != null ? Math.round((ig.current - ig.prior) * 100) : null;
-    var igD = igChg != null ? sign(igChg) + igChg + ' bps' : '';
-    creditGrid.appendChild(renderMetric('IG OAS', igBps + ' bps', igD, ig.date, { deltaNum: igChg }));
-  } else if (lastKnownCredit && lastKnownCredit.ig) {
-    creditGrid.appendChild(renderMetric('IG OAS', lastKnownCredit.ig.value, '', lastKnownCredit.ig.date, { stale: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('IG OAS', 'N/A', '', ''));
-  }
-  var hy = fred.BAMLH0A0HYM2;
-  if (hy && hy.current != null) {
-    anyCreditLive = true;
-    var hyBps = Math.round(hy.current * 100);
-    var hyChg = hy.prior != null ? Math.round((hy.current - hy.prior) * 100) : null;
-    var hyD = hyChg != null ? sign(hyChg) + hyChg + ' bps' : '';
-    creditGrid.appendChild(renderMetric('HY OAS', hyBps + ' bps', hyD, hy.date, { deltaNum: hyChg }));
-  } else if (lastKnownCredit && lastKnownCredit.hy) {
-    creditGrid.appendChild(renderMetric('HY OAS', lastKnownCredit.hy.value, '', lastKnownCredit.hy.date, { stale: true }));
-  } else {
-    creditGrid.appendChild(renderMetric('HY OAS', 'N/A', '', ''));
-  }
-  if (anyCreditLive) {
-    var snap = {};
-    if (ig && ig.current != null) snap.ig = { value: Math.round(ig.current * 100) + ' bps', date: ig.date };
-    if (hy && hy.current != null) snap.hy = { value: Math.round(hy.current * 100) + ' bps', date: hy.date };
-    lastKnownCredit = snap;
-    saveLastKnown('credit', snap);
-  }
-}
-
-function renderCommodities(yahoo) {
-  // Metric chips and footer removed — panel shows chart + toggle only.
-  // Alert computation still runs via computeAlerts() which uses yahoo directly.
-  // No DOM updates needed here; chart is managed by initTradingView/renderTVChart.
-}
+// ---- Forex ----
 
 function fxDecimals(key) {
   if (key === 'USDJPY' || key === 'USDCNH') return 2;
@@ -769,9 +712,7 @@ function fxDecimals(key) {
 }
 
 function renderForex(yahoo) {
-  // Render FX pairs as mover-style chips into the forex strip
   renderForexStrip(yahoo);
-  // Always (re-)initialize the converter — it lives in its own promoted panel
   initFxConverter();
 }
 
@@ -797,8 +738,9 @@ function renderForexStrip(yahoo) {
   container.innerHTML = chips.join('');
 }
 
+
 // ============================================
-// FX CONVERTER (FIXED: uses cachedYahoo, not stale closure)
+// FX CONVERTER — autocomplete text inputs, 250K presets
 // ============================================
 
 function getToUSD(ccy) {
@@ -810,31 +752,39 @@ function getToUSD(ccy) {
   return FX_INVERTED[ccy] ? 1 / rate : rate;
 }
 
+function getToUSDPrior(ccy) {
+  if (ccy === 'USD') return 1;
+  if (!cachedYahoo) return null;
+  var key = FX_YAHOO_MAP[ccy];
+  if (!key || !cachedYahoo[key] || cachedYahoo[key].prior == null) return null;
+  var rate = cachedYahoo[key].prior;
+  return FX_INVERTED[ccy] ? 1 / rate : rate;
+}
+
 function initFxConverter() {
-  var baseSelect  = document.getElementById('fx-base');
-  var quoteSelect = document.getElementById('fx-quote');
+  var baseInput  = document.getElementById('fx-base');
+  var quoteInput = document.getElementById('fx-quote');
   var amountInput = document.getElementById('fx-amount');
+  var baseList = document.getElementById('fx-base-list');
+  var quoteList = document.getElementById('fx-quote-list');
+
   if (!fxConverterInitialized) {
     fxConverterInitialized = true;
-    baseSelect.innerHTML = '';
-    quoteSelect.innerHTML = '';
-    for (var i = 0; i < FX_CURRENCIES.length; i++) {
-      var c = FX_CURRENCIES[i];
-      baseSelect.appendChild(new Option(c, c));
-      quoteSelect.appendChild(new Option(c, c));
-    }
-    baseSelect.value  = 'USD';
-    quoteSelect.value = 'EUR';
+
+    // Autocomplete for base currency
+    setupCcyAutocomplete(baseInput, baseList);
+    // Autocomplete for quote currency
+    setupCcyAutocomplete(quoteInput, quoteList);
 
     var compute = function() { computeFxConversion(); };
-    baseSelect.addEventListener('change', compute);
-    quoteSelect.addEventListener('change', compute);
+    baseInput.addEventListener('change', compute);
+    quoteInput.addEventListener('change', compute);
     amountInput.addEventListener('input', compute);
 
     document.getElementById('fx-swap').addEventListener('click', function() {
-      var tmp = baseSelect.value;
-      baseSelect.value  = quoteSelect.value;
-      quoteSelect.value = tmp;
+      var tmp = baseInput.value;
+      baseInput.value  = quoteInput.value;
+      quoteInput.value = tmp;
       computeFxConversion();
     });
 
@@ -844,7 +794,6 @@ function initFxConverter() {
       (function(btn) {
         btn.addEventListener('click', function() {
           amountInput.value = btn.getAttribute('data-amount');
-          // Active state
           for (var k = 0; k < presetBtns.length; k++) presetBtns[k].classList.remove('active');
           btn.classList.add('active');
           computeFxConversion();
@@ -855,10 +804,79 @@ function initFxConverter() {
   computeFxConversion();
 }
 
+function setupCcyAutocomplete(input, listEl) {
+  var isOpen = false;
+
+  function showList(filter) {
+    var val = (filter || '').toUpperCase();
+    var matches = FX_CURRENCIES.filter(function(c) {
+      if (!val) return true;
+      return c.indexOf(val) === 0 || (FX_CURRENCY_NAMES[c] && FX_CURRENCY_NAMES[c].toUpperCase().indexOf(val) !== -1);
+    });
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === val)) {
+      listEl.style.display = 'none';
+      isOpen = false;
+      return;
+    }
+    listEl.innerHTML = '';
+    for (var i = 0; i < matches.length; i++) {
+      var opt = document.createElement('div');
+      opt.className = 'fx-ccy-option';
+      opt.textContent = matches[i] + ' — ' + (FX_CURRENCY_NAMES[matches[i]] || '');
+      opt.setAttribute('data-ccy', matches[i]);
+      opt.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        input.value = this.getAttribute('data-ccy');
+        listEl.style.display = 'none';
+        isOpen = false;
+        computeFxConversion();
+      });
+      listEl.appendChild(opt);
+    }
+    listEl.style.display = 'block';
+    isOpen = true;
+  }
+
+  input.addEventListener('focus', function() {
+    showList(input.value);
+  });
+
+  input.addEventListener('input', function() {
+    input.value = input.value.toUpperCase();
+    showList(input.value);
+  });
+
+  input.addEventListener('blur', function() {
+    setTimeout(function() {
+      listEl.style.display = 'none';
+      isOpen = false;
+      // Validate: if not a known currency, revert to USD
+      var val = input.value.toUpperCase();
+      if (FX_CURRENCIES.indexOf(val) === -1) {
+        input.value = 'USD';
+      }
+      computeFxConversion();
+    }, 150);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      listEl.style.display = 'none';
+      isOpen = false;
+      input.value = input.value.toUpperCase();
+      computeFxConversion();
+    }
+    if (e.key === 'Escape') {
+      listEl.style.display = 'none';
+      isOpen = false;
+    }
+  });
+}
+
 function computeFxConversion() {
   var amount = parseFloat(document.getElementById('fx-amount').value);
-  var base = document.getElementById('fx-base').value;
-  var quote = document.getElementById('fx-quote').value;
+  var base = document.getElementById('fx-base').value.toUpperCase();
+  var quote = document.getElementById('fx-quote').value.toUpperCase();
   var resultEl   = document.getElementById('fx-result');
   var rateEl     = document.getElementById('fx-rate-line');
   var reverseEl  = document.getElementById('fx-reverse-rate');
@@ -886,33 +904,28 @@ function computeFxConversion() {
   var crossRateRev = 1 / crossRate;
   var result = amount * crossRate;
 
-  // Main result — animated via CSS class toggle
   var newText = result.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + quote;
   if (resultEl.textContent !== newText) {
     resultEl.classList.remove('fx-result-flash');
-    void resultEl.offsetWidth; // force reflow
+    void resultEl.offsetWidth;
     resultEl.classList.add('fx-result-flash');
     resultEl.textContent = newText;
   }
 
-  // Forward rate line
   var dec = crossRate > 10 ? 2 : 4;
   if (rateEl) rateEl.textContent = '1 ' + base + ' = ' + crossRate.toFixed(dec) + ' ' + quote;
 
-  // Reverse rate line
   var decRev = crossRateRev > 10 ? 2 : 4;
   if (reverseEl) reverseEl.textContent = '1 ' + quote + ' = ' + crossRateRev.toFixed(decRev) + ' ' + base;
 
-  // Trend vs yesterday (rate change direction)
   if (trendEl && cachedYahoo) {
-    // Try to find prior rate for this pair
     var baseUSDPrior  = getToUSDPrior(base);
     var quoteUSDPrior = getToUSDPrior(quote);
     if (baseUSDPrior && quoteUSDPrior) {
       var priorCross = baseUSDPrior / quoteUSDPrior;
       var pct = ((crossRate - priorCross) / priorCross) * 100;
-      var sign = pct >= 0 ? '+' : '';
-      trendEl.textContent = sign + pct.toFixed(2) + '% vs prev';
+      var s = pct >= 0 ? '+' : '';
+      trendEl.textContent = s + pct.toFixed(2) + '% vs prev';
       trendEl.className = 'fx-rate-trend ' + (pct > 0 ? 'trend-up' : pct < 0 ? 'trend-down' : 'trend-flat');
     } else {
       trendEl.textContent = '';
@@ -920,14 +933,7 @@ function computeFxConversion() {
   }
 }
 
-function getToUSDPrior(ccy) {
-  if (ccy === 'USD') return 1;
-  if (!cachedYahoo) return null;
-  var key = FX_YAHOO_MAP[ccy];
-  if (!key || !cachedYahoo[key] || cachedYahoo[key].prior == null) return null;
-  var rate = cachedYahoo[key].prior;
-  return FX_INVERTED[ccy] ? 1 / rate : rate;
-}
+// ---- Macro Indicators ----
 
 function renderMacro(macro) {
   var container = document.getElementById('macro-chips');
@@ -961,19 +967,18 @@ function renderMacro(macro) {
       stale = true;
     }
 
-    var deltaClass = deltaNum == null ? 'delta-flat'
+    var dCls = deltaNum == null ? 'delta-flat'
       : (deltaNum > 0 ? 'delta-up' : (deltaNum < 0 ? 'delta-down' : 'delta-flat'));
 
     chips.push(
       '<span class="macro-chip' + (stale ? ' macro-chip-stale' : '') + '">'
       + '<span class="macro-chip-name">' + m.label + '</span>'
       + '<span class="macro-chip-value">' + valStr + '</span>'
-      + (delta ? '<span class="macro-chip-delta ' + deltaClass + '">' + delta + '</span>' : '')
+      + (delta ? '<span class="macro-chip-delta ' + dCls + '">' + delta + '</span>' : '')
       + '</span>'
     );
   }
 
-  // Duplicate for seamless scroll (same pattern as ticker/movers)
   var html = chips.join('');
   container.innerHTML = html + html;
 
@@ -995,15 +1000,12 @@ function renderMacro(macro) {
 // ============================================
 // CUSTOM ECONOMIC CALENDAR
 // ============================================
-// Hardcoded upcoming events with color-coded urgency tiers.
-// FOMC badge in header uses worker-provided FOMC_2026 dates.
 
 function renderCalendar(fomc) {
   var container = document.getElementById('calendar-content');
   if (!container) return;
   container.innerHTML = '';
 
-  // Legend
   var legend = document.createElement('div');
   legend.className = 'cal-legend';
   legend.innerHTML =
@@ -1071,85 +1073,7 @@ function renderCalendar(fomc) {
   }
 }
 
-// ============================================
-// TRADINGVIEW S&P 500 HEATMAP
-// ============================================
-// Full-width panel, lazy-loaded via IntersectionObserver for performance.
-
-var tvHeatmapLoaded = false;
-
-function initTVHeatmap() {
-  var container = document.getElementById('heatmap-content');
-  if (!container) return;
-
-  // Clear and rebuild — TV heatmap widgets don't auto-refresh; must re-inject script
-  container.innerHTML = '';
-  var widgetDiv = document.createElement('div');
-  widgetDiv.className = 'tradingview-widget-container';
-  widgetDiv.style.height = '100%';
-  widgetDiv.style.width = '100%';
-
-  var inner = document.createElement('div');
-  inner.className = 'tradingview-widget-container__widget';
-  widgetDiv.appendChild(inner);
-
-  var config = {
-    dataSource: 'SPX500',
-    blockSize: 'market_cap_basic',
-    blockColor: 'change',
-    grouping: 'sector',
-    locale: 'en',
-    symbolUrl: '',
-    colorTheme: 'dark',
-    hasTopBar: false,
-    isDataSet498Enabled: false,
-    isZoomEnabled: true,
-    hasSymbolTooltip: true,
-    isMonoSize: false,
-    width: '100%',
-    height: 400
-  };
-
-  var script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js';
-  script.async = true;
-  script.textContent = JSON.stringify(config);
-  widgetDiv.appendChild(script);
-
-  container.appendChild(widgetDiv);
-
-  // Timestamp label
-  var ts = document.createElement('div');
-  ts.className = 'heatmap-timestamp';
-  var now = new Date();
-  ts.textContent = 'Updated ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  container.appendChild(ts);
-  tvHeatmapLoaded = true;
-}
-
-// Lazy-load heatmap when panel scrolls into view
-function lazyLoadHeatmap() {
-  var panel = document.getElementById('panel-heatmap');
-  if (!panel) return;
-
-  if (!tvHeatmapLoaded) {
-    if ('IntersectionObserver' in window) {
-      var observer = new IntersectionObserver(function(entries) {
-        if (entries[0].isIntersecting) {
-          initTVHeatmap();
-          observer.disconnect();
-        }
-      }, { rootMargin: '200px' });
-      observer.observe(panel);
-    } else {
-      setTimeout(initTVHeatmap, 2000);
-    }
-  } else {
-    // Already loaded once — refresh the widget by rebuilding it
-    initTVHeatmap();
-  }
-}
+// ---- News ----
 
 function renderNews(items) {
   var container = document.getElementById('news-content');
@@ -1161,23 +1085,19 @@ function renderNews(items) {
     return;
   }
   countBadge.textContent = items.length;
-  // Last-updated timestamp
   if (items.length > 0 && items[0].date) {
     var tsSpan = document.createElement('div');
     tsSpan.className = 'news-updated';
     tsSpan.textContent = 'Updated ' + formatTime(items[0].date);
     container.appendChild(tsSpan);
   }
-  // Show up to 30 items (increased from 20 — worker now provides 50)
   for (var i = 0; i < items.length && i < 30; i++) {
     var item = items[i];
     var div = document.createElement('div');
     div.className = 'news-item';
-    // Category tag
     var tagSpan = document.createElement('span');
     tagSpan.className = 'news-tag news-tag-' + (item.tag || 'MARKETS');
     tagSpan.textContent = item.tag || 'NEWS';
-    // Article body
     var body = document.createElement('div');
     body.className = 'news-body';
     var titleDiv = document.createElement('div');
@@ -1192,7 +1112,6 @@ function renderNews(items) {
     } else {
       titleDiv.textContent = item.title;
     }
-    // Source badge + timestamp meta line
     var metaDiv = document.createElement('div');
     metaDiv.className = 'news-meta';
     var metaParts = '';
@@ -1206,6 +1125,76 @@ function renderNews(items) {
     div.appendChild(body);
     container.appendChild(div);
   }
+}
+
+// ---- Energy Movers ----
+
+var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver', 'VIX', 'DXY'];
+var MOVERS_LABELS = {
+  WTI: 'WTI Crude', Brent: 'Brent', NatGas: 'Nat Gas', HeatOil: 'Heat Oil',
+  Copper: 'Copper', Gold: 'Gold', Silver: 'Silver', VIX: 'VIX', DXY: 'DXY'
+};
+
+function renderMovers(yahoo) {
+  var container = document.getElementById('movers-content');
+  if (!container) return;
+  var movers = [];
+  for (var i = 0; i < MOVERS_KEYS.length; i++) {
+    var k = MOVERS_KEYS[i];
+    var d = yahoo[k];
+    if (d && d.current != null && d.prior != null) {
+      var pct = pctChange(d.current, d.prior);
+      if (pct != null) movers.push({ key: k, price: d.current, pct: pct });
+    }
+  }
+  movers.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
+
+  var strip = document.createElement('div');
+  strip.className = 'movers-strip';
+  for (var j = 0; j < movers.length; j++) {
+    var m = movers[j];
+    var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
+    var prefix = isNonDollar ? '' : '$';
+    var chip = document.createElement('div');
+    chip.className = 'mover-chip ' + (m.pct >= 0 ? 'chip-up' : 'chip-down');
+    chip.innerHTML =
+      '<span class="mover-chip-name">' + MOVERS_LABELS[m.key] + '</span>' +
+      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2) + '</span>' +
+      '<span class="mover-chip-pct">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
+    strip.appendChild(chip);
+  }
+  container.innerHTML = '';
+  container.appendChild(strip);
+}
+
+// ============================================
+// LIVE CATALYSTS — Bloomberg TV
+// ============================================
+
+var LIVE_CHANNELS = [
+  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' }
+];
+
+function initLiveStreams() {
+  var container = document.getElementById('live-streams');
+  if (!container) return;
+  container.innerHTML = '';
+
+  var live = isMarketOpen();
+  var dot = document.getElementById('live-dot-indicator');
+  if (dot) {
+    dot.className = 'live-dot' + (live ? '' : ' live-dot-off');
+  }
+
+  var ch = LIVE_CHANNELS[0];
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
+    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  iframe.title = ch.label + ' Live';
+  iframe.loading = 'lazy';
+  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+  iframe.setAttribute('allowfullscreen', '');
+  container.appendChild(iframe);
 }
 
 // ============================================
@@ -1246,17 +1235,15 @@ function renderDashboard(data) {
     }
   }
 
-  // Cache for FX converter + ticker + risk panel preservation
   cachedYahoo = data.yahoo;
   cachedFred = data.fred;
   cacheData('market', data);
 
   // Render all panels
   renderYields(data.fred);
-  renderYieldCurve(data.fred);
+  renderYieldCurve(data.yieldsHist || {});
+  renderYieldTable(data.yieldsHist || {});
   renderFunding(data.nyfed, data.fred);
-  renderRisk(data.yahoo, data.fred);
-  renderCommodities(data.yahoo);
   renderForex(data.yahoo);
   renderMacro(data.macro);
   renderCalendar(data.fomc);
@@ -1264,21 +1251,15 @@ function renderDashboard(data) {
   renderMovers(data.yahoo);
 
   // Source attribution
-  var yDate = data.fred.DGS10 ? data.fred.DGS10.date : null;
+  var yDate = data.fred.DGS1MO ? data.fred.DGS1MO.date : null;
   addSourceAttribution('panel-yields', 'FRED', yDate);
   addSourceAttribution('panel-funding', 'NY Fed / FRED', data.nyfed.sofr ? data.nyfed.sofr.date : null);
-  addSourceAttribution('panel-risk', 'Yahoo / FRED', data.yahoo.VIX ? data.yahoo.VIX.date : null);
-  addSourceAttribution('panel-commodities', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
   addSourceAttribution('panel-forex', 'Yahoo Finance', data.yahoo.EURUSD ? data.yahoo.EURUSD.date : null);
   addSourceAttribution('panel-macro', 'FRED', data.macro.UNRATE ? data.macro.UNRATE.date : null);
   addSourceAttribution('panel-calendar', 'Fed / BLS / BEA', null);
   addSourceAttribution('panel-news', 'Fed / ECB / WSJ / Reuters / CNBC / MarketWatch / Yahoo / Seeking Alpha', null);
   addSourceAttribution('panel-movers', 'Yahoo Finance', data.yahoo.WTI ? data.yahoo.WTI.date : null);
 
-  initTradingView();
-  initCommoditySelector();
-
-  // Clear error states on successful render
   var allPanels = document.querySelectorAll('.panel-error');
   for (var pe = 0; pe < allPanels.length; pe++) allPanels[pe].classList.remove('panel-error');
 
@@ -1315,7 +1296,6 @@ function fetchData() {
       if (cached) {
         try { renderDashboard(cached); return; } catch (e) {}
       }
-      // After 3 retries, show error state on panels
       if (fetchRetryCount >= 3) {
         var panels = document.querySelectorAll('.panel');
         for (var p = 0; p < panels.length; p++) panels[p].classList.add('panel-error');
@@ -1330,8 +1310,6 @@ function fetchData() {
     .finally(endFetch);
 }
 
-// All news now fetched worker-side (Fed, ECB, CNBC, WSJ, Reuters, MarketWatch,
-// Yahoo Finance, Seeking Alpha). No rss2json dependency, no client-side rate limits.
 function fetchNews() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
 
@@ -1346,14 +1324,11 @@ function fetchNews() {
       renderNews(items);
     })
     .catch(function(err) {
-      // Fall back to cached news on failure
-      var cached = getCachedData('news', 7200000); // 2hr stale cache for fallback
+      var cached = getCachedData('news', 7200000);
       if (cached) renderNews(cached);
     });
 }
 
-// Smart ticker refresh -- hits lightweight /api/ticker endpoint (9 symbols only).
-// Full /api/market-data stays on the 15-min timer -- no FRED/NY Fed overhead every 10s.
 function tickerRefresh() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) return;
   fetch(WORKER_URL + '/api/ticker')
@@ -1362,11 +1337,8 @@ function tickerRefresh() {
       return resp.json();
     })
     .then(function(data) {
-      // Merge ticker symbols into cached full dataset so other panels stay intact
       cachedYahoo = Object.assign(cachedYahoo || {}, data.yahoo);
       renderTicker(cachedYahoo);
-      renderCommodities(cachedYahoo);
-      renderRisk(cachedYahoo, cachedFred || {});
       renderMovers(cachedYahoo);
       renderForexStrip(cachedYahoo);
       tickerBackoff = isMarketOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
@@ -1389,11 +1361,9 @@ function initNotes() {
   var textarea = document.getElementById('notes-text');
   var savedMsg = document.getElementById('notes-saved');
 
-  // Load saved notes
   var saved = localStorage.getItem('td_notes') || '';
   textarea.value = saved;
 
-  // Auto-save on input
   var saveTimeout = null;
   textarea.addEventListener('input', function() {
     clearTimeout(saveTimeout);
@@ -1404,12 +1374,10 @@ function initNotes() {
     }, 500);
   });
 
-  // Close button
   document.getElementById('notes-close').addEventListener('click', function() {
     panel.style.display = 'none';
   });
 
-  // Clear button
   document.getElementById('notes-clear').addEventListener('click', function() {
     if (confirm('Clear all notes?')) {
       textarea.value = '';
@@ -1417,86 +1385,9 @@ function initNotes() {
     }
   });
 
-  // Toggle button in header
   document.getElementById('btn-notes').addEventListener('click', function() {
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   });
-}
-
-// ============================================
-// LIVE CATALYSTS — Bloomberg TV + CNBC (dual-screen, stacked)
-// ============================================
-
-// Bloomberg only — live stream now embedded inside the Treasury Yields panel
-var LIVE_CHANNELS = [
-  { label: 'Bloomberg TV', channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg', link: 'https://www.youtube.com/@BloombergTelevision/live' }
-];
-
-function initLiveStreams() {
-  var container = document.getElementById('live-streams');
-  if (!container) return;
-  container.innerHTML = '';
-
-  var live = isMarketOpen();
-
-  // Update the pre-rendered live dot in the Yields panel header
-  var dot = document.getElementById('live-dot-indicator');
-  if (dot) {
-    dot.className = 'live-dot' + (live ? '' : ' live-dot-off');
-  }
-
-  // Bloomberg only — single iframe, no loop needed
-  var ch = LIVE_CHANNELS[0];
-  var iframe = document.createElement('iframe');
-  iframe.src = 'https://www.youtube.com/embed/live_stream?channel=' + ch.channelId
-    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-  iframe.title = ch.label + ' Live';
-  iframe.loading = 'lazy';
-  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-  iframe.setAttribute('allowfullscreen', '');
-  container.appendChild(iframe);
-}
-
-// ============================================
-// ENERGY MOVERS (sorted by % change)
-// ============================================
-
-var MOVERS_KEYS = ['WTI', 'Brent', 'NatGas', 'HeatOil', 'Copper', 'Gold', 'Silver', 'VIX', 'DXY'];
-var MOVERS_LABELS = {
-  WTI: 'WTI Crude', Brent: 'Brent', NatGas: 'Nat Gas', HeatOil: 'Heat Oil',
-  Copper: 'Copper', Gold: 'Gold', Silver: 'Silver', VIX: 'VIX', DXY: 'DXY'
-};
-
-function renderMovers(yahoo) {
-  var container = document.getElementById('movers-content');
-  if (!container) return;
-  var movers = [];
-  for (var i = 0; i < MOVERS_KEYS.length; i++) {
-    var k = MOVERS_KEYS[i];
-    var d = yahoo[k];
-    if (d && d.current != null && d.prior != null) {
-      var pct = pctChange(d.current, d.prior);
-      if (pct != null) movers.push({ key: k, price: d.current, pct: pct });
-    }
-  }
-  movers.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
-
-  var strip = document.createElement('div');
-  strip.className = 'movers-strip';
-  for (var j = 0; j < movers.length; j++) {
-    var m = movers[j];
-    var isNonDollar = m.key === 'VIX' || m.key === 'DXY';
-    var prefix = isNonDollar ? '' : '$';
-    var chip = document.createElement('div');
-    chip.className = 'mover-chip ' + (m.pct >= 0 ? 'chip-up' : 'chip-down');
-    chip.innerHTML =
-      '<span class="mover-chip-name">' + MOVERS_LABELS[m.key] + '</span>' +
-      '<span class="mover-chip-price">' + prefix + m.price.toFixed(2) + '</span>' +
-      '<span class="mover-chip-pct">' + sign(m.pct) + m.pct.toFixed(2) + '%</span>';
-    strip.appendChild(chip);
-  }
-  container.innerHTML = '';
-  container.appendChild(strip);
 }
 
 // ============================================
@@ -1585,15 +1476,15 @@ function initShortcuts() {
 }
 
 // ============================================
-// SKELETON LOADING (per-panel placeholders)
+// SKELETON LOADING
 // ============================================
 
 function showSkeletons() {
-  var grids = ['yields-grid', 'funding-grid', 'risk-grid', 'credit-grid'];
+  var grids = ['yields-grid', 'funding-grid'];
   for (var i = 0; i < grids.length; i++) {
     var g = document.getElementById(grids[i]);
     if (!g || g.children.length > 0) continue;
-    var count = 4;
+    var count = grids[i] === 'funding-grid' ? 6 : 3;
     for (var j = 0; j < count; j++) {
       var sk = document.createElement('div');
       sk.className = 'metric';
@@ -1604,7 +1495,7 @@ function showSkeletons() {
 }
 
 // ============================================
-// REFRESH INDICATOR (spin button + updated-ago counter)
+// REFRESH INDICATOR
 // ============================================
 
 var lastRefreshTime = 0;
@@ -1655,7 +1546,7 @@ function initDensityToggle() {
 }
 
 // ============================================
-// PANEL PREFS (persist collapsed state)
+// PANEL PREFS
 // ============================================
 
 function loadPanelPrefs() {
@@ -1683,7 +1574,7 @@ function savePanelPrefs() {
 }
 
 // ============================================
-// LAZY INIT UTILITY (IntersectionObserver)
+// LAZY INIT
 // ============================================
 
 function lazyInit(panelId, initFn) {
@@ -1709,39 +1600,31 @@ var fetchRetryCount = 0;
 // INIT
 // ============================================
 
-// 0. Show dashboard grid immediately with skeletons
 document.getElementById('dashboard').style.display = 'grid';
 showSkeletons();
 loadPanelPrefs();
 initDensityToggle();
 
-// 1. Show cached data instantly if available
-var cachedMarket = getCachedData('market', 600000); // 10 min cache
+var cachedMarket = getCachedData('market', 600000);
 if (cachedMarket) {
   try { renderDashboard(cachedMarket); } catch (e) {}
 }
-var cachedNews = getCachedData('news', 3600000); // 1 hr cache
+var cachedNews = getCachedData('news', 3600000);
 if (cachedNews) {
   try { renderNews(cachedNews); } catch (e) {}
 }
 
-// 2. Background fresh fetch
 fetchData();
 fetchNews();
 
-// 3. Set up refresh timers
 refreshTimer = setInterval(fetchData, REFRESH_MS);
 newsTimer = setInterval(fetchNews, NEWS_REFRESH_MS);
 
-// 4. Start smart ticker refresh (10s during market hours)
 tickerTimer = setTimeout(tickerRefresh, tickerBackoff);
 
-// 5. Init interactive features
 initShortcuts();
 initNotes();
 
-// 6. Lazy-init heavy widgets
 lazyInit('panel-live', initLiveStreams);
 
-// 7. Updated-ago counter (ticks every 10s)
 setInterval(updateAgoCounter, 10000);
