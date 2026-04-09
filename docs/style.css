@@ -304,8 +304,6 @@ main {
   margin-bottom: 8px;
 }
 
-/* Commodities spans 2 of 3 cols in Row 2 */
-.panel-commodities-wide { grid-column: span 2; }
 .panel-news-wide { grid-column: span 2; }
 
 /* Forex is full width in Row 4 */
@@ -412,22 +410,21 @@ main {
   outline: none;
 }
 
-.fx-select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 4px 4px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  min-width: 52px;
+.fx-ccy-wrap { position: relative; display: inline-block; }
+.fx-ccy-input {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;
+  font-weight: 600; width: 56px; text-align: center; text-transform: uppercase; letter-spacing: 0.5px;
 }
-
-.fx-select:focus {
-  border-color: var(--blue);
-  outline: none;
+.fx-ccy-input:focus { border-color: var(--blue); outline: none; }
+.fx-ccy-list {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 100;
+  background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 4px;
+  max-height: 200px; overflow-y: auto; min-width: 190px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
+.fx-ccy-option { padding: 5px 8px; font-size: 11px; font-family: var(--font-mono); color: var(--text); cursor: pointer; white-space: nowrap; }
+.fx-ccy-option:hover { background: var(--bg-hover); color: var(--blue); }
+.fx-preset-sep { color: var(--text-dim); font-size: 11px; margin: 0 2px; }
 
 .fx-arrow {
   color: var(--text-dim);
@@ -447,21 +444,7 @@ main {
   border: 1px solid var(--border);
 }
 
-#tradingview-widget {
-  min-height: 350px;
-  width: 100%;
-}
-
-/* TradingView Advanced Chart — must have CSS-backed height so the widget's
-   internal iframe can resolve height:100% at paint time (same as heatmap). */
-#tradingview-widget .tradingview-widget-container {
-  height: 350px;
-  width: 100%;
-}
-#tradingview-widget .tradingview-widget-container__widget {
-  height: 100%;
-  width: 100%;
-}
+/* (TradingView widget removed) */
 
 /* ---- Yield Curve Legend ---- */
 
@@ -496,6 +479,7 @@ main {
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 .cols-4 { grid-template-columns: repeat(4, 1fr); }
+.cols-6 { grid-template-columns: repeat(6, 1fr); }
 
 /* ---- Metric Card ---- */
 
@@ -1107,19 +1091,13 @@ footer kbd {
 /* ---- Responsive ---- */
 
 @media (max-width: 1200px) {
-  main {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  /* On 2-col: commodities still spans 2 */
-  .panel-commodities-wide { grid-column: span 2; }
-.panel-news-wide { grid-column: span 2; }
+  main { grid-template-columns: repeat(2, 1fr); }
+  .panel-news-wide { grid-column: span 2; }
   #panel-forex { grid-column: 1 / -1; }
   #panel-fx-converter { grid-column: 1 / -1; }
   #panel-macro { grid-column: 1 / -1; }
-  /* cols-4 falls back to cols-2 at tablet */
-  .cols-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .cols-6 { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 768px) {
@@ -1148,24 +1126,14 @@ footer kbd {
     grid-template-columns: 1fr;
   }
 
-  .panel-commodities-wide { grid-column: span 1; }
   #panel-forex { grid-column: 1 / -1; }
   #panel-fx-converter { grid-column: 1 / -1; }
   #panel-macro { grid-column: 1 / -1; }
-  .cols-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .fx-converter-fullrow {
-    flex-direction: column;
-  }
-  .fx-converter-right {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .cols-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .cols-6 { grid-template-columns: repeat(2, 1fr); }
+  .fx-converter-fullrow { flex-direction: column; }
+  .fx-converter-right { min-width: 0; width: 100%; }
+  .cols-3 { grid-template-columns: repeat(2, 1fr); }
 
   .metric-value {
     font-size: 15px;
@@ -1183,20 +1151,8 @@ footer kbd {
     margin: 0 -8px 8px;
   }
 
-  .yields-bloomberg {
-    margin-top: 6px;
-  }
-  #risk-grid-combined {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .panel-compact-row {
-    flex-direction: column;
-  }
-  .compact-divider {
-    width: 100%;
-    height: 1px;
-    margin: 6px 0;
-  }
+  .yields-bloomberg { margin-top: 6px; }
+  .panel-compact-row .metrics-grid { grid-template-columns: repeat(2, 1fr); }
 
 
   #calendar-content {
@@ -1379,7 +1335,6 @@ body.density-compact .metric {
   border-color: var(--border-light);
 }
 
-/* Commodities metric boost removed — panel is chart-only */
 /* Macro panel — key indicators get slightly larger type */
 #panel-macro .metric-value {
   font-size: 15px;
@@ -1519,23 +1474,8 @@ body.density-compact .metric {
 /* ---- Compact Funding+Risk data strip (Row 0.5) ---- */
 
 .panel-compact-row {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
   padding: 5px 10px;
-  border-left: 3px solid var(--cyan);   /* distinct from yellow movers accent */
-}
-
-.compact-half {
-  flex: 1;
-  min-width: 0;
-}
-
-.compact-divider {
-  width: 1px;
-  background: var(--border);
-  margin: 0 10px;
-  flex-shrink: 0;
+  border-left: 3px solid var(--cyan);
 }
 
 .strip-h2 {
@@ -1574,12 +1514,7 @@ body.density-compact .metric {
   font-size: 10px;
 }
 
-/* Risk+Credit combined grid in compact row — 4-col inline */
-#risk-grid-combined {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
-}
+/* (Risk+Credit grid removed) */
 
 
 /* ---- Treasury Yields + Bloomberg (combined panel) ---- */
@@ -1615,69 +1550,7 @@ body.density-compact .metric {
   display: none;
 }
 
-/* ---- Commodity chart controls ---- */
-
-.tv-chart-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0 4px 4px;
-  margin-bottom: 2px;
-}
-
-/* Prominent full-bar toggle version */
-.tv-chart-controls-prominent {
-  background: var(--bg-card-alt);
-  border-bottom: 1px solid var(--border);
-  padding: 6px 10px;
-  border-radius: 4px 4px 0 0;
-  margin-bottom: 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.tv-chart-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-}
-
-.commodity-select {
-  background: var(--bg-card-alt);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 3px 8px 3px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: border-color 0.15s;
-}
-
-/* Large prominent version for the chart bar */
-.commodity-select-lg {
-  font-size: 13px;
-  padding: 5px 12px;
-  flex: 1;
-  background: var(--bg);
-  border-color: var(--border-light);
-}
-
-.commodity-select:focus,
-.commodity-select-lg:focus {
-  border-color: var(--yellow);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(234,179,8,0.15);
-}
-
-.commodity-select:hover,
-.commodity-select-lg:hover {
-  border-color: var(--yellow);
-}
+/* (Commodity chart controls removed) */
 
 /* ---- Macro Indicators strip (same pattern as Energy Movers) ---- */
 
@@ -1748,3 +1621,15 @@ body.density-compact .metric {
 
 /* Old .forex-layout references cleaned up */
 .forex-layout { display: none; }
+
+/* ---- Yield History Table (T-1/T-7/T-14 comparison) ---- */
+.yield-hist-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; font-family: var(--font-mono); }
+.yield-hist-table th { text-align: left; font-weight: 600; color: var(--text-muted); padding: 4px 8px; border-bottom: 1px solid var(--border); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.yield-hist-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+.yield-hist-table tr:last-child td { border-bottom: none; }
+.yht-maturity { font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.yht-val { font-weight: 600; }
+.yht-delta { font-weight: 700; }
+.yht-delta.delta-up { color: var(--green); }
+.yht-delta.delta-down { color: var(--red); }
+.yht-delta.delta-flat { color: var(--text-dim); }

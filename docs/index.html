@@ -41,13 +41,12 @@
 
   <!-- MAIN DASHBOARD GRID
     Strip A : Energy Movers      (full width, yellow accent)
-    Strip B : Macro Indicators   (full width, cyan accent)   ← CHANGE 1
-    Strip C : Funding + Risk     (full width, two halves)
-    Panel D : FX Converter       (full width, promoted)      ← CHANGE 4a
+    Strip B : Macro Indicators   (full width, cyan accent)
+    Strip C : Funding & Liquidity (full width, 6 rates)
+    Panel D : FX Converter       (full width, autocomplete)
     Row E   : Calendar (1) | News (2)
-    Row F   : Yields full-width  (Bloomberg below chart)     ← CHANGE 3
-              + Commodities (chart + toggle only)            ← CHANGE 2
-    Strip G : Forex rates        (full width, purple accent) ← CHANGE 4b
+    Row F   : Treasury Yields    (full width, 1M/3M/6M grouped bar + table)
+    Strip G : Forex rates        (full width, purple accent)
   -->
   <main id="dashboard" style="display:none;">
 
@@ -61,21 +60,11 @@
       <div id="macro-chips"></div>
     </section>
 
-    <!-- Strip C: Funding & Liquidity + Risk & Credit -->
-    <section class="panel panel-full panel-compact-row" id="panel-funding-risk" aria-label="Funding and Risk">
-      <div id="panel-funding" class="compact-half" aria-label="Funding and Liquidity">
-        <div class="strip-h2">Funding &amp; Liquidity</div>
-        <div class="metrics-grid cols-3" id="funding-grid"></div>
-        <div class="strip-footer" id="funding-footer"></div>
-      </div>
-      <div class="compact-divider"></div>
-      <div id="panel-risk" class="compact-half" aria-label="Risk and Credit">
-        <div class="strip-h2">Risk &amp; Credit</div>
-        <div class="metrics-grid cols-4" id="risk-grid-combined">
-          <div id="risk-grid" style="display:contents;"></div>
-          <div id="credit-grid" style="display:contents;"></div>
-        </div>
-      </div>
+    <!-- Strip C: Funding & Liquidity (6 rates, full width) -->
+    <section class="panel panel-full panel-compact-row" id="panel-funding" aria-label="Funding and Liquidity">
+      <div class="strip-h2">Funding &amp; Liquidity</div>
+      <div class="metrics-grid cols-6" id="funding-grid"></div>
+      <div class="strip-footer" id="funding-footer"></div>
     </section>
 
     <!-- Panel D: FX Converter (promoted, full width) -->
@@ -87,17 +76,25 @@
             <span id="fx-rate-trend" class="fx-rate-trend"></span>
           </div>
           <div class="fx-presets" id="fx-presets">
-            <button class="fx-preset-btn" data-amount="100000">100K</button>
+            <button class="fx-preset-btn" data-amount="250000">250K</button>
             <button class="fx-preset-btn" data-amount="500000">500K</button>
+            <button class="fx-preset-btn" data-amount="750000">750K</button>
             <button class="fx-preset-btn active" data-amount="1000000">1M</button>
+            <span class="fx-preset-sep">|</span>
             <button class="fx-preset-btn" data-amount="5000000">5M</button>
             <button class="fx-preset-btn" data-amount="10000000">10M</button>
           </div>
           <div class="fx-converter-row">
-            <input type="number" id="fx-amount" value="1000000" step="1000" class="fx-input" title="Notional amount">
-            <select id="fx-base" class="fx-select"><option value="USD">USD</option></select>
+            <input type="number" id="fx-amount" value="1000000" step="250000" class="fx-input" title="Notional amount">
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-base" class="fx-ccy-input" value="USD" maxlength="3" autocomplete="off" spellcheck="false" title="From currency">
+              <div id="fx-base-list" class="fx-ccy-list"></div>
+            </div>
             <span class="fx-arrow">&#x21c4;</span>
-            <select id="fx-quote" class="fx-select"><option value="EUR">EUR</option></select>
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-quote" class="fx-ccy-input" value="EUR" maxlength="3" autocomplete="off" spellcheck="false" title="To currency">
+              <div id="fx-quote-list" class="fx-ccy-list"></div>
+            </div>
             <button id="fx-swap" class="btn-icon" title="Swap currencies">&#x21c4;</button>
           </div>
         </div>
@@ -121,14 +118,15 @@
       <div id="news-content" class="news-feed"></div>
     </section>
 
-    <!-- Row F: Yields (full-width chart, Bloomberg below) + Commodities (chart+toggle only) -->
-    <section class="panel" id="panel-yields" aria-label="Treasury Yields">
-      <h2>Treasury Yields</h2>
-      <div class="metrics-grid cols-4" id="yields-grid"></div>
+    <!-- Row F: Treasury Yields (full-width, grouped bar chart + comparison table + Bloomberg) -->
+    <section class="panel panel-full" id="panel-yields" aria-label="Treasury Yields">
+      <h2>Treasury Yields (1M / 3M / 6M)</h2>
+      <div class="metrics-grid cols-3" id="yields-grid"></div>
       <div class="panel-footer" id="yields-footer"></div>
       <div class="chart-container chart-container-full">
-        <canvas id="yield-curve-canvas" height="180"></canvas>
+        <canvas id="yield-curve-canvas" height="220"></canvas>
       </div>
+      <div id="yields-table-wrap"></div>
       <div class="yields-bloomberg" id="panel-live">
         <div class="strip-h2">
           <span class="live-dot" id="live-dot-indicator"></span>
@@ -137,22 +135,6 @@
              style="color:var(--text-dim);font-size:9px;margin-left:auto;text-decoration:none;">Open &#x2197;</a>
         </div>
         <div class="live-streams" id="live-streams"></div>
-      </div>
-    </section>
-
-    <section class="panel panel-commodities-wide" id="panel-commodities" aria-label="Commodities">
-      <h2>Commodities</h2>
-      <div class="chart-container" id="tv-chart-wrap">
-        <div class="tv-chart-controls tv-chart-controls-prominent">
-          <span class="tv-chart-label">&#9881; Chart</span>
-          <select id="commodity-selector" class="commodity-select commodity-select-lg">
-            <option value="NYMEX:CL1!">WTI Crude  (CL1!)</option>
-            <option value="NYMEX:BZ1!">Brent Crude (BZ1!)</option>
-            <option value="NYMEX:RB1!">RBOB Gasoline (RB1!)</option>
-            <option value="NYMEX:HO1!">Heating Oil (HO1!)</option>
-          </select>
-        </div>
-        <div id="tradingview-widget"></div>
       </div>
     </section>
 

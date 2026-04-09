@@ -32,7 +32,7 @@ var YAHOO_SYMBOLS = [
   { key: 'Copper',  symbol: 'HG%3DF',     group: 'commodities' },
   { key: 'Gold',    symbol: 'GC%3DF',     group: 'commodities' },
   { key: 'Silver',  symbol: 'SI%3DF',     group: 'commodities' },
-  // Forex
+  // Forex (expanded for treasury FX converter)
   { key: 'EURUSD',  symbol: 'EURUSD%3DX', group: 'forex' },
   { key: 'GBPUSD',  symbol: 'GBPUSD%3DX', group: 'forex' },
   { key: 'USDJPY',  symbol: 'JPY%3DX',    group: 'forex' },
@@ -40,6 +40,14 @@ var YAHOO_SYMBOLS = [
   { key: 'USDCAD',  symbol: 'USDCAD%3DX', group: 'forex' },
   { key: 'USDCHF',  symbol: 'USDCHF%3DX', group: 'forex' },
   { key: 'USDCNH',  symbol: 'USDCNH%3DX', group: 'forex' },
+  { key: 'NZDUSD',  symbol: 'NZDUSD%3DX', group: 'forex' },
+  { key: 'USDMXN',  symbol: 'USDMXN%3DX', group: 'forex' },
+  { key: 'USDBRL',  symbol: 'USDBRL%3DX', group: 'forex' },
+  { key: 'USDSGD',  symbol: 'USDSGD%3DX', group: 'forex' },
+  { key: 'USDHKD',  symbol: 'USDHKD%3DX', group: 'forex' },
+  { key: 'USDINR',  symbol: 'USDINR%3DX', group: 'forex' },
+  { key: 'USDSEK',  symbol: 'USDSEK%3DX', group: 'forex' },
+  { key: 'USDNOK',  symbol: 'USDNOK%3DX', group: 'forex' },
   // Risk indicators
   { key: 'DXY',     symbol: 'DX-Y.NYB',   group: 'risk' },
   { key: 'VIX',     symbol: '%5EVIX',     group: 'risk' },
@@ -63,6 +71,7 @@ var TICKER_SYMBOLS_WORKER = [
 ];
 
 var FRED_MARKET = [
+  { id: 'DGS1MO', label: '1M UST',  extra: '' },
   { id: 'DGS3MO', label: '3M UST',  extra: '' },
   { id: 'DGS6MO', label: '6M UST',  extra: '' },
   { id: 'DGS1',   label: '1Y UST',  extra: '' },
@@ -75,6 +84,14 @@ var FRED_MARKET = [
   { id: 'BAMLH0A0HYM2', label: 'HY OAS',  extra: '' },
   { id: 'SOFR',          label: 'SOFR',    extra: '' },
   { id: 'EFFR',          label: 'EFFR',    extra: '' },
+  { id: 'SOFR30DAYAVG',  label: 'SOFR 30D Avg', extra: '' },
+];
+
+// Short-term yields for grouped bar chart (T-1, T-7, T-14)
+var FRED_YIELDS_HIST = [
+  { id: 'DGS1MO', label: '1M UST' },
+  { id: 'DGS3MO', label: '3M UST' },
+  { id: 'DGS6MO', label: '6M UST' },
 ];
 
 var FRED_MACRO = [
@@ -171,12 +188,14 @@ async function handleMarketData(env) {
     fetchAllFRED(FRED_MARKET, fredKey),
     fetchAllFRED(FRED_MACRO, fredKey),
     fetchAllNYFed(),
+    fetchYieldHistory(fredKey),
   ]);
 
   var yahoo = results[0];
   var fredMarket = results[1];
   var fredMacro = results[2];
   var nyfed = results[3];
+  var yieldsHist = results[4];
 
   // Fallback: if NY Fed API is blocked, use FRED SOFR/EFFR series
   if (!nyfed.sofr.rate && fredMarket.SOFR && fredMarket.SOFR.current != null) {
@@ -205,6 +224,7 @@ async function handleMarketData(env) {
     fred: fredMarket,
     macro: fredMacro,
     nyfed: nyfed,
+    yieldsHist: yieldsHist,
     fomc: {
       next: nextFomc,
       daysAway: fomcDays,
@@ -410,8 +430,61 @@ async function fetchNYFedRate(rateName) {
 }
 
 async function fetchAllNYFed() {
-  var results = await Promise.all([fetchNYFedRate('sofr'), fetchNYFedRate('effr')]);
-  return { sofr: results[0], effr: results[1] };
+  var results = await Promise.all([fetchNYFedRate('sofr'), fetchNYFedRate('effr'), fetchNYFedRate('obfr')]);
+  return { sofr: results[0], effr: results[1], obfr: results[2] };
+}
+
+// ============================================
+// YIELD HISTORY (T-1, T-7, T-14 for short-term yields)
+// Fetches 20 obs per series, finds nearest business day to target dates.
+// ============================================
+
+async function fetchYieldHistory(apiKey) {
+  if (!apiKey) return {};
+  var results = await Promise.all(FRED_YIELDS_HIST.map(function(s) {
+    return fetchFREDYieldSeries(s, apiKey);
+  }));
+  var out = {};
+  for (var i = 0; i < results.length; i++) out[results[i].id] = results[i];
+  return out;
+}
+
+async function fetchFREDYieldSeries(series, apiKey) {
+  var empty = { id: series.id, label: series.label, t1: null, t1Date: null, t7: null, t7Date: null, t14: null, t14Date: null };
+  if (!apiKey) return empty;
+  try {
+    var url = 'https://api.stlouisfed.org/fred/series/observations'
+      + '?series_id=' + series.id + '&api_key=' + apiKey
+      + '&file_type=json&sort_order=desc&limit=20';
+    var resp = await fetch(url);
+    var data = await resp.json();
+    var obs = (data.observations || []).filter(function(o) { return o.value !== '.'; });
+    if (obs.length === 0) return empty;
+
+    var t1Val = parseFloat(obs[0].value);
+    var t1Date = obs[0].date;
+    var latestMs = new Date(t1Date + 'T12:00:00Z').getTime();
+
+    var t7 = findClosestObs(obs, latestMs - 7 * 86400000);
+    var t14 = findClosestObs(obs, latestMs - 14 * 86400000);
+
+    return {
+      id: series.id, label: series.label,
+      t1: t1Val, t1Date: t1Date,
+      t7: t7 ? parseFloat(t7.value) : null, t7Date: t7 ? t7.date : null,
+      t14: t14 ? parseFloat(t14.value) : null, t14Date: t14 ? t14.date : null,
+    };
+  } catch (e) { return empty; }
+}
+
+function findClosestObs(obs, targetMs) {
+  var best = null, bestDiff = Infinity;
+  for (var i = 0; i < obs.length; i++) {
+    var d = new Date(obs[i].date + 'T12:00:00Z').getTime();
+    var diff = Math.abs(d - targetMs);
+    if (diff < bestDiff) { bestDiff = diff; best = obs[i]; }
+  }
+  return bestDiff <= 3 * 86400000 ? best : null;  // 3-day tolerance
 }
 
 // ============================================
