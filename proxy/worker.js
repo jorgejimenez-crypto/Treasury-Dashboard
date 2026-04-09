@@ -111,26 +111,49 @@ var FOMC_2026 = [
   '2026-07-30', '2026-09-17', '2026-11-05', '2026-12-17',
 ];
 
+// ============================================
+// WSJ RSS FEEDS  (fetched separately via fetchWSJFeed)
+//
+// Three target categories per spec:
+//   MARKETS  — RSSMarketsMain.xml  (equity, bond, commodities markets)
+//   ECONOMY  — RSSBusiness.xml     (macro, trade, employment, GDP)
+//   USNEWS   — WSJcomUSBusiness.xml (broader US business/political economy)
+//
+// feeds.a.dj.com occasionally rate-limits Cloudflare Worker IPs.
+// Each feed is fetched independently so a single failure doesn't
+// block the others, and the 10-min cache means most requests
+// are served from cache rather than hitting WSJ servers directly.
+// ============================================
+var WSJ_FEEDS = [
+  {
+    url:      'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
+    source:   'WSJ Markets',
+    category: 'MARKETS',
+  },
+  {
+    url:      'https://feeds.a.dj.com/rss/RSSBusiness.xml',
+    source:   'WSJ Economy',
+    category: 'ECONOMY',
+  },
+  {
+    url:      'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
+    source:   'WSJ US News',
+    category: 'USNEWS',
+  },
+];
+
 var RSS_FEEDS = [
-  // Government / Central Bank (always pinned)
+  // Government / Central Bank (always pinned, never filtered out)
   { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',     isGov: true  },
   { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
-  // Premium news (previously client-side via rss2json — now worker-side, no rate limits)
-  // WSJ: RSSWorldNews was removed — it is general world news and >90% of articles
-  // fail the financial keyword filter. RSSMarketsMain + RSSBusiness are directly
-  // financial. Note: feeds.a.dj.com may occasionally block Cloudflare Worker IPs;
-  // if WSJ articles drop to zero, the feeds are being blocked (not a code issue).
-  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',          source: 'WSJ Markets',     tag: 'MARKETS', isGov: false },
-  { url: 'https://feeds.a.dj.com/rss/RSSBusiness.xml',             source: 'WSJ Business',    tag: 'MARKETS', isGov: false },
-  { url: 'https://feeds.reuters.com/reuters/businessNews',           source: 'Reuters',         tag: 'MARKETS', isGov: false },
-  { url: 'https://feeds.marketwatch.com/marketwatch/topstories',     source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
-  { url: 'https://finance.yahoo.com/rss/topstories',                source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
-  { url: 'https://seekingalpha.com/feed.xml',                       source: 'Seeking Alpha',   tag: 'MARKETS', isGov: false },
-  // Broadcast / Wire
-  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC', tag: 'MARKETS', isGov: false },
-  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', source: 'CNBC Economy', tag: 'FED', isGov: false },
+  // Wire services + broadcast
+  { url: 'https://feeds.reuters.com/reuters/businessNews',          source: 'Reuters',         tag: 'MARKETS', isGov: false },
+  { url: 'https://feeds.marketwatch.com/marketwatch/topstories',    source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
+  { url: 'https://finance.yahoo.com/rss/topstories',               source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC',         tag: 'MARKETS', isGov: false },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', source: 'CNBC Economy', tag: 'ECONOMY', isGov: false },
 ];
 
 var CORS = {
@@ -252,10 +275,51 @@ async function handleTicker() {
 // /api/news  (original -- untouched)
 // ============================================
 
+// ============================================
+// /api/news  — WSJ (Economy + Markets + US News) + Gov + Wire
+//
+// Cache strategy (Cloudflare Cache API):
+//   - First check caches.default for a cached response (10 min TTL)
+//   - On miss: fetch all feeds, build response, store in cache
+//   - Cache key is a synthetic URL independent of the real request URL
+//
+// Fault tolerance:
+//   - Each feed fetched independently; failures return []
+//   - If ALL WSJ feeds fail: other sources still populate the feed
+//   - If entire fetch fails: caller falls back to 2hr localStorage cache
+// ============================================
+
+var NEWS_CACHE_TTL = 600;   // 10 minutes
+var NEWS_CACHE_KEY = 'https://treasury-news-v2.cache/api/news';
+
 async function handleNews(env) {
+  // ── 1. Check Cloudflare edge cache ──────────────────────────
+  var cache = caches.default;
+  try {
+    var cacheReq = new Request(NEWS_CACHE_KEY);
+    var hit = await cache.match(cacheReq);
+    if (hit) {
+      // Re-attach CORS headers (may not be preserved in cache storage)
+      var body     = await hit.text();
+      var headers  = Object.assign({}, CORS, {
+        'Content-Type':  'application/json',
+        'Cache-Control': 'public, max-age=' + NEWS_CACHE_TTL,
+        'X-Cache':       'HIT',
+      });
+      return new Response(body, { status: 200, headers: headers });
+    }
+  } catch (e) { /* cache API unavailable — fall through to fetch */ }
+
+  // ── 2. Fetch all news sources in parallel ───────────────────
   var allItems = [];
 
-  // RSS feeds (free -- Fed, ECB, CNBC)
+  // WSJ (Economy · Markets · US News) — primary source per spec
+  try {
+    var wsjItems = await fetchAllWSJ();
+    allItems = allItems.concat(wsjItems);
+  } catch (e) { /* all WSJ failed — continue with other sources */ }
+
+  // Government / wire feeds (Fed, ECB, Reuters, MarketWatch, CNBC, Yahoo)
   var rssResults = await Promise.all(RSS_FEEDS.map(function(feed) {
     return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
   }));
@@ -263,7 +327,7 @@ async function handleNews(env) {
     allItems = allItems.concat(rssResults[i]);
   }
 
-  // Optional NewsAPI enhancement
+  // Optional NewsAPI enhancement (uses NEWSAPI_KEY secret)
   var newsapiKey = env.NEWSAPI_KEY || '';
   if (newsapiKey) {
     try {
@@ -272,18 +336,15 @@ async function handleNews(env) {
     } catch (e) { /* continue with RSS only */ }
   }
 
-  // Age filter: drop items older than 72 hours (covers weekends)
+  // ── 3. Age filter: drop items older than 72 h ───────────────
   var cutoff = Date.now() - (72 * 60 * 60 * 1000);
   allItems = allItems.filter(function(item) {
-    if (!item.date) return true;  // keep if no date (gov press releases sometimes lack dates)
+    if (!item.date) return true;
     var d = new Date(item.date);
     return isNaN(d.getTime()) || d.getTime() >= cutoff;
   });
 
-  // Relevance filter: non-gov items must match at least one financial keyword
-  // FIN_KEYWORDS: catches financial content across Reuters, MarketWatch, Yahoo, WSJ.
-  // WSJ tends to use broader business language — 'capital', 'invest', 'financ',
-  // 'merger', 'deal' etc. — so these are added to prevent over-filtering.
+  // ── 4. Relevance filter (non-gov only) ──────────────────────
   var FIN_KEYWORDS = [
     'fed','fomc','rate','yield','bond','treasury','inflation','cpi','ppi','pce',
     'gdp','economy','economic','market','stock','equity','dollar','currency','forex',
@@ -293,11 +354,11 @@ async function handleNews(env) {
     'interest','spread','liquidity','repo','sofr','effr','rrp','mbs','mortgage',
     'earnings','revenue','profit','loss','quarter','annual','guidance',
     'invest','capital','financ','fund','hedge','merger','acquisition','ipo',
-    'wall street','sanction','tariff','deal','shares','investor','asset','portfolio',
+    'wall street','sanction','deal','shares','investor','asset','portfolio',
     'volatil','downturn','rally','selloff','correction','bull','bear','risk'
   ];
   allItems = allItems.filter(function(item) {
-    if (item.isGov) return true;  // always keep gov sources (Fed, ECB)
+    if (item.isGov) return true;
     var text = (item.title + ' ' + (item.summary || '')).toLowerCase();
     for (var k = 0; k < FIN_KEYWORDS.length; k++) {
       if (text.indexOf(FIN_KEYWORDS[k]) !== -1) return true;
@@ -305,29 +366,48 @@ async function handleNews(env) {
     return false;
   });
 
-  // Deduplicate by normalized title
+  // ── 5. Deduplicate by normalised title ──────────────────────
   var seen = {};
   var deduped = [];
-  for (var i = 0; i < allItems.length; i++) {
-    var normTitle = allItems[i].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
-    if (!seen[normTitle]) {
-      seen[normTitle] = true;
-      deduped.push(allItems[i]);
-    }
+  for (var d = 0; d < allItems.length; d++) {
+    var norm = allItems[d].title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 60);
+    if (!seen[norm]) { seen[norm] = true; deduped.push(allItems[d]); }
   }
 
-  // Pin recent gov sources (last 6h) to top; sort rest by date descending
+  // ── 6. Sort: recent gov pinned first, then descending pubDate ─
   var sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
   deduped.sort(function(a, b) {
     var aPin = a.isGov && new Date(a.date || 0).getTime() > sixHoursAgo;
     var bPin = b.isGov && new Date(b.date || 0).getTime() > sixHoursAgo;
     if (aPin && !bPin) return -1;
-    if (!aPin && bPin) return 1;
+    if (!aPin && bPin) return  1;
     return new Date(b.date || 0) - new Date(a.date || 0);
   });
   deduped = deduped.slice(0, 50);
 
-  return jsonResp({ timestamp: new Date().toISOString(), items: deduped });
+  // ── 7. Build response, store in edge cache ───────────────────
+  var payload = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    wsj_count: allItems.filter(function(i){ return i.source && i.source.indexOf('WSJ') === 0; }).length,
+    items: deduped,
+  });
+
+  var respHeaders = Object.assign({}, CORS, {
+    'Content-Type':  'application/json',
+    'Cache-Control': 'public, max-age=' + NEWS_CACHE_TTL,
+    'X-Cache':       'MISS',
+  });
+
+  // Store in Cloudflare's edge cache (TTL driven by Cache-Control header)
+  try {
+    var cacheableResp = new Response(payload, {
+      status:  200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + NEWS_CACHE_TTL },
+    });
+    await cache.put(new Request(NEWS_CACHE_KEY), cacheableResp);
+  } catch (e) { /* cache write failed — non-fatal */ }
+
+  return new Response(payload, { status: 200, headers: respHeaders });
 }
 
 // ============================================
@@ -486,6 +566,97 @@ function findClosestObs(obs, targetMs) {
   }
   return bestDiff <= 3 * 86400000 ? best : null;  // 3-day tolerance
 }
+
+// ============================================
+// WSJ RSS FETCHING  (dedicated — separate from generic fetchRSS)
+//
+// WSJ feeds require a browser-like User-Agent to avoid 403s.
+// Each feed is fetched independently:  one failure ≠ all fail.
+// Items are normalised to the shared schema and tagged with
+// category (MARKETS | ECONOMY | USNEWS) for CSS class binding.
+// ============================================
+
+var WSJ_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+  + 'AppleWebKit/537.36 (KHTML, like Gecko) '
+  + 'Chrome/124.0.0.0 Safari/537.36';
+
+async function fetchWSJFeed(feedDef) {
+  try {
+    var resp = await fetch(feedDef.url, {
+      headers: {
+        'User-Agent':      WSJ_USER_AGENT,
+        'Accept':          'application/rss+xml, application/xml, text/xml, */*',
+        'Cache-Control':   'no-cache',
+        'Referer':         'https://www.wsj.com/',
+        'Origin':          'https://www.wsj.com',
+      },
+      cf: { cacheTtl: 0 },   // bypass Cloudflare's fetch cache — we manage our own
+    });
+    if (!resp.ok) return [];          // 403 / 429 → silent, others keep working
+    var xml = await resp.text();
+    return parseWSJItems(xml, feedDef.source, feedDef.category);
+  } catch (e) {
+    return [];                         // network error → silent fallback
+  }
+}
+
+function parseWSJItems(xml, source, category) {
+  var items = [];
+  var itemRx = /<item>([\s\S]*?)<\/item>/gi;
+  var match;
+  while ((match = itemRx.exec(xml)) !== null && items.length < 15) {
+    var block = match[1];
+    var title   = extractXmlTag(block, 'title');
+    var link    = extractXmlTag(block, 'link')
+               || extractXmlTag(block, 'guid')   // WSJ sometimes puts link in <guid>
+               || '';
+    var pubDate = extractXmlTag(block, 'pubDate') || '';
+    var desc    = extractXmlTag(block, 'description') || '';
+
+    if (!title) continue;
+
+    // Refine category based on article content — keeps strong semantic signals
+    // (e.g. a Markets feed article about Fed policy → FED)
+    var resolvedCategory = classifyWSJ(title, desc, category);
+
+    items.push({
+      title:   decodeEntities(title),
+      link:    link.trim(),
+      date:    pubDate,
+      summary: decodeEntities(desc).substring(0, 200),
+      source:  source,      // "WSJ Markets" | "WSJ Economy" | "WSJ US News"
+      tag:     resolvedCategory,
+      isGov:   false,
+    });
+  }
+  return items;
+}
+
+// Lightweight classifier for WSJ items.
+// Unlike the general classifyArticle, this preserves the caller's
+// category (MARKETS / ECONOMY / USNEWS) as the default — only
+// overrides for unambiguous macro/policy signals.
+function classifyWSJ(title, desc, defaultCategory) {
+  var text = ((title || '') + ' ' + (desc || '')).toLowerCase();
+  if (/\bfomc\b|federal open market|interest rate decision|monetary policy/.test(text)) return 'FED';
+  if (/\binflation\b|\bcpi\b|price index|core pce/.test(text))                          return 'FED';
+  if (/\byield curve\b|\btreasury yield\b|\bsofr\b|\beffr\b/.test(text))               return 'RATES';
+  if (/\bgdp\b|gross domestic product/.test(text))                                       return 'ECONOMY';
+  if (/\bnonfarm payroll|\bunemployment rate|\bjobless claims/.test(text))               return 'ECONOMY';
+  // Default: honour the caller's category (MARKETS | ECONOMY | USNEWS)
+  return defaultCategory;
+}
+
+async function fetchAllWSJ() {
+  // All 3 WSJ feeds in parallel — failures are silent (return [])
+  var results = await Promise.all(WSJ_FEEDS.map(fetchWSJFeed));
+  var combined = [];
+  for (var i = 0; i < results.length; i++) {
+    combined = combined.concat(results[i]);
+  }
+  return combined;
+}
+
 
 // ============================================
 // RSS FEED PARSING  (original -- untouched)

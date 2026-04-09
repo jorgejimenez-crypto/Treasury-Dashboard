@@ -731,6 +731,9 @@ body {
 .news-tag-MACRO, .news-tag-ECON   { background: var(--indigo-bg); color: #a5b4fc;          border-color: rgba(99,102,241,0.3);}
 .news-tag-MARKETS                 { background: var(--green-bg);  color: var(--green);     border-color: var(--green-border); }
 .news-tag-FOMC                    { background: var(--amber-bg);  color: var(--amber);     border-color: var(--amber-border); }
+/* WSJ-specific categories */
+.news-tag-ECONOMY                 { background: var(--indigo-bg); color: #a5b4fc;          border-color: rgba(99,102,241,0.3);}
+.news-tag-USNEWS                  { background: rgba(14,165,233,0.09); color: #38bdf8;     border-color: rgba(14,165,233,0.28);}
 
 /* Headline */
 .news-title {
