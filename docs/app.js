@@ -811,35 +811,24 @@ function initLiveStream() {
   liveStreamLoaded = true;
 
   var iframe = document.createElement('iframe');
+  // Standard YouTube channel live-stream embed URL.
+  // When live: plays the active stream muted.
+  // When not live: YouTube shows its own "no live stream" message inside the player.
   iframe.src = 'https://www.youtube.com/embed/live_stream'
     + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
     + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
   iframe.title          = 'Bloomberg Television Live';
-  // NO loading='lazy' — lazy defers off-screen iframes indefinitely; use eager
   iframe.allow          = 'autoplay; encrypted-media; picture-in-picture';
   iframe.allowFullscreen = true;
 
-  // Timeout fallback: if iframe never fires 'load' within 9s, show graceful message.
-  // Covers: CSP block, X-Frame-Options, network failure, no active live stream.
-  var loaded = false;
-  var fallbackTimer = setTimeout(function() {
-    if (!loaded) showStreamFallback(wrap);
-  }, 9000);
-
-  iframe.addEventListener('load', function() {
-    loaded = true;
-    clearTimeout(fallbackTimer);
-    // onload fires when the YouTube player doc loads — good enough to confirm the embed reached YouTube.
-    // (We cannot inspect the iframe content cross-origin to verify video playback.)
-  });
-
-  // onerror rarely fires for iframes but cover it anyway
+  // onerror: network/CSP block — show fallback immediately
   iframe.addEventListener('error', function() {
-    clearTimeout(fallbackTimer);
     showStreamFallback(wrap);
   });
 
-  // Clear "Loading stream..." placeholder and inject iframe
+  // Replace the static fallback link with the live iframe.
+  // YouTube handles its own "not live" state inside the player —
+  // no JS timeout needed since the default HTML is already a usable fallback.
   wrap.innerHTML = '';
   wrap.appendChild(iframe);
 
