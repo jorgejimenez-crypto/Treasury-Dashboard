@@ -1106,7 +1106,10 @@ function fetchData() {
       var cached = getCachedData('market', 3600000);
       if (cached) { try { renderDashboard(cached); } catch(e){} return; }
       var el = document.getElementById('loading');
-      if (el) el.innerHTML = '<div class="load-err">Failed to load: '+err.message+'<br><small>Press R to retry.</small></div>';
+      if (el) {
+        el.style.display = 'flex';  // restore visibility (hidden in init)
+        el.innerHTML = '<div class="load-err">Failed to load: '+err.message+'<br><small>Press R to retry.</small></div>';
+      }
     })
     .finally(endFetch);
 }
@@ -1134,7 +1137,6 @@ function tickerRefresh() {
 
 // === UI UTILITIES ===============================================
 
-var fetchInFlight2 = 0;
 function beginFetch() { fetchInFlight++; var b=document.getElementById('btn-refresh'); if(b) b.classList.add('spinning'); }
 function endFetch()   { fetchInFlight=Math.max(0,fetchInFlight-1); if(!fetchInFlight){ var b=document.getElementById('btn-refresh'); if(b) b.classList.remove('spinning'); } }
 
@@ -1184,9 +1186,12 @@ function initShortcuts() {
 
 // === INIT =======================================================
 
-// Show dashboard immediately with cached data
+// Show dashboard immediately — hide loading screen, wire all init-time UI
 document.getElementById('dashboard').style.display = 'block';
-initLiveStream();   // always fires on load — independent of market data fetch
+document.getElementById('loading').style.display   = 'none';   // hide spinner; errors shown inline
+updateHeader(null);   // show live date/time + market status before data arrives
+initLiveStream();     // Bloomberg iframe — independent of market data
+initFxConverter();    // wire FX inputs immediately; shows "Rate unavailable" until Yahoo data arrives
 var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 

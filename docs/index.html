@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260411">
+  <link rel="stylesheet" href="style.css?v=20260412">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -66,10 +66,13 @@
 </div>
 
 <!-- === MAIN DASHBOARD =================================
-     Three sections only:
+     Primary sections (full-width):
        1. Treasury Yields  (hero)
        2. Funding & Liquidity
        3. FX Converter
+     Secondary zone (side-by-side):
+       4. Live Catalyst (Bloomberg TV)
+       5. News & Intelligence
 ======================================================= -->
 <main id="dashboard" style="display:none">
 
@@ -128,7 +131,7 @@
     </div>
 
     <div class="funding-grid" id="funding-grid">
-      <!-- 6 metric cards — populated by renderFunding() -->
+      <!-- 5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M — populated by renderFunding() -->
     </div>
 
   </section>
@@ -314,6 +317,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260411"></script>
+<script src="app.js?v=20260412"></script>
 </body>
 </html>
