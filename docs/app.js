@@ -404,14 +404,25 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
 
   // Destroy old instance if it exists (handles type migration from bar → line)
   if (yieldChart) {
-    yieldChart.destroy();
+    try { yieldChart.destroy(); } catch(e) {}
     yieldChart = null;
   }
 
-  yieldChart = new Chart(
-    canvas.getContext('2d'),
-    { type:'line', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
-  );
+  try {
+    yieldChart = new Chart(
+      canvas.getContext('2d'),
+      { type:'line', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
+    );
+  } catch(e) {
+    // Chart.js or ChartDataLabels unavailable (CDN timeout, etc.)
+    // Show message inside the chart shell so the data table still renders below
+    console.error('[yields] Chart init failed:', e);
+    var shell = canvas.parentElement;
+    if (shell) shell.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;'
+      + 'color:var(--text-3,#64748b);font-size:12px;font-family:monospace;">'
+      + 'Chart unavailable — see data table below</div>';
+  }
 
   // Update legend swatches — colors must match dataset borderColor exactly
   var leg = document.getElementById('chart-legend');
