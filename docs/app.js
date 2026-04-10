@@ -782,6 +782,17 @@ function computeFx() {
 // Lazy-injects a muted YouTube live iframe once.
 // The outer wrapper uses padding-top: 56.25% for 16:9 aspect ratio.
 
+// Shows a graceful fallback when the stream cannot load
+function showStreamFallback(wrap) {
+  var extUrl = 'https://www.youtube.com/@BloombergTelevision/live';
+  wrap.innerHTML =
+    '<div class="catalyst-fallback">'
+    + '<span class="catalyst-fb-msg">Live stream unavailable</span>'
+    + '<a href="' + extUrl + '" target="_blank" rel="noopener" class="catalyst-fb-link">'
+    + 'Open on YouTube ↗</a>'
+    + '</div>';
+}
+
 function initLiveStream() {
   if (liveStreamLoaded) return;
   var wrap = document.getElementById('catalyst-frame-wrap');
@@ -792,10 +803,32 @@ function initLiveStream() {
   iframe.src = 'https://www.youtube.com/embed/live_stream'
     + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
     + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-  iframe.title       = 'Bloomberg Television Live';
-  iframe.loading     = 'lazy';
-  iframe.allow       = 'autoplay; encrypted-media; picture-in-picture';
+  iframe.title          = 'Bloomberg Television Live';
+  // NO loading='lazy' — lazy defers off-screen iframes indefinitely; use eager
+  iframe.allow          = 'autoplay; encrypted-media; picture-in-picture';
   iframe.allowFullscreen = true;
+
+  // Timeout fallback: if iframe never fires 'load' within 9s, show graceful message.
+  // Covers: CSP block, X-Frame-Options, network failure, no active live stream.
+  var loaded = false;
+  var fallbackTimer = setTimeout(function() {
+    if (!loaded) showStreamFallback(wrap);
+  }, 9000);
+
+  iframe.addEventListener('load', function() {
+    loaded = true;
+    clearTimeout(fallbackTimer);
+    // onload fires when the YouTube player doc loads — good enough to confirm the embed reached YouTube.
+    // (We cannot inspect the iframe content cross-origin to verify video playback.)
+  });
+
+  // onerror rarely fires for iframes but cover it anyway
+  iframe.addEventListener('error', function() {
+    clearTimeout(fallbackTimer);
+    showStreamFallback(wrap);
+  });
+
+  // Clear "Loading stream..." placeholder and inject iframe
   wrap.innerHTML = '';
   wrap.appendChild(iframe);
 
