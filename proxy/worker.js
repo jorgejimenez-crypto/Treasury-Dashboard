@@ -19,20 +19,15 @@
 // ============================================
 
 var YAHOO_SYMBOLS = [
-  // Equities
+  // Equities (S&P 500 only — DOW/NASDAQ/RUSSELL not used by frontend)
   { key: 'SP500',   symbol: '%5EGSPC',     group: 'equities' },
-  { key: 'DOW',     symbol: '%5EDJI',      group: 'equities' },
-  { key: 'NASDAQ',  symbol: '%5EIXIC',     group: 'equities' },
-  { key: 'RUSSELL', symbol: '%5ERUT',      group: 'equities' },
-  // Commodities
+  // Commodities (WTI, Gold for ticker; Brent/NatGas/HeatOil for energy alerts)
   { key: 'WTI',     symbol: 'CL%3DF',     group: 'commodities' },
   { key: 'Brent',   symbol: 'BZ%3DF',     group: 'commodities' },
   { key: 'NatGas',  symbol: 'NG%3DF',     group: 'commodities' },
   { key: 'HeatOil', symbol: 'HO%3DF',     group: 'commodities' },
-  { key: 'Copper',  symbol: 'HG%3DF',     group: 'commodities' },
   { key: 'Gold',    symbol: 'GC%3DF',     group: 'commodities' },
-  { key: 'Silver',  symbol: 'SI%3DF',     group: 'commodities' },
-  // Forex (expanded for treasury FX converter)
+  // Forex (expanded for treasury FX converter — all 15 pairs)
   { key: 'EURUSD',  symbol: 'EURUSD%3DX', group: 'forex' },
   { key: 'GBPUSD',  symbol: 'GBPUSD%3DX', group: 'forex' },
   { key: 'USDJPY',  symbol: 'JPY%3DX',    group: 'forex' },
@@ -76,14 +71,10 @@ var FRED_MARKET = [
   { id: 'DGS6MO', label: '6M UST',  extra: '' },
   { id: 'DGS1',   label: '1Y UST',  extra: '' },
   { id: 'DGS2',   label: '2Y UST',  extra: '' },
-  { id: 'DGS5',   label: '5Y UST',  extra: '' },
   { id: 'DGS10',  label: '10Y UST', extra: '' },
-  { id: 'DGS30',  label: '30Y UST', extra: '' },
-  { id: 'RRPONTSYD',    label: 'ON RRP',  extra: '' },
-  { id: 'BAMLC0A0CM',   label: 'IG OAS',  extra: '' },
-  { id: 'BAMLH0A0HYM2', label: 'HY OAS',  extra: '' },
-  { id: 'SOFR',          label: 'SOFR',    extra: '' },
-  { id: 'EFFR',          label: 'EFFR',    extra: '' },
+  { id: 'BAMLC0A0CM',   label: 'IG OAS',       extra: '' },
+  { id: 'SOFR',          label: 'SOFR',         extra: '' },
+  { id: 'EFFR',          label: 'EFFR',         extra: '' },
   { id: 'SOFR30DAYAVG',  label: 'SOFR 30D Avg', extra: '' },
 ];
 
@@ -206,19 +197,25 @@ function jsonResp(data, status) {
 async function handleMarketData(env) {
   var fredKey = env.FRED_API_KEY || '';
 
+  // ── Phase 1: fire all market-data fetches in parallel ─────────
+  // Count: 40 Yahoo + 17 FRED_MARKET + 8 FRED_MACRO + 3 NY Fed = 68 subrequests.
+  // Cloudflare Workers free tier caps concurrent subrequests at 50; paid at 1000.
+  // fetchYieldHistory (3 FRED calls) is sequenced AFTER Phase 1 completes so its
+  // requests are never part of the 68-way simultaneous burst.
   var results = await Promise.all([
     fetchAllYahoo(),
     fetchAllFRED(FRED_MARKET, fredKey),
     fetchAllFRED(FRED_MACRO, fredKey),
     fetchAllNYFed(),
-    fetchYieldHistory(fredKey),
   ]);
 
-  var yahoo = results[0];
+  var yahoo      = results[0];
   var fredMarket = results[1];
-  var fredMacro = results[2];
-  var nyfed = results[3];
-  var yieldsHist = results[4];
+  var fredMacro  = results[2];
+  var nyfed      = results[3];
+
+  // ── Phase 2: historical yield series (separate — avoids subrequest cap) ──
+  var yieldsHist = await fetchYieldHistory(fredKey);
 
   // Fallback: if NY Fed API is blocked, use FRED SOFR/EFFR series
   if (!nyfed.sofr.rate && fredMarket.SOFR && fredMarket.SOFR.current != null) {
@@ -539,10 +536,16 @@ async function fetchFREDYieldSeries(series, apiKey) {
       + '&file_type=json&sort_order=desc&limit=30';
     var resp = await fetch(url);
     // Surface FRED API errors (bad key, rate limit, etc.) rather than silently returning empty
-    if (!resp.ok) return Object.assign({}, empty, { error: 'FRED HTTP ' + resp.status });
+    if (!resp.ok) {
+      console.error('[yieldsHist] FRED HTTP ' + resp.status + ' for ' + series.id);
+      return Object.assign({}, empty, { error: 'FRED HTTP ' + resp.status });
+    }
     var data = await resp.json();
     var obs = (data.observations || []).filter(function(o) { return o.value !== '.'; });
-    if (obs.length === 0) return empty;
+    if (obs.length === 0) {
+      console.error('[yieldsHist] No valid observations for ' + series.id + ' (raw count: ' + (data.observations||[]).length + ')');
+      return Object.assign({}, empty, { error: 'no_obs' });
+    }
 
     var t1Val = parseFloat(obs[0].value);
     var t1Date = obs[0].date;
@@ -551,13 +554,19 @@ async function fetchFREDYieldSeries(series, apiKey) {
     var t7 = findClosestObs(obs, latestMs - 7 * 86400000);
     var t14 = findClosestObs(obs, latestMs - 14 * 86400000);
 
+    if (!t7)  console.error('[yieldsHist] ' + series.id + ' T-7  miss: target=' + new Date(latestMs - 7*86400000).toISOString().slice(0,10)  + ' range=' + obs[obs.length-1].date + '..' + obs[0].date);
+    if (!t14) console.error('[yieldsHist] ' + series.id + ' T-14 miss: target=' + new Date(latestMs - 14*86400000).toISOString().slice(0,10) + ' range=' + obs[obs.length-1].date + '..' + obs[0].date);
+
     return {
       id: series.id, label: series.label,
       t1: t1Val, t1Date: t1Date,
       t7: t7 ? parseFloat(t7.value) : null, t7Date: t7 ? t7.date : null,
       t14: t14 ? parseFloat(t14.value) : null, t14Date: t14 ? t14.date : null,
     };
-  } catch (e) { return empty; }
+  } catch (e) {
+    console.error('[yieldsHist] Exception for ' + series.id + ': ' + e.message);
+    return Object.assign({}, empty, { error: e.message });
+  }
 }
 
 function findClosestObs(obs, targetMs) {
