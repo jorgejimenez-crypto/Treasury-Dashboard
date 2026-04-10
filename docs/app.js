@@ -271,10 +271,15 @@ function renderYieldsSection(fred, yieldsHist) {
 // === SHORT-TERM TREASURY YIELDS — Line Chart ====================
 //
 // Maturity comparison chart: 3 x-axis points (1M · 3M · 6M)
-// 3 series: T-1 (solid blue, filled) · T-7 (dashed indigo) · T-14 (dotted slate)
+// 3 series: T-1 (solid blue) · T-7 (dashed red) · T-14 (dotted green)
 //
 // Not a time-series — this is a snapshot of the yield curve shape
 // across maturities at three different points in time.
+
+// Series color palette (dark-theme readable, not neon)
+var YLD_BLUE  = '#60a5fa';   // T-1  — blue
+var YLD_RED   = '#f87171';   // T-7  — red
+var YLD_GREEN = '#34d399';   // T-14 — green
 
 function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   var canvas = document.getElementById('yield-bar-canvas');
@@ -282,17 +287,17 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
 
   var datasets = [
     {
-      // T-1 (latest) — most prominent: solid line, filled area, large points
+      // T-1 (latest) — most prominent: solid blue, filled area, large points
       label: lbl1,
       data: t1,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.07)',
+      borderColor: YLD_BLUE,
+      backgroundColor: 'rgba(96,165,250,0.07)',
       borderWidth: 2.5,
       fill: true,
       tension: 0,
       pointRadius: 7,
       pointHoverRadius: 9,
-      pointBackgroundColor: '#3b82f6',
+      pointBackgroundColor: YLD_BLUE,
       pointBorderColor: 'var(--bg-inset, #0b0f17)',
       pointBorderWidth: 2,
       datalabels: {
@@ -304,10 +309,10 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
       }
     },
     {
-      // T-7 — secondary: dashed indigo, medium points
+      // T-7 — secondary: dashed red, medium points
       label: lbl7,
       data: t7,
-      borderColor: 'rgba(99,102,241,0.80)',
+      borderColor: 'rgba(248,113,113,0.85)',
       backgroundColor: 'transparent',
       borderWidth: 1.5,
       borderDash: [6, 4],
@@ -315,16 +320,16 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
       tension: 0,
       pointRadius: 5,
       pointHoverRadius: 7,
-      pointBackgroundColor: '#6366f1',
+      pointBackgroundColor: YLD_RED,
       pointBorderColor: 'var(--bg-inset, #0b0f17)',
       pointBorderWidth: 1.5,
       datalabels: { display: false }
     },
     {
-      // T-14 — background reference: loosely dotted slate, small points
+      // T-14 — background reference: dotted green, small points
       label: lbl14,
       data: t14,
-      borderColor: 'rgba(100,116,139,0.60)',
+      borderColor: 'rgba(52,211,153,0.70)',
       backgroundColor: 'transparent',
       borderWidth: 1.5,
       borderDash: [2, 5],
@@ -332,7 +337,7 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
       tension: 0,
       pointRadius: 4,
       pointHoverRadius: 6,
-      pointBackgroundColor: '#64748b',
+      pointBackgroundColor: YLD_GREEN,
       pointBorderColor: 'var(--bg-inset, #0b0f17)',
       pointBorderWidth: 1,
       datalabels: { display: false }
@@ -406,13 +411,13 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
     { type:'line', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
   );
 
-  // Update legend swatches
+  // Update legend swatches — colors must match dataset borderColor exactly
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch leg-solid" style="background:#3b82f6"></span>'+(lbl1||'T-1')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch leg-dashed" style="border-color:rgba(99,102,241,0.80)"></span>'+(lbl7||'T-7')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch leg-dotted" style="border-color:rgba(100,116,139,0.60)"></span>'+(lbl14||'T-14')+'</span>';
+      '<span class="leg-item"><span class="leg-swatch leg-solid" style="background:'+YLD_BLUE+'"></span>'+(lbl1||'T-1')+'</span>' +
+      '<span class="leg-item"><span class="leg-dashed" style="border-color:'+YLD_RED+'"></span>'+(lbl7||'T-7')+'</span>' +
+      '<span class="leg-item"><span class="leg-dotted" style="border-color:'+YLD_GREEN+'"></span>'+(lbl14||'T-14')+'</span>';
   }
 }
 
@@ -428,8 +433,8 @@ function buildYieldTable(t1, t7, t14, col1, col7, col14) {
   thead.innerHTML = '<tr>'
     + '<th class="yt-hd-mat">Maturity</th>'
     + '<th class="yt-hd-val yt-hd-latest">'+col1+'</th>'
-    + '<th class="yt-hd-val">'+col7+'</th>'
-    + '<th class="yt-hd-val">'+col14+'</th>'
+    + '<th class="yt-hd-val yt-hd-t7">'+col7+'</th>'
+    + '<th class="yt-hd-val yt-hd-t14">'+col14+'</th>'
     + '<th class="yt-hd-delta">Δ 7d (bps)</th>'
     + '<th class="yt-hd-delta">Δ 14d (bps)</th>'
     + '</tr>';
