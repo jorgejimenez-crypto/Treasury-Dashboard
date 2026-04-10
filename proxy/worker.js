@@ -134,17 +134,26 @@ var WSJ_FEEDS = [
 ];
 
 var RSS_FEEDS = [
-  // Government / Central Bank (always pinned, never filtered out)
+  // ── Government / Central Bank (always pinned, never keyword-filtered) ──────
   { url: 'https://www.federalreserve.gov/feeds/press_monetary.xml', source: 'Federal Reserve', tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_bcreg.xml',    source: 'Fed Banking',     tag: 'FED',     isGov: true  },
   { url: 'https://www.federalreserve.gov/feeds/press_other.xml',    source: 'Fed Other',       tag: 'FED',     isGov: true  },
   { url: 'https://www.ecb.europa.eu/rss/press.html',                source: 'ECB',             tag: 'FED',     isGov: true  },
-  // Wire services + broadcast
+  // ── Reuters (two endpoints — general business + financial markets) ───────────
   { url: 'https://feeds.reuters.com/reuters/businessNews',          source: 'Reuters',         tag: 'MARKETS', isGov: false },
-  { url: 'https://feeds.marketwatch.com/marketwatch/topstories',    source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
-  { url: 'https://finance.yahoo.com/rss/topstories',               source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
+  { url: 'https://feeds.reuters.com/reuters/financialMarketsNews',  source: 'Reuters Markets', tag: 'MARKETS', isGov: false },
+  // ── CNBC (markets, economy, finance — all three IDs) ────────────────────────
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258', source: 'CNBC',         tag: 'MARKETS', isGov: false },
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', source: 'CNBC Economy', tag: 'ECONOMY', isGov: false },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=56503479', source: 'CNBC Finance', tag: 'MARKETS', isGov: false },
+  // ── Yahoo Finance ────────────────────────────────────────────────────────────
+  { url: 'https://finance.yahoo.com/rss/topstories',               source: 'Yahoo Finance',   tag: 'MARKETS', isGov: false },
+  // ── MarketWatch (updated path — old /topstories returns 403) ────────────────
+  { url: 'https://feeds.marketwatch.com/marketwatch/marketpulse',  source: 'MarketWatch',     tag: 'MARKETS', isGov: false },
+  // ── Financial Times US edition ───────────────────────────────────────────────
+  { url: 'https://www.ft.com/rss/home/us',                         source: 'Financial Times', tag: 'MARKETS', isGov: false },
+  // ── Investopedia (reliable; good for rates + macro context) ─────────────────
+  { url: 'https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline', source: 'Investopedia', tag: 'MARKETS', isGov: false },
 ];
 
 var CORS = {
@@ -287,8 +296,8 @@ async function handleTicker() {
 //   - If entire fetch fails: caller falls back to 2hr localStorage cache
 // ============================================
 
-var NEWS_CACHE_TTL = 600;   // 10 minutes
-var NEWS_CACHE_KEY = 'https://treasury-news-v2.cache/api/news';
+var NEWS_CACHE_TTL = 420;   // 7 minutes — faster refresh during fast-moving market events
+var NEWS_CACHE_KEY = 'https://treasury-news-v3.cache/api/news';  // v3: bumped after multi-source upgrade
 
 async function handleNews(env) {
   // ── 1. Check Cloudflare edge cache ──────────────────────────
@@ -384,9 +393,18 @@ async function handleNews(env) {
   deduped = deduped.slice(0, 50);
 
   // ── 7. Build response, store in edge cache ───────────────────
+  // Per-source item counts — visible in DevTools Network → /api/news → Response
+  var sourceCounts = {};
+  for (var sc = 0; sc < deduped.length; sc++) {
+    var src = deduped[sc].source || 'Unknown';
+    sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+  }
+
   var payload = JSON.stringify({
     timestamp: new Date().toISOString(),
-    wsj_count: allItems.filter(function(i){ return i.source && i.source.indexOf('WSJ') === 0; }).length,
+    total: deduped.length,
+    wsj_count: deduped.filter(function(i){ return i.source && i.source.indexOf('WSJ') === 0; }).length,
+    source_counts: sourceCounts,
     items: deduped,
   });
 
@@ -588,27 +606,48 @@ function findClosestObs(obs, targetMs) {
 // category (MARKETS | ECONOMY | USNEWS) for CSS class binding.
 // ============================================
 
-var WSJ_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-  + 'AppleWebKit/537.36 (KHTML, like Gecko) '
-  + 'Chrome/124.0.0.0 Safari/537.36';
+// Rotate through 3 UA strings — WSJ rate-limits by UA pattern, rotation reduces repeat 403s
+var WSJ_UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+];
+var wsj_ua_idx = 0;
+function nextWSJUA() { wsj_ua_idx = (wsj_ua_idx + 1) % WSJ_UA_POOL.length; return WSJ_UA_POOL[wsj_ua_idx]; }
 
 async function fetchWSJFeed(feedDef) {
+  // Attempt 1 — rotating UA
+  var ua1 = nextWSJUA();
   try {
     var resp = await fetch(feedDef.url, {
       headers: {
-        'User-Agent':      WSJ_USER_AGENT,
-        'Accept':          'application/rss+xml, application/xml, text/xml, */*',
-        'Cache-Control':   'no-cache',
-        'Referer':         'https://www.wsj.com/',
-        'Origin':          'https://www.wsj.com',
+        'User-Agent':    ua1,
+        'Accept':        'application/rss+xml, application/xml, text/xml, */*',
+        'Cache-Control': 'no-cache',
+        'Referer':       'https://www.wsj.com/',
       },
-      cf: { cacheTtl: 0 },   // bypass Cloudflare's fetch cache — we manage our own
+      cf: { cacheTtl: 0 },
     });
-    if (!resp.ok) return [];          // 403 / 429 → silent, others keep working
-    var xml = await resp.text();
-    return parseWSJItems(xml, feedDef.source, feedDef.category);
+    if (resp.ok) {
+      var xml = await resp.text();
+      return parseWSJItems(xml, feedDef.source, feedDef.category);
+    }
+    // On 403 / 429 → wait 1.5s and retry with a different UA
+    if (resp.status === 403 || resp.status === 429) {
+      await new Promise(function(r) { setTimeout(r, 1500); });
+      var ua2 = nextWSJUA();
+      var resp2 = await fetch(feedDef.url, {
+        headers: { 'User-Agent': ua2, 'Accept': 'application/rss+xml, application/xml, text/xml, */*', 'Referer': 'https://www.wsj.com/' },
+        cf: { cacheTtl: 0 },
+      });
+      if (resp2.ok) {
+        var xml2 = await resp2.text();
+        return parseWSJItems(xml2, feedDef.source, feedDef.category);
+      }
+    }
+    return [];  // both attempts failed — silent fallback, other sources still render
   } catch (e) {
-    return [];                         // network error → silent fallback
+    return [];
   }
 }
 
@@ -676,7 +715,12 @@ async function fetchAllWSJ() {
 
 async function fetchRSS(url, sourceName, tag, isGov) {
   try {
-    var resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    var resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept':     'application/rss+xml, application/xml, text/xml, */*',
+      },
+    });
     var xml = await resp.text();
     return parseRSS(xml, sourceName, tag, isGov !== false);
   } catch (e) {
