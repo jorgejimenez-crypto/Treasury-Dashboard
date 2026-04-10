@@ -84,6 +84,8 @@ var COMMODITY_LABELS= {
 var yieldChart          = null;   // Chart.js line chart instance
 var refreshTimer        = null;
 var newsTimer           = null;    // 30-min news refresh
+var newsFilterMode      = localStorage.getItem('td_news_filter') || 'all';  // 'all' | 'wsj'
+var cachedNewsItems     = null;    // raw items from last fetch (re-filtered on toggle)
 var tickerTimer         = null;
 var cachedYahoo         = null;
 var cachedFred          = null;
@@ -804,6 +806,60 @@ function initLiveStream() {
 
 
 // === NEWS & INTELLIGENCE =========================================
+// ── News filter helpers ────────────────────────────────────────────────────────
+
+// Map full source name → compact badge label
+function getSourceShort(source) {
+  if (!source) return '';
+  var s = source.toLowerCase();
+  if (s.indexOf('wsj') !== -1 || s.indexOf('wall street') !== -1) return 'WSJ';
+  if (s.indexOf('federal reserve') !== -1 || s.indexOf('fed ') === 0) return 'Fed';
+  if (s.indexOf('ecb') !== -1)           return 'ECB';
+  if (s.indexOf('reuters') !== -1)       return 'Reuters';
+  if (s.indexOf('financial times') !== -1 || s === 'ft') return 'FT';
+  if (s.indexOf('cnbc') !== -1)          return 'CNBC';
+  if (s.indexOf('yahoo') !== -1)         return 'Yahoo';
+  if (s.indexOf('marketwatch') !== -1)   return 'MW';
+  if (s.indexOf('investopedia') !== -1)  return 'Inv';
+  if (s.indexOf('ap ') === 0 || s === 'ap business') return 'AP';
+  if (s.indexOf('bbc') !== -1)           return 'BBC';
+  return source.split(' ')[0];  // fallback: first word
+}
+
+// Map short badge label → CSS modifier class for coloring
+function getSourceClass(shortLabel) {
+  var map = {
+    'WSJ':     'src-wsj',
+    'Fed':     'src-fed',
+    'ECB':     'src-fed',
+    'Reuters': 'src-reuters',
+    'FT':      'src-ft',
+    'CNBC':    'src-cnbc',
+    'Yahoo':   'src-yahoo',
+    'MW':      'src-mw',
+    'AP':      'src-ap',
+    'BBC':     'src-bbc',
+    'Inv':     'src-inv',
+  };
+  return map[shortLabel] || 'src-default';
+}
+
+// Apply the active filter mode to a raw items array.
+// 'wsj'  → WSJ items ranked first (by date desc), then others (by date desc).
+//           Never returns empty — other sources fill the gap if WSJ is sparse.
+// 'all'  → return items as-is (already sorted by worker: gov-pinned then date desc)
+function applyNewsFilter(items, mode) {
+  if (!items || !items.length) return items;
+  if (mode !== 'wsj') return items;
+
+  function byDate(a, b) { return new Date(b.date || 0) - new Date(a.date || 0); }
+  var wsj   = items.filter(function(i) { return i.source && i.source.toLowerCase().indexOf('wsj') !== -1; });
+  var other = items.filter(function(i) { return !i.source || i.source.toLowerCase().indexOf('wsj') === -1; });
+  wsj.sort(byDate);
+  other.sort(byDate);
+  return wsj.concat(other);  // WSJ first, then fill with all other sources
+}
+
 // Renders up to 8 news items: headline · source · timestamp.
 // Falls back to localStorage cache (2 hr) on fetch failure.
 
@@ -819,39 +875,55 @@ function formatTime(dateStr) {
   } catch(e) { return ''; }
 }
 
-function renderNews(items) {
+function renderNews(items, mode) {
   var feed    = document.getElementById('news-list');
   var counter = document.getElementById('news-count');
   var updLbl  = document.getElementById('news-updated-lbl');
   if (!feed) return;
 
-  if (!items || !items.length) {
+  // Apply source filter (WSJ first or all-sources)
+  var filtered = applyNewsFilter(items, mode || newsFilterMode);
+
+  if (!filtered || !filtered.length) {
     feed.innerHTML = '<div class="news-empty">No news available — refreshes every 30 min.</div>';
     if (counter) counter.textContent = '';
     return;
   }
 
-  var shown = items.slice(0, 8);   // max 8 items
+  var shown = filtered.slice(0, 8);   // max 8 items visible
 
-  if (counter) {
-    counter.textContent = items.length;
-  }
+  if (counter) counter.textContent = filtered.length;
   if (updLbl && shown[0] && shown[0].date) {
     updLbl.textContent = formatTime(shown[0].date);
   }
 
   feed.innerHTML = '';
   shown.forEach(function(item) {
-    var el  = document.createElement('article');
+    var el = document.createElement('article');
     el.className = 'news-item';
 
-    // Tag pill
+    // Row 1: tag pill + source badge (inline, space-between)
+    var topRow = document.createElement('div');
+    topRow.className = 'news-item-top';
+
     if (item.tag) {
       var tag = document.createElement('span');
       tag.className   = 'news-tag news-tag-' + item.tag.toUpperCase();
       tag.textContent = item.tag;
-      el.appendChild(tag);
+      topRow.appendChild(tag);
     }
+
+    // Source badge — short label, color-coded by outlet
+    if (item.source) {
+      var shortLabel  = getSourceShort(item.source);
+      var srcClass    = getSourceClass(shortLabel);
+      var srcBadge    = document.createElement('span');
+      srcBadge.className   = 'news-src-badge ' + srcClass;
+      srcBadge.textContent = shortLabel;
+      topRow.appendChild(srcBadge);
+    }
+
+    el.appendChild(topRow);
 
     // Headline link
     var title = document.createElement('div');
@@ -868,14 +940,13 @@ function renderNews(items) {
     }
     el.appendChild(title);
 
-    // Meta: source + time
-    var meta = document.createElement('div');
-    meta.className = 'news-meta';
-    var parts = [];
-    if (item.source) parts.push('<span class="news-source">' + item.source + '</span>');
-    if (item.date)   parts.push('<span class="news-time">'   + formatTime(item.date) + '</span>');
-    meta.innerHTML = parts.join('<span class="news-sep">·</span>');
-    el.appendChild(meta);
+    // Meta: time only (source is now shown as badge above)
+    if (item.date) {
+      var meta = document.createElement('div');
+      meta.className = 'news-meta';
+      meta.innerHTML = '<span class="news-time">' + formatTime(item.date) + '</span>';
+      el.appendChild(meta);
+    }
 
     feed.appendChild(el);
   });
@@ -888,12 +959,13 @@ function fetchNews() {
     .then(function(data) {
       var items = (data && data.items) ? data.items : (Array.isArray(data) ? data : []);
       cacheData('news', items);
+      cachedNewsItems = items;   // store raw for re-filter on toggle
       renderNews(items);
     })
     .catch(function() {
       // Graceful fallback to cached news (up to 2 hr stale)
       var cached = getCachedData('news', 7200000);
-      if (cached) renderNews(cached);
+      if (cached) { cachedNewsItems = cached; renderNews(cached); }
     });
 }
 
@@ -1006,7 +1078,7 @@ function renderDashboard(data) {
 
   // Secondary: News (uses cached data; live data fetched on separate timer)
   var cachedNews = getCachedData('news', 7200000);
-  if (cachedNews) renderNews(cachedNews);
+  if (cachedNews) { cachedNewsItems = cachedNews; renderNews(cachedNews); }
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
@@ -1121,6 +1193,28 @@ var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
+// ── News filter toggle ────────────────────────────────────────────────────────
+(function() {
+  var toggle = document.getElementById('news-filter-toggle');
+  if (!toggle) return;
+
+  // Set initial active state from persisted mode
+  toggle.querySelectorAll('.nft-btn').forEach(function(btn) {
+    if (btn.dataset.mode === newsFilterMode) btn.classList.add('nft-active');
+    btn.addEventListener('click', function() {
+      if (btn.dataset.mode === newsFilterMode) return;  // no-op if already active
+      newsFilterMode = btn.dataset.mode;
+      localStorage.setItem('td_news_filter', newsFilterMode);
+      // Update button active state
+      toggle.querySelectorAll('.nft-btn').forEach(function(b) {
+        b.classList.toggle('nft-active', b.dataset.mode === newsFilterMode);
+      });
+      // Re-render immediately with the same raw items — no new fetch needed
+      if (cachedNewsItems) renderNews(cachedNewsItems);
+    });
+  });
+})();
+
 fetchNews();    // initial news load (separate from market data)
 refreshTimer = setInterval(fetchData,  REFRESH_MS);
 newsTimer    = setInterval(fetchNews,  NEWS_REFRESH_MS);

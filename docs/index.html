@@ -256,6 +256,11 @@
           <span class="section-desc">Fed &middot; ECB &middot; Reuters &middot; WSJ &middot; CNBC</span>
         </div>
         <div class="section-hd-right">
+          <!-- Source-filter segmented control — persisted in localStorage -->
+          <div class="news-filter-toggle" id="news-filter-toggle" role="group" aria-label="News source filter">
+            <button class="nft-btn" data-mode="all">All</button>
+            <button class="nft-btn" data-mode="wsj">WSJ First</button>
+          </div>
           <span class="news-count-badge" id="news-count"></span>
           <span class="data-source" id="news-updated-lbl"></span>
         </div>
