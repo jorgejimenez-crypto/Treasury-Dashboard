@@ -1073,9 +1073,6 @@ function renderDashboard(data) {
   // Market ticker (top strip)
   renderTicker(data.yahoo, data.fred);
 
-  // Secondary: Bloomberg TV (lazy — injected once on first render)
-  initLiveStream();
-
   // Secondary: News (uses cached data; live data fetched on separate timer)
   var cachedNews = getCachedData('news', 7200000);
   if (cachedNews) { cachedNewsItems = cachedNews; renderNews(cachedNews); }
@@ -1189,6 +1186,7 @@ function initShortcuts() {
 
 // Show dashboard immediately with cached data
 document.getElementById('dashboard').style.display = 'block';
+initLiveStream();   // always fires on load — independent of market data fetch
 var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
