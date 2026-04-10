@@ -243,6 +243,7 @@ async function handleMarketData(env) {
 
   return jsonResp({
     timestamp: now.toISOString(),
+    fred_key_set: !!(fredKey),   // diagnostic: visible in DevTools Network tab
     yahoo: yahoo,
     fred: fredMarket,
     macro: fredMacro,
@@ -537,6 +538,8 @@ async function fetchFREDYieldSeries(series, apiKey) {
       + '?series_id=' + series.id + '&api_key=' + apiKey
       + '&file_type=json&sort_order=desc&limit=30';
     var resp = await fetch(url);
+    // Surface FRED API errors (bad key, rate limit, etc.) rather than silently returning empty
+    if (!resp.ok) return Object.assign({}, empty, { error: 'FRED HTTP ' + resp.status });
     var data = await resp.json();
     var obs = (data.observations || []).filter(function(o) { return o.value !== '.'; });
     if (obs.length === 0) return empty;

@@ -215,22 +215,22 @@ function renderYieldsSection(fred, yieldsHist) {
     t14Dates.push( h && h.t14Date ? h.t14Date : '');
   }
 
-  // Persist for offline/weekend fallback
-  // Saves t1, t7, t14 per maturity so all three lines survive a FRED outage or
-  // stale localStorage cache. Note: cached t7/t14 become slightly stale day-on-day
-  // (a cached "T-7" is tomorrow's "T-8") but the visual comparison remains useful.
+  // Persist for offline/weekend fallback.
+  // Rule: only write a field to knownYields if we actually have a value.
+  // Never overwrite a good cached t7/t14 with null — that destroys the fallback.
   var anyLive = t1.some(function(v){ return v!=null; });
   if (anyLive) {
-    var snap = {};
+    if (!knownYields) knownYields = {};
     for (var j=0; j<CURVE_KEYS.length; j++) {
-      snap[CURVE_KEYS[j]] = {
-        t1:  t1[j]  != null ? t1[j].toFixed(3)  : null,
-        t7:  t7[j]  != null ? t7[j].toFixed(3)  : null,
-        t14: t14[j] != null ? t14[j].toFixed(3) : null,
-        date: t1Dates[j] || ''
-      };
+      var key = CURVE_KEYS[j];
+      if (!knownYields[key]) knownYields[key] = {};
+      // Only update a slot when we have a real value — preserve prior good values
+      if (t1[j]  != null) knownYields[key].t1  = t1[j].toFixed(3);
+      if (t7[j]  != null) knownYields[key].t7  = t7[j].toFixed(3);
+      if (t14[j] != null) knownYields[key].t14 = t14[j].toFixed(3);
+      if (t1Dates[j])     knownYields[key].date = t1Dates[j];
     }
-    knownYields = snap; saveKnown('yields', snap);
+    saveKnown('yields', knownYields);
   }
   // Fill gaps from cache — T-1 always, T-7/T-14 only when yieldsHist returned null
   for (var k=0; k<CURVE_KEYS.length; k++) {
