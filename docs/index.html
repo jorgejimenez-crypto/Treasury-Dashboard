@@ -9,7 +9,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260416">
+  <link rel="stylesheet" href="style.css?v=20260413">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -82,155 +82,17 @@
 <main id="dashboard" style="display:none">
 
   <!-- ═══════════════════════════════════════════════
-       SECTION 1 — TREASURY YIELDS
-       Full-width hero. Grouped bar chart (1M/3M/6M ×
-       T-1/T-7/T-14) with a precise data table below.
+       PRIMARY GRID — desktop: 2-col × 2-row
+         Row 1: Live Catalyst (left)  |  News & Intelligence (right)
+         Row 2: Treasury Yields (left) |  FX Converter (right)
+       Mobile: single-column stack (catalyst → news → yields → fx)
   ═══════════════════════════════════════════════════ -->
-  <section class="desk-section" id="sec-yields">
+  <div class="primary-grid">
 
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">Short-Term Treasury Yields</h2>
-        <span class="section-desc">1M &nbsp;|&nbsp; 3M &nbsp;|&nbsp; 6M &nbsp;&nbsp;·&nbsp;&nbsp; T-1 vs T-7 vs T-14</span>
-      </div>
-      <div class="section-hd-right">
-        <span class="spread-pill" id="yield-spread-pill"></span>
-        <span class="data-source" id="yield-source-lbl">FRED · Daily</span>
-      </div>
-    </div>
-
-    <!-- Grouped bar chart -->
-    <div class="chart-shell">
-      <canvas id="yield-bar-canvas"></canvas>
-    </div>
-
-    <!-- Chart legend -->
-    <div class="chart-legend" id="chart-legend"></div>
-
-    <!-- Precision data table -->
-    <div class="yield-table-shell">
-      <table class="yield-table" id="yield-data-table">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-  </section>
-
-  <!-- ═══════════════════════════════════════════════
-       SECTION 2 — FUNDING & LIQUIDITY
-       6 metric cards: EFFR · SOFR · SOFR-30D ·
-       OBFR · TSY 1M · TSY 3M
-  ═══════════════════════════════════════════════════ -->
-  <section class="desk-section" id="sec-funding">
-
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">Funding &amp; Liquidity</h2>
-        <span class="section-desc">Overnight rates and short-term benchmarks</span>
-      </div>
-      <div class="section-hd-right">
-        <span class="sofr-effr-spread" id="funding-spread"></span>
-        <span class="data-source">NY Fed · FRED · Daily</span>
-      </div>
-    </div>
-
-    <div class="funding-grid" id="funding-grid">
-      <!-- 5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M — populated by renderFunding() -->
-    </div>
-
-  </section>
-
-  <!-- ═══════════════════════════════════════════════
-       SECTION 3 — FX CONVERTER
-       Two preset rows (250K–1M, 5M–10M).
-       Autocomplete currency inputs with full names.
-       Bidirectional rates + trend indicator.
-  ═══════════════════════════════════════════════════ -->
-  <section class="desk-section" id="sec-fx">
-
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">FX Converter</h2>
-        <span class="section-desc">16 currencies · Live cross-rates</span>
-      </div>
-      <div class="section-hd-right">
-        <span id="fx-rate-trend" class="fx-trend"></span>
-        <span class="data-source">Yahoo Finance · 15-min</span>
-      </div>
-    </div>
-
-    <div class="fx-body">
-
-      <!-- Row 1 presets: notional 250K → 1M -->
-      <div class="fx-preset-row" id="fx-row-1">
-        <button class="fx-preset" data-amount="250000">250K</button>
-        <button class="fx-preset" data-amount="500000">500K</button>
-        <button class="fx-preset" data-amount="750000">750K</button>
-        <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
-      </div>
-
-      <!-- Row 2 presets: large notionals -->
-      <div class="fx-preset-row" id="fx-row-2">
-        <button class="fx-preset" data-amount="5000000">5M</button>
-        <button class="fx-preset" data-amount="10000000">10M</button>
-        <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
-      </div>
-
-      <!-- Converter inputs -->
-      <div class="fx-inputs">
-        <div class="fx-amount-wrap">
-          <label class="fx-label">Amount</label>
-          <div class="fx-amount-inner">
-            <input type="number" id="fx-amount" class="fx-amount"
-                   value="1000000" step="250000" autocomplete="off">
-            <span id="fx-base-badge" class="fx-base-badge">USD</span>
-          </div>
-        </div>
-        <div class="fx-ccy-col">
-          <label class="fx-label">From</label>
-          <div class="fx-ccy-wrap">
-            <input type="text" id="fx-base" class="fx-ccy-input"
-                   value="USD" maxlength="3" autocomplete="off" spellcheck="false">
-            <div id="fx-base-list" class="fx-dropdown"></div>
-          </div>
-        </div>
-        <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
-        <div class="fx-ccy-col">
-          <label class="fx-label">To</label>
-          <div class="fx-ccy-wrap">
-            <input type="text" id="fx-quote" class="fx-ccy-input"
-                   value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
-            <div id="fx-quote-list" class="fx-dropdown"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Result panel -->
-      <div class="fx-result-panel">
-        <div class="fx-result-main" id="fx-result">--</div>
-        <div class="fx-result-rates">
-          <span class="fx-rate-fwd" id="fx-rate-line"></span>
-          <span class="fx-rate-rev" id="fx-reverse-rate"></span>
-        </div>
-      </div>
-
-    </div><!-- /fx-body -->
-
-  </section>
-
-  <!-- ═══════════════════════════════════════════════
-       SECONDARY ZONE — desktop: 2-col side by side
-                         mobile:  stacked
-       Left  → Live Catalyst (Bloomberg TV)
-       Right → News & Intelligence
-  ═══════════════════════════════════════════════════ -->
-  <div class="secondary-zone" id="secondary-zone">
-
-    <!-- === LIVE CATALYST ============================
+    <!-- === LIVE CATALYST (Row 1, Left) ===========================
          Compact Bloomberg TV iframe.
          Passive macro awareness — never dominant.
-    ================================================= -->
+    ============================================================== -->
     <section class="desk-section secondary-card" id="sec-catalyst">
       <div class="section-hd">
         <div class="section-hd-left">
@@ -246,10 +108,7 @@
              target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
         </div>
       </div>
-      <!-- 16:9 responsive iframe wrapper.
-           Default state = fallback link — JS upgrades to iframe when ready.
-           This way the section is never stuck on "Loading stream…" regardless
-           of JS execution, WORKER_URL state, or browser cache. -->
+      <!-- 16:9 responsive iframe wrapper. Default state = fallback link. -->
       <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
         <div class="catalyst-fallback" id="catalyst-default">
           <span class="catalyst-fb-msg">Bloomberg Television</span>
@@ -260,11 +119,11 @@
       </div>
     </section>
 
-    <!-- === NEWS & INTELLIGENCE ======================
+    <!-- === NEWS & INTELLIGENCE (Row 1, Right) ====================
          Scrollable feed from worker /api/news.
          Headline · Source · Timestamp only.
          Max 8 items visible before scroll.
-    ================================================= -->
+    ============================================================== -->
     <section class="desk-section secondary-card" id="sec-news">
       <div class="section-hd">
         <div class="section-hd-left">
@@ -287,7 +146,143 @@
       </div>
     </section>
 
-  </div><!-- /secondary-zone -->
+    <!-- === SHORT-TERM TREASURY YIELDS (Row 2, Left) ==============
+         Compact grouped line chart (1M/3M/6M × T-1/T-7/T-14)
+         with compact precision data table below.
+         Chart height and table density reduced ~50% vs full-width.
+    ============================================================== -->
+    <section class="desk-section" id="sec-yields">
+
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Short-Term Treasury Yields</h2>
+          <span class="section-desc">1M &nbsp;|&nbsp; 3M &nbsp;|&nbsp; 6M &nbsp;&nbsp;&middot;&nbsp;&nbsp; T-1 vs T-7 vs T-14</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="spread-pill" id="yield-spread-pill"></span>
+          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+        </div>
+      </div>
+
+      <!-- Grouped line chart (compact height) -->
+      <div class="chart-shell">
+        <canvas id="yield-bar-canvas"></canvas>
+      </div>
+
+      <!-- Chart legend -->
+      <div class="chart-legend" id="chart-legend"></div>
+
+      <!-- Compact precision data table -->
+      <div class="yield-table-shell">
+        <table class="yield-table" id="yield-data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- === FX CONVERTER (Row 2, Right) ===========================
+         Two preset rows (250K–1M, 5M–10M).
+         Autocomplete currency inputs with full names.
+         Bidirectional rates + trend indicator.
+    ============================================================== -->
+    <section class="desk-section" id="sec-fx">
+
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">FX Converter</h2>
+          <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+        </div>
+        <div class="section-hd-right">
+          <span id="fx-rate-trend" class="fx-trend"></span>
+          <span class="data-source">Yahoo Finance &middot; 15-min</span>
+        </div>
+      </div>
+
+      <div class="fx-body">
+
+        <!-- Row 1 presets: notional 250K → 1M -->
+        <div class="fx-preset-row" id="fx-row-1">
+          <button class="fx-preset" data-amount="250000">250K</button>
+          <button class="fx-preset" data-amount="500000">500K</button>
+          <button class="fx-preset" data-amount="750000">750K</button>
+          <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
+        </div>
+
+        <!-- Row 2 presets: large notionals -->
+        <div class="fx-preset-row" id="fx-row-2">
+          <button class="fx-preset" data-amount="5000000">5M</button>
+          <button class="fx-preset" data-amount="10000000">10M</button>
+          <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
+        </div>
+
+        <!-- Converter inputs -->
+        <div class="fx-inputs">
+          <div class="fx-amount-wrap">
+            <label class="fx-label">Amount</label>
+            <div class="fx-amount-inner">
+              <input type="number" id="fx-amount" class="fx-amount"
+                     value="1000000" step="250000" autocomplete="off">
+              <span id="fx-base-badge" class="fx-base-badge">USD</span>
+            </div>
+          </div>
+          <div class="fx-ccy-col">
+            <label class="fx-label">From</label>
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-base" class="fx-ccy-input"
+                     value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+              <div id="fx-base-list" class="fx-dropdown"></div>
+            </div>
+          </div>
+          <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
+          <div class="fx-ccy-col">
+            <label class="fx-label">To</label>
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-quote" class="fx-ccy-input"
+                     value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+              <div id="fx-quote-list" class="fx-dropdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result panel -->
+        <div class="fx-result-panel">
+          <div class="fx-result-main" id="fx-result">--</div>
+          <div class="fx-result-rates">
+            <span class="fx-rate-fwd" id="fx-rate-line"></span>
+            <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+          </div>
+        </div>
+
+      </div><!-- /fx-body -->
+
+    </section>
+
+  </div><!-- /primary-grid -->
+
+  <!-- ═══════════════════════════════════════════════
+       FUNDING & LIQUIDITY — full-width strip below grid
+       5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
+  ═══════════════════════════════════════════════════ -->
+  <section class="desk-section" id="sec-funding">
+
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">Funding &amp; Liquidity</h2>
+        <span class="section-desc">Overnight rates and short-term benchmarks</span>
+      </div>
+      <div class="section-hd-right">
+        <span class="sofr-effr-spread" id="funding-spread"></span>
+        <span class="data-source">NY Fed &middot; FRED &middot; Daily</span>
+      </div>
+    </div>
+
+    <div class="funding-grid" id="funding-grid">
+      <!-- 5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M — populated by renderFunding() -->
+    </div>
+
+  </section>
 
 </main>
 
@@ -330,6 +325,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260416"></script>
+<script src="app.js?v=20260413"></script>
 </body>
 </html>
