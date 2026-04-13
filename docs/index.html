@@ -81,6 +81,134 @@
 ======================================================= -->
 <main id="dashboard" style="display:none">
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       FL-BAR — Funding & Liquidity KPI Strip
+       ─────────────────────────────────────────────────────────────────
+       Purpose : High-signal operational snapshot above the main grid.
+       Data     : Internal treasury metrics (static placeholders —
+                  wire to your backend or extend the worker as needed).
+       Layout   : 6 KPI cards in a single horizontal row, ~72px tall.
+                  Dividers between cards. Sparklines on cards 1 & 2.
+       Mobile   : Cards wrap to 3×2 at ≤840px, 2×3 at ≤520px.
+  ════════════════════════════════════════════════════════════════════ -->
+  <div class="fl-bar" id="fl-bar" role="region" aria-label="Funding &amp; Liquidity KPIs">
+
+    <!-- Card 1 — Liquidity Ratio (with sparkline) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Liquidity Ratio</span>
+        <span class="fl-chg fl-up">▲ 0.06</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-liq-ratio">1.84<span class="fl-unit">×</span></span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <!-- Sparkline: 8-pt uptrend, green, 44×18 SVG -->
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-green" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#22d3a0" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,16 6,12 12,18 18,10 24,8 30,6 36,2 42,0 42,18 0,18"
+                     fill="url(#spk-green)"/>
+            <polyline points="0,16 6,12 12,18 18,10 24,8 30,6 36,2 42,0"
+                      fill="none" stroke="#22d3a0" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-strong">Strong</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 2 — Cash Position (with sparkline) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Cash Position</span>
+        <span class="fl-chg fl-up">▲ $120M</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-cash">$2.47<span class="fl-unit">B</span></span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <!-- Sparkline: 8-pt uptrend, blue, 44×18 SVG -->
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-blue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,15 6,18 12,11 18,8 24,6 30,3 36,4 42,0 42,18 0,18"
+                     fill="url(#spk-blue)"/>
+            <polyline points="0,15 6,18 12,11 18,8 24,6 30,3 36,4 42,0"
+                      fill="none" stroke="#60a5fa" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-strong">Strong</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 3 — Available Credit Lines -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Avail. Credit Lines</span>
+        <span class="fl-chg fl-flat">— unch.</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-credit">$1.85<span class="fl-unit">B</span></span>
+        <span class="fl-status fl-adequate">Adequate</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 4 — 30-Day Funding Gap -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">30D Funding Gap</span>
+        <span class="fl-chg fl-up">▲ $85M</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-positive" id="fl-gap">+$340<span class="fl-unit">M</span></span>
+        <span class="fl-status fl-strong">Surplus</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 5 — Weighted Avg. Maturity -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Wtd. Avg. Maturity</span>
+        <span class="fl-chg fl-dn">▼ 4d</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-wam">87<span class="fl-unit">d</span></span>
+        <span class="fl-status fl-adequate">Adequate</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 6 — Near-Term Maturities -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Near-Term Maturities</span>
+        <span class="fl-chg fl-monitor">14d window</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-warn" id="fl-maturities">$450<span class="fl-unit">M</span></span>
+        <span class="fl-status fl-monitor">Monitor</span>
+      </div>
+    </div>
+
+  </div><!-- /fl-bar -->
+
   <!-- ═══════════════════════════════════════════════
        PRIMARY GRID — desktop: 2-col × 2-row
          Row 1: Live Catalyst (left)  |  News & Intelligence (right)

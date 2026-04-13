@@ -1125,3 +1125,212 @@ body {
   .header-actions,.notes-panel,.modal-bg { display:none!important; }
   .desk-section { border:1px solid #ddd; break-inside:avoid; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   FL-BAR — Funding & Liquidity KPI Strip
+   ───────────────────────────────────────────────────────────────
+   A thin, single-row strip of 6 operational KPI cards.
+   ~72px total height on desktop. Sits above the primary grid.
+   Static placeholder values — wire to backend as needed.
+   ─────────────────────────────────────────────────────────────
+   Structure:
+     .fl-bar               — outer strip shell
+       .fl-card            — one KPI (flex: 1)
+         .fl-top           — label row (label + change)
+         .fl-bottom        — value row (number + sparkline + status)
+       .fl-divider         — 1px vertical separator between cards
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Strip shell ────────────────────────────────────────────── */
+.fl-bar {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 0 20px;
+  display: flex;
+  align-items: stretch;
+  min-height: 72px;
+  overflow: hidden;
+  /* Subtle top-accent line — matches the section chrome */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+/* ── Vertical divider between cards ────────────────────────── */
+.fl-divider {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 14px 0;    /* doesn't span full height — refined look */
+}
+
+/* ── Individual KPI card ────────────────────────────────────── */
+.fl-card {
+  flex: 1;
+  min-width: 0;       /* prevent overflow in tight columns */
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s;
+  /* Prevent card from shrinking smaller than its label */
+  min-width: 110px;
+}
+
+.fl-card:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+/* ── Top row: label (left) + change indicator (right) ───────── */
+.fl-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.fl-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Change indicator ───────────────────────────────────────── */
+.fl-chg {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-up      { color: var(--green); }
+.fl-dn      { color: var(--red);   }
+.fl-flat    { color: var(--text-3); }
+.fl-monitor { color: var(--amber); }
+
+/* ── Bottom row: value + sparkline + status pill ────────────── */
+.fl-bottom {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Main KPI value */
+.fl-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Unit suffix — smaller, muted */
+.fl-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 1px;
+  letter-spacing: 0;
+}
+
+/* Colored value variants */
+.fl-positive { color: var(--green); }
+.fl-warn     { color: var(--amber); }
+.fl-negative { color: var(--red);   }
+
+/* ── Sparkline wrapper + SVG ────────────────────────────────── */
+.fl-spark-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.fl-card:hover .fl-spark-wrap { opacity: 1; }
+
+.fl-spark {
+  width: 44px;
+  height: 18px;
+  display: block;
+  overflow: visible;
+}
+
+/* ── Status pill ────────────────────────────────────────────── */
+.fl-status {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Status color variants */
+.fl-strong   {
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+}
+.fl-adequate {
+  color: var(--blue-lt);
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+}
+.fl-monitor  {
+  color: var(--amber);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+}
+.fl-alert    {
+  color: var(--red);
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+
+/* Tablet: 3-up wrap, 2 rows */
+@media (max-width: 840px) {
+  .fl-bar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 0;
+    padding: 4px 12px 8px;
+  }
+  .fl-divider {
+    display: none;    /* dividers become visual noise in wrapped layout */
+  }
+  .fl-card {
+    flex-basis: calc(33.33% - 8px);
+    min-width: 120px;
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  /* Last row: no border-bottom */
+  .fl-card:nth-child(n+9) { border-bottom: none; }
+  /* Remove bottom border on last full row (cards 5+6 = n+9 in the full set with dividers) */
+}
+
+/* Mobile: 2-up wrap, 3 rows */
+@media (max-width: 520px) {
+  .fl-card {
+    flex-basis: calc(50% - 6px);
+    min-width: 0;
+  }
+  .fl-value { font-size: 15px; }
+  .fl-spark-wrap { display: none; }   /* drop sparklines at this size */
+}
