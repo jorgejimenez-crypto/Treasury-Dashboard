@@ -432,6 +432,61 @@ body {
 /* Alternating rows */
 .yield-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
 
+/* ── Compact Treasury Yields — in 50%-width left column ──────
+   Chart reduced to ~50% height; table tightened ~50%.
+   T-7 and T-14 columns get solid left-border delineation.
+   Applied via #sec-yields specificity — no extra class needed.
+──────────────────────────────────────────────────────────── */
+
+/* Compact chart height (~50% of 340px hero) */
+#sec-yields .chart-shell {
+  height: 185px;
+  padding: 10px 10px 6px;
+  margin-bottom: 10px;
+}
+
+/* Tighter section header */
+#sec-yields .section-hd {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+/* Compact legend spacing */
+#sec-yields .chart-legend {
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+/* Compact table — ~50% of original density */
+#sec-yields .yield-table {
+  font-size: 10.5px;
+  min-width: 0;          /* remove 520px min — fluid in column */
+}
+#sec-yields .yield-table thead th {
+  padding: 5px 8px;
+  font-size: 8.5px;
+  letter-spacing: 0.4px;
+}
+#sec-yields .yield-table .yt-hd-mat { padding-left: 12px; }
+#sec-yields .yield-table tbody td   { padding: 5px 8px; }
+#sec-yields .yt-mat   { padding-left: 12px !important; font-size: 11px; }
+#sec-yields .yt-latest { font-size: 11.5px; }
+
+/* Solid left-border column dividers for T-7 and T-14 columns.
+   The original chart uses dashed/dotted lines for T-7/T-14;
+   the table columns now get matching solid delineation. */
+#sec-yields .yt-hd-t7,
+#sec-yields .yield-table tbody td:nth-child(3) {
+  border-left: 1px solid var(--border-md);
+}
+#sec-yields .yt-hd-t14,
+#sec-yields .yield-table tbody td:nth-child(4) {
+  border-left: 1px solid var(--border-md);
+}
+
+/* FX section in right column: remove max-width cap so it fills column */
+#sec-fx .fx-body { max-width: 100%; }
+
 
 /* === SECTION 2 — FUNDING & LIQUIDITY ====================== */
 
@@ -667,26 +722,26 @@ body {
 .fx-trend-flat { color:var(--text-3); }
 
 
-/* === SECONDARY ZONE ======================================== */
-/* Desktop: 2-col side by side. Mobile: stacked.             */
-/* Bloomberg TV (left) + News & Intelligence (right)         */
+/* === PRIMARY GRID ========================================== */
+/* Desktop: 2-col × 2-row.                                   */
+/*   Row 1: Live Catalyst (left) | News & Intelligence (right) */
+/*   Row 2: Treasury Yields (left) | FX Converter (right)    */
+/* Mobile: single-column stack.                              */
 
-.secondary-zone {
+.primary-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
 
-/* Each card in the secondary zone uses the same desk-section
-   shell but with slightly reduced padding */
+/* Secondary cards (catalyst + news) use reduced padding    */
 .secondary-card {
-  /* inherits .desk-section styles */
-  min-height: 0;   /* allow grid to size naturally */
+  min-height: 0;
   padding: 24px 28px;  /* lighter than primary --section-pad: 36px */
 }
 
 @media (max-width: 900px) {
-  .secondary-zone {
+  .primary-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1042,6 +1097,8 @@ body {
   .header-inner { padding: 12px 20px; flex-wrap: wrap; }
   .header-status { order: 3; flex-basis: 100%; }
   .chart-shell  { height: 280px; }
+  /* Restore compact yields chart to standard height on single-column mobile */
+  #sec-yields .chart-shell { height: 230px; }
   #app-footer   { padding: 14px 20px 24px; }
 }
 
