@@ -1334,3 +1334,46 @@ body {
   .fl-value { font-size: 15px; }
   .fl-spark-wrap { display: none; }   /* drop sparklines at this size */
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   FL-BAR-MKTS — Market Rates & Risk KPI Strip (9-card modifier)
+   ───────────────────────────────────────────────────────────────
+   Extends the base .fl-bar / .fl-card system with tighter
+   min-widths to accommodate 9 cards in the same row height.
+   All color tokens, hover logic, and status pills are inherited
+   from the fl-bar base block above — nothing overrides those.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 9-card row: tighter per-card minimum width ─────────────── */
+.fl-bar-mkts .fl-card {
+  min-width: 88px;      /* vs 110px on 6-card bar — fits 9 in ~1320px */
+  padding: 12px 12px;   /* slight horizontal squeeze */
+}
+
+/* ── Compact value variant — for multi-digit ranges (Fed Range) */
+.fl-value-sm {
+  font-size: 13px !important;   /* 3.50–3.75% fits at 13px */
+  letter-spacing: -0.3px;
+}
+
+/* ── Section label sitting above the bar (screen-reader hint)  */
+/* Already covered by aria-label on the div — no visible label  */
+
+/* ── Responsive: 9-card bar wraps to 3 × 3 rows at ≤840px ─── */
+@media (max-width: 840px) {
+  .fl-bar-mkts .fl-card {
+    flex-basis: calc(33.33% - 8px);
+    min-width: 100px;
+    padding: 10px 10px;
+  }
+}
+
+/* ── At ≤520px: 2-col, same as base bar ─────────────────────── */
+@media (max-width: 520px) {
+  .fl-bar-mkts .fl-card {
+    flex-basis: calc(50% - 6px);
+    min-width: 0;
+  }
+  /* fl-value-sm stays small — already compact */
+}

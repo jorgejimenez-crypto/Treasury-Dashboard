@@ -209,6 +209,221 @@
 
   </div><!-- /fl-bar -->
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       FL-BAR-MKTS — Market Rates & Risk KPI Strip (9 cards)
+       ─────────────────────────────────────────────────────────────────
+       Purpose : Live market-rate context row (SOFR → VIX).
+                 Sits directly below the Funding & Liquidity bar.
+       Data     : Wire card IDs to /api/market-data & /api/ticker —
+                  SOFR/EFFR from nyfed/fred; DXY/WTI/VIX from yahoo;
+                  2s10s from fred.DGS2 & fred.DGS10; RRP from nyfed.
+       Layout   : 9 cards, single row, ~72px.
+                  ≤840px: 3-col wrap. ≤520px: 2-col wrap, no sparklines.
+       SVG IDs  : Prefixed spk-m-* to avoid collision with fl-bar above.
+  ════════════════════════════════════════════════════════════════════ -->
+  <div class="fl-bar fl-bar-mkts" id="fl-bar-mkts" role="region" aria-label="Market Rates &amp; Risk">
+
+    <!-- Card 1 — SOFR (with sparkline — downtrend = tightening, green) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">SOFR</span>
+        <span class="fl-chg fl-dn">▼ 1bp</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-sofr">3.57<span class="fl-unit">%</span></span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-m-sofr" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#22d3a0" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,4 6,6 12,5 18,8 24,9 30,10 36,12 42,14 42,18 0,18"
+                     fill="url(#spk-m-sofr)"/>
+            <polyline points="0,4 6,6 12,5 18,8 24,9 30,10 36,12 42,14"
+                      fill="none" stroke="#22d3a0" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-strong">Strong</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 2 — EFFR (flat trend) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">EFFR</span>
+        <span class="fl-chg fl-flat">— unch.</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-effr">3.64<span class="fl-unit">%</span></span>
+        <span class="fl-status fl-strong">Strong</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 3 — Fed Funds Target Range (compact value, no sparkline) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">Fed Range</span>
+        <span class="fl-chg fl-flat">— unch.</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-value-sm" id="fl-fedrange">3.50–3.75<span class="fl-unit">%</span></span>
+        <span class="fl-status fl-adequate">Target</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 4 — 2s10s Spread (with sparkline — narrowing) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">2s10s</span>
+        <span class="fl-chg fl-dn">▼ 3bp</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-positive" id="fl-2s10s">+50<span class="fl-unit">bp</span></span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-m-curve" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,2 6,3 12,2 18,4 24,6 30,8 36,10 42,13 42,18 0,18"
+                     fill="url(#spk-m-curve)"/>
+            <polyline points="0,2 6,3 12,2 18,4 24,6 30,8 36,10 42,13"
+                      fill="none" stroke="#60a5fa" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-adequate">Steepening</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 5 — IG Spread / OAS (tight = strong) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">IG OAS</span>
+        <span class="fl-chg fl-dn">▼ 4bp</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value" id="fl-igoas">82<span class="fl-unit">bp</span></span>
+        <span class="fl-status fl-strong">Tight</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 6 — RRP (drained = very strong signal, system flushed) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">RRP</span>
+        <span class="fl-chg fl-dn">▼ drained</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-positive" id="fl-rrp">~$0<span class="fl-unit">B</span></span>
+        <span class="fl-status fl-strong">V. Strong</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 7 — DXY (elevated = monitor, amber tint) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">DXY</span>
+        <span class="fl-chg fl-monitor">▲ 0.4</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-warn" id="fl-dxy">98.8</span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-m-dxy" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#f59e0b" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,16 6,14 12,15 18,11 24,9 30,6 36,4 42,2 42,18 0,18"
+                     fill="url(#spk-m-dxy)"/>
+            <polyline points="0,16 6,14 12,15 18,11 24,9 30,6 36,4 42,2"
+                      fill="none" stroke="#f59e0b" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-monitor">Monitor</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 8 — WTI Oil (surging = monitor/alert, red-amber tint) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">WTI Oil</span>
+        <span class="fl-chg fl-monitor">▲ 6.7%</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-warn" id="fl-wti">$103<span class="fl-unit">/bbl</span></span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-m-oil" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#f87171" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#f87171" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,18 6,16 12,15 18,13 24,10 30,8 36,4 42,0 42,18 0,18"
+                     fill="url(#spk-m-oil)"/>
+            <polyline points="0,18 6,16 12,15 18,13 24,10 30,8 36,4 42,0"
+                      fill="none" stroke="#f87171" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-monitor">Monitor</span>
+      </div>
+    </div>
+
+    <div class="fl-divider" aria-hidden="true"></div>
+
+    <!-- Card 9 — VIX (elevated but sub-20 = amber/mild) -->
+    <div class="fl-card">
+      <div class="fl-top">
+        <span class="fl-label">VIX</span>
+        <span class="fl-chg fl-monitor">▲ 1.2</span>
+      </div>
+      <div class="fl-bottom">
+        <span class="fl-value fl-warn" id="fl-vix">19.9</span>
+        <span class="fl-spark-wrap" aria-hidden="true">
+          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spk-m-vix" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#f59e0b" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polygon points="0,14 6,16 12,12 18,14 24,10 30,9 36,6 42,4 42,18 0,18"
+                     fill="url(#spk-m-vix)"/>
+            <polyline points="0,14 6,16 12,12 18,14 24,10 30,9 36,6 42,4"
+                      fill="none" stroke="#f59e0b" stroke-width="1.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="fl-status fl-monitor">Mildly Elev.</span>
+      </div>
+    </div>
+
+  </div><!-- /fl-bar-mkts -->
+
   <!-- ═══════════════════════════════════════════════
        PRIMARY GRID — desktop: 2-col × 2-row
          Row 1: Live Catalyst (left)  |  News & Intelligence (right)
