@@ -18,7 +18,61 @@ var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev'
 var REFRESH_MS          = 15 * 60 * 1000;
 var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
-// === STATE ======================================================
+
+// Silent alert thresholds (background risk monitoring — no panel displayed)
+var THRESHOLDS = {
+  commodityPct: 2.0, multiBooksMin: 2,
+  vixHigh: 30, vixPctSpike: 15,
+  dxyLow: 99, dxyHigh: 105,
+  yield10YHigh: 5.0,
+  igOasWide: 150, hyOasWide: 500
+};
+
+// Yield curve (short end: 1M · 3M · 6M)
+var CURVE_KEYS   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
+var CURVE_LABELS = ['1M', '3M', '6M'];
+
+// Ticker strip items — yahoo (10s) + fred daily
+var TICKER_ITEMS = [
+  { key:'SP500',  label:'S&P 500', src:'yahoo', prefix:'',  fmt:0, suffix:'' },
+  { key:'DGS2',   label:'2Y UST',  src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
+  { key:'DGS10',  label:'10Y UST', src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
+  { key:'DXY',    label:'DXY',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
+  { key:'WTI',    label:'WTI',     src:'yahoo', prefix:'$', fmt:2, suffix:'' },
+  { key:'Gold',   label:'Gold',    src:'yahoo', prefix:'$', fmt:0, suffix:'' },
+  { key:'EURUSD', label:'EUR/USD', src:'yahoo', prefix:'',  fmt:4, suffix:'' },
+  { key:'VIX',    label:'VIX',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
+];
+
+// FX converter — 16 currencies
+var FX_CURRENCIES = [
+  'USD','EUR','GBP','JPY','AUD','CAD','CHF','CNH',
+  'NZD','MXN','BRL','SGD','HKD','INR','SEK','NOK'
+];
+var FX_NAMES = {
+  USD:'US Dollar',   EUR:'Euro',              GBP:'British Pound',
+  JPY:'Japanese Yen',AUD:'Australian Dollar', CAD:'Canadian Dollar',
+  CHF:'Swiss Franc', CNH:'Chinese Yuan',      NZD:'New Zealand Dollar',
+  MXN:'Mexican Peso',BRL:'Brazilian Real',    SGD:'Singapore Dollar',
+  HKD:'Hong Kong Dollar',INR:'Indian Rupee',  SEK:'Swedish Krona',
+  NOK:'Norwegian Krone'
+};
+var FX_YAHOO_MAP = {
+  EUR:'EURUSD', GBP:'GBPUSD', AUD:'AUDUSD', JPY:'USDJPY',
+  CAD:'USDCAD', CHF:'USDCHF', CNH:'USDCNH', NZD:'NZDUSD',
+  MXN:'USDMXN', BRL:'USDBRL', SGD:'USDSGD', HKD:'USDHKD',
+  INR:'USDINR', SEK:'USDSEK', NOK:'USDNOK'
+};
+var FX_INVERTED = {
+  JPY:true,CAD:true,CHF:true,CNH:true,MXN:true,BRL:true,
+  SGD:true,HKD:true,INR:true,SEK:true,NOK:true
+};
+
+// Energy keys for silent alert computation
+var ENERGY_KEYS      = ['WTI','Brent','NatGas','HeatOil'];
+var COMMODITY_LABELS = {
+  WTI:'WTI Crude',Brent:'Brent Crude',NatGas:'Henry Hub',HeatOil:'Heating Oil'
+};
 
 var yieldChart          = null;   // Chart.js line chart instance
 var refreshTimer        = null;
