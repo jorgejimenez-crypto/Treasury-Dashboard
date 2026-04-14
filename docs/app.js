@@ -836,7 +836,7 @@ function renderDashboard(data) {
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
-  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'flex';
 }
 
 
@@ -945,7 +945,7 @@ function initShortcuts() {
 
 // === INIT =======================================================
 
-document.getElementById('dashboard').style.display = 'block';
+document.getElementById('dashboard').style.display = 'flex';
 document.getElementById('loading').style.display   = 'none';
 updateHeader(null);
 initFxConverter();
