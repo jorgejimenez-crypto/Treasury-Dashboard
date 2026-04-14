@@ -722,6 +722,86 @@ body {
 .fx-trend-flat { color:var(--text-3); }
 
 
+/* === SECONDARY ZONE ======================================== */
+
+.secondary-zone {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.secondary-card {
+  min-height: 0;
+  padding: 24px 28px;
+}
+@media (max-width: 900px) {
+  .secondary-zone { grid-template-columns: 1fr; }
+}
+
+
+/* === LIVE CATALYST ========================================= */
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.live-pip {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.live-on  { color: var(--green); }
+.live-on  .live-pip { background: var(--green); box-shadow: 0 0 5px var(--green); animation: pulse-pip 2s ease-in-out infinite; }
+.live-off { color: var(--text-3); }
+.live-off .live-pip { background: var(--text-3); }
+
+@keyframes pulse-pip {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.catalyst-ext-link {
+  font-size: 14px;
+  color: var(--text-3);
+  text-decoration: none;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.catalyst-ext-link:hover { color: var(--text-2); }
+
+.catalyst-frame-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;   /* 16:9 */
+  background: #000;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.catalyst-frame-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.catalyst-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+
+
 /* === FOOTER ================================================ */
 
 #app-footer {

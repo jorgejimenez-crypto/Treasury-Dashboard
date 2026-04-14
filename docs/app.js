@@ -82,6 +82,7 @@ var cachedFred          = null;
 var tickerBackoff       = TICKER_REFRESH_MS;
 var lastManualRefresh   = 0;
 var fxConverterReady    = false;
+var liveStreamLoaded    = false;   // Bloomberg iframe injected once
 var lastRefreshTime     = 0;
 var fetchInFlight       = 0;
 var fetchRetryCount     = 0;
@@ -780,9 +781,30 @@ function computeFx() {
 
 
 // === LIVE CATALYST — Bloomberg TV ===============================
-// Lazy-injects a muted YouTube live iframe once.
+// Lazy-injects a muted YouTube live iframe once on first render.
 // The outer wrapper uses padding-top: 56.25% for 16:9 aspect ratio.
 
+function initLiveStream() {
+  if (liveStreamLoaded) return;
+  var wrap = document.getElementById('catalyst-frame-wrap');
+  if (!wrap) return;
+  liveStreamLoaded = true;
+
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/live_stream'
+    + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
+    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
+  iframe.title          = 'Bloomberg Television Live';
+  iframe.loading        = 'lazy';
+  iframe.allow          = 'autoplay; encrypted-media; picture-in-picture';
+  iframe.allowFullscreen = true;
+  wrap.innerHTML = '';
+  wrap.appendChild(iframe);
+
+  // Live-dot: green during market hours, dim otherwise
+  var pip = document.getElementById('live-dot');
+  if (pip) pip.className = 'live-indicator ' + (isOpen() ? 'live-on' : 'live-off');
+}
 
 
 function renderTicker(yahoo, fred) {
@@ -886,6 +908,9 @@ function renderDashboard(data) {
 
   // Market ticker (top strip)
   renderTicker(data.yahoo, data.fred);
+
+  // Live Catalyst (lazy — injected once)
+  initLiveStream();
 
 
   // Show dashboard
@@ -1002,6 +1027,7 @@ function initShortcuts() {
 document.getElementById('dashboard').style.display = 'flex';
 document.getElementById('loading').style.display   = 'none';
 updateHeader(null);
+initLiveStream();
 initFxConverter();
 var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
