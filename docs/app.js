@@ -18,84 +18,20 @@ var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev'
 var REFRESH_MS          = 15 * 60 * 1000;
 var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
-var NEWS_REFRESH_MS     = 30 * 60 * 1000;   // news refreshes every 30 min
-
-// Silent alert thresholds (kept for background risk monitoring)
-var THRESHOLDS = {
-  commodityPct: 2.0, multiBooksMin: 2,
-  vixHigh: 30, vixPctSpike: 15,
-  dxyLow: 99, dxyHigh: 105,
-  yield10YHigh: 5.0,
-  igOasWide: 150, hyOasWide: 500
-};
-
-// Yield curve (short end: 1M · 3M · 6M)
-var CURVE_KEYS   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
-var CURVE_LABELS = ['1M', '3M', '6M'];
-
-// === TICKER ITEMS =====================================================
-// Sources: yahoo (10s live) + fred (daily, from 15-min full refresh)
-// Includes FRED 2Y/10Y for a complete treasury desk view.
-
-var TICKER_ITEMS = [
-  { key:'SP500',  label:'S&P 500', src:'yahoo', prefix:'',  fmt:0, suffix:'' },
-  { key:'DGS2',   label:'2Y UST',  src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
-  { key:'DGS10',  label:'10Y UST', src:'fred',  prefix:'',  fmt:2, suffix:'%', bpsChange:true },
-  { key:'DXY',    label:'DXY',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
-  { key:'WTI',    label:'WTI',     src:'yahoo', prefix:'$', fmt:2, suffix:'' },
-  { key:'Gold',   label:'Gold',    src:'yahoo', prefix:'$', fmt:0, suffix:'' },
-  { key:'EURUSD', label:'EUR/USD', src:'yahoo', prefix:'',  fmt:4, suffix:'' },
-  { key:'VIX',    label:'VIX',     src:'yahoo', prefix:'',  fmt:2, suffix:'' },
-];
-
-// FX — expanded 16-currency list for converter
-var FX_CURRENCIES = [
-  'USD','EUR','GBP','JPY','AUD','CAD','CHF','CNH',
-  'NZD','MXN','BRL','SGD','HKD','INR','SEK','NOK'
-];
-var FX_NAMES = {
-  USD:'US Dollar',   EUR:'Euro',              GBP:'British Pound',
-  JPY:'Japanese Yen',AUD:'Australian Dollar', CAD:'Canadian Dollar',
-  CHF:'Swiss Franc', CNH:'Chinese Yuan',      NZD:'New Zealand Dollar',
-  MXN:'Mexican Peso',BRL:'Brazilian Real',    SGD:'Singapore Dollar',
-  HKD:'Hong Kong Dollar',INR:'Indian Rupee',  SEK:'Swedish Krona',
-  NOK:'Norwegian Krone'
-};
-var FX_YAHOO_MAP = {
-  EUR:'EURUSD', GBP:'GBPUSD', AUD:'AUDUSD', JPY:'USDJPY',
-  CAD:'USDCAD', CHF:'USDCHF', CNH:'USDCNH', NZD:'NZDUSD',
-  MXN:'USDMXN', BRL:'USDBRL', SGD:'USDSGD', HKD:'USDHKD',
-  INR:'USDINR', SEK:'USDSEK', NOK:'USDNOK'
-};
-var FX_INVERTED = {
-  JPY:true,CAD:true,CHF:true,CNH:true,MXN:true,BRL:true,
-  SGD:true,HKD:true,INR:true,SEK:true,NOK:true
-};
-
-// Keys still needed for silent alert computation
-var ENERGY_KEYS     = ['WTI','Brent','NatGas','HeatOil'];
-var COMMODITY_LABELS= {
-  WTI:'WTI Crude',Brent:'Brent Crude',NatGas:'Henry Hub',HeatOil:'Heating Oil'
-};
-
-
 // === STATE ======================================================
 
 var yieldChart          = null;   // Chart.js line chart instance
 var refreshTimer        = null;
-var newsTimer           = null;    // 30-min news refresh
-var newsFilterMode      = localStorage.getItem('td_news_filter') || 'all';  // 'all' | 'wsj'
-var cachedNewsItems     = null;    // raw items from last fetch (re-filtered on toggle)
 var tickerTimer         = null;
 var cachedYahoo         = null;
 var cachedFred          = null;
 var tickerBackoff       = TICKER_REFRESH_MS;
 var lastManualRefresh   = 0;
 var fxConverterReady    = false;
-var liveStreamLoaded    = false;   // Bloomberg iframe injected once
 var lastRefreshTime     = 0;
 var fetchInFlight       = 0;
 var fetchRetryCount     = 0;
+
 
 
 // === LOCALSTORAGE ===============================================
@@ -793,220 +729,7 @@ function computeFx() {
 // Lazy-injects a muted YouTube live iframe once.
 // The outer wrapper uses padding-top: 56.25% for 16:9 aspect ratio.
 
-// Shows a graceful fallback when the stream cannot load
-function showStreamFallback(wrap) {
-  var extUrl = 'https://www.youtube.com/@BloombergTelevision/live';
-  wrap.innerHTML =
-    '<div class="catalyst-fallback">'
-    + '<span class="catalyst-fb-msg">Live stream unavailable</span>'
-    + '<a href="' + extUrl + '" target="_blank" rel="noopener" class="catalyst-fb-link">'
-    + 'Open on YouTube ↗</a>'
-    + '</div>';
-}
 
-function initLiveStream() {
-  if (liveStreamLoaded) return;
-  var wrap = document.getElementById('catalyst-frame-wrap');
-  if (!wrap) return;
-  liveStreamLoaded = true;
-
-  var iframe = document.createElement('iframe');
-  // Standard YouTube channel live-stream embed URL.
-  // When live: plays the active stream muted.
-  // When not live: YouTube shows its own "no live stream" message inside the player.
-  iframe.src = 'https://www.youtube.com/embed/live_stream'
-    + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
-    + '&autoplay=1&mute=1&playsinline=1&modestbranding=1&rel=0';
-  iframe.title          = 'Bloomberg Television Live';
-  iframe.allow          = 'autoplay; encrypted-media; picture-in-picture';
-  iframe.allowFullscreen = true;
-
-  // onerror: network/CSP block — show fallback immediately
-  iframe.addEventListener('error', function() {
-    showStreamFallback(wrap);
-  });
-
-  // Replace the static fallback link with the live iframe.
-  // YouTube handles its own "not live" state inside the player —
-  // no JS timeout needed since the default HTML is already a usable fallback.
-  wrap.innerHTML = '';
-  wrap.appendChild(iframe);
-
-  // Live-dot: green if market hours, dim otherwise
-  var pip = document.getElementById('live-dot');
-  if (pip) pip.className = 'live-indicator ' + (isOpen() ? 'live-on' : 'live-off');
-}
-
-
-// === NEWS & INTELLIGENCE =========================================
-// ── News filter helpers ────────────────────────────────────────────────────────
-
-// Map full source name → compact badge label
-function getSourceShort(source) {
-  if (!source) return '';
-  var s = source.toLowerCase();
-  if (s.indexOf('wsj') !== -1 || s.indexOf('wall street') !== -1) return 'WSJ';
-  if (s.indexOf('federal reserve') !== -1 || s.indexOf('fed ') === 0) return 'Fed';
-  if (s.indexOf('ecb') !== -1)           return 'ECB';
-  if (s.indexOf('reuters') !== -1)       return 'Reuters';
-  if (s.indexOf('financial times') !== -1 || s === 'ft') return 'FT';
-  if (s.indexOf('cnbc') !== -1)          return 'CNBC';
-  if (s.indexOf('yahoo') !== -1)         return 'Yahoo';
-  if (s.indexOf('marketwatch') !== -1)   return 'MW';
-  if (s.indexOf('investopedia') !== -1)  return 'Inv';
-  if (s.indexOf('ap ') === 0 || s === 'ap business') return 'AP';
-  if (s.indexOf('bbc') !== -1)           return 'BBC';
-  return source.split(' ')[0];  // fallback: first word
-}
-
-// Map short badge label → CSS modifier class for coloring
-function getSourceClass(shortLabel) {
-  var map = {
-    'WSJ':     'src-wsj',
-    'Fed':     'src-fed',
-    'ECB':     'src-fed',
-    'Reuters': 'src-reuters',
-    'FT':      'src-ft',
-    'CNBC':    'src-cnbc',
-    'Yahoo':   'src-yahoo',
-    'MW':      'src-mw',
-    'AP':      'src-ap',
-    'BBC':     'src-bbc',
-    'Inv':     'src-inv',
-  };
-  return map[shortLabel] || 'src-default';
-}
-
-// Apply the active filter mode to a raw items array.
-// 'wsj'  → WSJ items ranked first (by date desc), then others (by date desc).
-//           Never returns empty — other sources fill the gap if WSJ is sparse.
-// 'all'  → return items as-is (already sorted by worker: gov-pinned then date desc)
-function applyNewsFilter(items, mode) {
-  if (!items || !items.length) return items;
-  if (mode !== 'wsj') return items;
-
-  function byDate(a, b) { return new Date(b.date || 0) - new Date(a.date || 0); }
-  var wsj   = items.filter(function(i) { return i.source && i.source.toLowerCase().indexOf('wsj') !== -1; });
-  var other = items.filter(function(i) { return !i.source || i.source.toLowerCase().indexOf('wsj') === -1; });
-  wsj.sort(byDate);
-  other.sort(byDate);
-  return wsj.concat(other);  // WSJ first, then fill with all other sources
-}
-
-// Renders up to 8 news items: headline · source · timestamp.
-// Falls back to localStorage cache (2 hr) on fetch failure.
-
-function formatTime(dateStr) {
-  try {
-    var d    = new Date(dateStr);
-    if (isNaN(d)) return '';
-    var diff = Date.now() - d;
-    if (diff < 60000)    return 'just now';
-    if (diff < 3600000)  return Math.floor(diff / 60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch(e) { return ''; }
-}
-
-function renderNews(items, mode) {
-  var feed    = document.getElementById('news-list');
-  var counter = document.getElementById('news-count');
-  var updLbl  = document.getElementById('news-updated-lbl');
-  if (!feed) return;
-
-  // Apply source filter (WSJ first or all-sources)
-  var filtered = applyNewsFilter(items, mode || newsFilterMode);
-
-  if (!filtered || !filtered.length) {
-    feed.innerHTML = '<div class="news-empty">No news available — refreshes every 30 min.</div>';
-    if (counter) counter.textContent = '';
-    return;
-  }
-
-  var shown = filtered.slice(0, 8);   // max 8 items visible
-
-  if (counter) counter.textContent = filtered.length;
-  if (updLbl && shown[0] && shown[0].date) {
-    updLbl.textContent = formatTime(shown[0].date);
-  }
-
-  feed.innerHTML = '';
-  shown.forEach(function(item) {
-    var el = document.createElement('article');
-    el.className = 'news-item';
-
-    // Row 1: tag pill + source badge (inline, space-between)
-    var topRow = document.createElement('div');
-    topRow.className = 'news-item-top';
-
-    if (item.tag) {
-      var tag = document.createElement('span');
-      tag.className   = 'news-tag news-tag-' + item.tag.toUpperCase();
-      tag.textContent = item.tag;
-      topRow.appendChild(tag);
-    }
-
-    // Source badge — short label, color-coded by outlet
-    if (item.source) {
-      var shortLabel  = getSourceShort(item.source);
-      var srcClass    = getSourceClass(shortLabel);
-      var srcBadge    = document.createElement('span');
-      srcBadge.className   = 'news-src-badge ' + srcClass;
-      srcBadge.textContent = shortLabel;
-      topRow.appendChild(srcBadge);
-    }
-
-    el.appendChild(topRow);
-
-    // Headline link
-    var title = document.createElement('div');
-    title.className = 'news-title';
-    if (item.link) {
-      var a     = document.createElement('a');
-      a.href    = item.link;
-      a.target  = '_blank';
-      a.rel     = 'noopener';
-      a.textContent = item.title;
-      title.appendChild(a);
-    } else {
-      title.textContent = item.title;
-    }
-    el.appendChild(title);
-
-    // Meta: time only (source is now shown as badge above)
-    if (item.date) {
-      var meta = document.createElement('div');
-      meta.className = 'news-meta';
-      meta.innerHTML = '<span class="news-time">' + formatTime(item.date) + '</span>';
-      el.appendChild(meta);
-    }
-
-    feed.appendChild(el);
-  });
-}
-
-function fetchNews() {
-  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-  fetch(WORKER_URL + '/api/news')
-    .then(function(r) { if (!r.ok) throw new Error('news ' + r.status); return r.json(); })
-    .then(function(data) {
-      var items = (data && data.items) ? data.items : (Array.isArray(data) ? data : []);
-      cacheData('news', items);
-      cachedNewsItems = items;   // store raw for re-filter on toggle
-      renderNews(items);
-    })
-    .catch(function() {
-      // Graceful fallback to cached news (up to 2 hr stale)
-      var cached = getCachedData('news', 7200000);
-      if (cached) { cachedNewsItems = cached; renderNews(cached); }
-    });
-}
-
-
-// === MARKET TICKER =============================================
-// Renders the slim scrolling strip above the dashboard.
-// Yahoo items update every 10s via tickerRefresh().
-// FRED items (2Y/10Y) update every 15 min via fetchData().
 
 function renderTicker(yahoo, fred) {
   var el = document.getElementById('ticker-content');
@@ -1056,6 +779,8 @@ function renderTicker(yahoo, fred) {
 
 // === HEADER =====================================================
 
+
+
 function updateHeader(data) {
   var now = nowET();
   var el  = document.getElementById('header-meta');
@@ -1084,6 +809,8 @@ function updateHeader(data) {
 
 // === MAIN RENDER ================================================
 
+
+
 function renderDashboard(data) {
   updateHeader(data);
 
@@ -1106,9 +833,6 @@ function renderDashboard(data) {
   // Market ticker (top strip)
   renderTicker(data.yahoo, data.fred);
 
-  // Secondary: News (uses cached data; live data fetched on separate timer)
-  var cachedNews = getCachedData('news', 7200000);
-  if (cachedNews) { cachedNewsItems = cachedNews; renderNews(cachedNews); }
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
@@ -1117,6 +841,8 @@ function renderDashboard(data) {
 
 
 // === DATA FETCHING ==============================================
+
+
 
 function fetchData() {
   if (WORKER_URL.indexOf('YOUR_') !== -1) {
@@ -1168,7 +894,7 @@ function tickerRefresh() {
 }
 
 
-// === UI UTILITIES ===============================================
+
 
 function beginFetch() { fetchInFlight++; var b=document.getElementById('btn-refresh'); if(b) b.classList.add('spinning'); }
 function endFetch()   { fetchInFlight=Math.max(0,fetchInFlight-1); if(!fetchInFlight){ var b=document.getElementById('btn-refresh'); if(b) b.classList.remove('spinning'); } }
@@ -1219,41 +945,15 @@ function initShortcuts() {
 
 // === INIT =======================================================
 
-// Show dashboard immediately — hide loading screen, wire all init-time UI
 document.getElementById('dashboard').style.display = 'block';
-document.getElementById('loading').style.display   = 'none';   // hide spinner; errors shown inline
-updateHeader(null);   // show live date/time + market status before data arrives
-initLiveStream();     // Bloomberg iframe — independent of market data
-initFxConverter();    // wire FX inputs immediately; shows "Rate unavailable" until Yahoo data arrives
+document.getElementById('loading').style.display   = 'none';
+updateHeader(null);
+initFxConverter();
 var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
-// ── News filter toggle ────────────────────────────────────────────────────────
-(function() {
-  var toggle = document.getElementById('news-filter-toggle');
-  if (!toggle) return;
-
-  // Set initial active state from persisted mode
-  toggle.querySelectorAll('.nft-btn').forEach(function(btn) {
-    if (btn.dataset.mode === newsFilterMode) btn.classList.add('nft-active');
-    btn.addEventListener('click', function() {
-      if (btn.dataset.mode === newsFilterMode) return;  // no-op if already active
-      newsFilterMode = btn.dataset.mode;
-      localStorage.setItem('td_news_filter', newsFilterMode);
-      // Update button active state
-      toggle.querySelectorAll('.nft-btn').forEach(function(b) {
-        b.classList.toggle('nft-active', b.dataset.mode === newsFilterMode);
-      });
-      // Re-render immediately with the same raw items — no new fetch needed
-      if (cachedNewsItems) renderNews(cachedNewsItems);
-    });
-  });
-})();
-
-fetchNews();    // initial news load (separate from market data)
 refreshTimer = setInterval(fetchData,  REFRESH_MS);
-newsTimer    = setInterval(fetchNews,  NEWS_REFRESH_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();

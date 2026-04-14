@@ -3,24 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Force browsers not to cache this HTML file.
-       The JS/CSS assets use versioned URLs (app.js?v=...) for fine-grained caching. -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260413">
+  <link rel="stylesheet" href="style.css?v=20260415">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
 
-<!-- === HEADER =========================================
-     Minimal, sticky. Brand + status + controls only.
-     No ticker strip — this is a focused desk tool.
-======================================================= -->
+<!-- ====================== HEADER ======================
+     Minimal sticky bar. Brand · status badges · controls.
+====================================================== -->
 <header id="app-header">
   <div class="header-inner">
-
     <div class="header-brand">
       <span class="brand-mark">◈</span>
       <div class="brand-text">
@@ -28,588 +24,79 @@
         <span class="brand-sub">Short-Term Funding &amp; Rates</span>
       </div>
     </div>
-
     <div class="header-status">
       <span id="market-status" class="mkt-badge">--</span>
       <span id="fomc-badge"    class="fomc-badge" title="Next FOMC">--</span>
       <span id="header-meta"  class="header-meta"></span>
     </div>
-
     <div class="header-actions">
       <button id="btn-refresh"   class="action-btn" title="Refresh (R)">&#x21bb;</button>
       <button id="btn-notes"     class="action-btn" title="Notes (J)">&#x270E;</button>
       <button id="btn-shortcuts" class="action-btn" title="Shortcuts (?)">?</button>
     </div>
-
   </div>
 </header>
 
-<!-- === MARKET TICKER ===========================
-     Slim continuously-scrolling live data strip.
-     SP500 · DXY · WTI · Gold · EUR/USD · VIX
-     + 2Y UST / 10Y UST from FRED daily data
-     Pauses on hover. Updates every 10s market hours.
-================================================ -->
+<!-- ====================== MARKET TICKER ======================
+     Slim scrolling strip. Pauses on hover.
+     SP500 · 2Y · 10Y · DXY · WTI · Gold · EUR/USD · VIX
+============================================================== -->
 <div id="market-ticker" aria-hidden="true" title="Hover to pause">
   <div id="ticker-content">Loading&hellip;</div>
 </div>
 
-<!-- === ALERT BAR ======================================
-     Silent by default. Surfaces only on threshold breach.
-======================================================= -->
 <div id="alert-bar" role="status" aria-live="polite"></div>
 
-<!-- Loading / setup -->
 <div id="setup-banner" class="setup-banner" style="display:none">
   Worker URL not configured — edit <code>WORKER_URL</code> in <code>app.js</code>.
 </div>
-<div id="loading" class="loading-screen">
+
+<div id="loading" class="loading-screen" style="display:none">
   <div class="loading-inner">
     <div class="spinner"></div>
     <p>Loading market data&hellip;</p>
   </div>
 </div>
 
-<!-- === MAIN DASHBOARD =================================
-     Primary sections (full-width):
-       1. Treasury Yields  (hero)
-       2. Funding & Liquidity
-       3. FX Converter
-     Secondary zone (side-by-side):
-       4. Live Catalyst (Bloomberg TV)
-       5. News & Intelligence
-======================================================= -->
-<main id="dashboard" style="display:none">
+<!-- ====================== MAIN DASHBOARD ======================
+     Three sections only — no side panels, no grid splits.
+       1. Treasury Yields  (hero, full-width)
+       2. Funding & Liquidity  (full-width)
+       3. FX Converter  (full-width)
+============================================================== -->
+<main id="dashboard">
 
-  <!-- ═══════════════════════════════════════════════════════════════════
-       FL-BAR — Funding & Liquidity KPI Strip
-       ─────────────────────────────────────────────────────────────────
-       Purpose : High-signal operational snapshot above the main grid.
-       Data     : Internal treasury metrics (static placeholders —
-                  wire to your backend or extend the worker as needed).
-       Layout   : 6 KPI cards in a single horizontal row, ~72px tall.
-                  Dividers between cards. Sparklines on cards 1 & 2.
-       Mobile   : Cards wrap to 3×2 at ≤840px, 2×3 at ≤520px.
-  ════════════════════════════════════════════════════════════════════ -->
-  <div class="fl-bar" id="fl-bar" role="region" aria-label="Funding &amp; Liquidity KPIs">
-
-    <!-- Card 1 — Liquidity Ratio (with sparkline) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Liquidity Ratio</span>
-        <span class="fl-chg fl-up">▲ 0.06</span>
+  <!-- ====================== TREASURY YIELDS HERO ======================
+       Full-width. Line chart 1M/3M/6M x T-1/T-7/T-14.
+       Precision data table below. Spread pill in header.
+  ====================================================================== -->
+  <section class="desk-section" id="sec-yields">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">Short-Term Treasury Yields</h2>
+        <span class="section-desc">1M &nbsp;|&nbsp; 3M &nbsp;|&nbsp; 6M &nbsp;&nbsp;&middot;&nbsp;&nbsp; Today vs 7 Days vs 14 Days</span>
       </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-liq-ratio">1.84<span class="fl-unit">×</span></span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <!-- Sparkline: 8-pt uptrend, green, 44×18 SVG -->
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-green" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#22d3a0" stop-opacity="0.25"/>
-                <stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,16 6,12 12,18 18,10 24,8 30,6 36,2 42,0 42,18 0,18"
-                     fill="url(#spk-green)"/>
-            <polyline points="0,16 6,12 12,18 18,10 24,8 30,6 36,2 42,0"
-                      fill="none" stroke="#22d3a0" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-strong">Strong</span>
+      <div class="section-hd-right">
+        <span class="spread-pill" id="yield-spread-pill"></span>
+        <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
       </div>
     </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 2 — Cash Position (with sparkline) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Cash Position</span>
-        <span class="fl-chg fl-up">▲ $120M</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-cash">$2.47<span class="fl-unit">B</span></span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <!-- Sparkline: 8-pt uptrend, blue, 44×18 SVG -->
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-blue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.22"/>
-                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,15 6,18 12,11 18,8 24,6 30,3 36,4 42,0 42,18 0,18"
-                     fill="url(#spk-blue)"/>
-            <polyline points="0,15 6,18 12,11 18,8 24,6 30,3 36,4 42,0"
-                      fill="none" stroke="#60a5fa" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-strong">Strong</span>
-      </div>
+    <div class="chart-shell">
+      <canvas id="yield-bar-canvas"></canvas>
     </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 3 — Available Credit Lines -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Avail. Credit Lines</span>
-        <span class="fl-chg fl-flat">— unch.</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-credit">$1.85<span class="fl-unit">B</span></span>
-        <span class="fl-status fl-adequate">Adequate</span>
-      </div>
+    <div class="chart-legend" id="chart-legend"></div>
+    <div class="yield-table-shell">
+      <table class="yield-table" id="yield-data-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
     </div>
+  </section>
 
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 4 — 30-Day Funding Gap -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">30D Funding Gap</span>
-        <span class="fl-chg fl-up">▲ $85M</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-positive" id="fl-gap">+$340<span class="fl-unit">M</span></span>
-        <span class="fl-status fl-strong">Surplus</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 5 — Weighted Avg. Maturity -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Wtd. Avg. Maturity</span>
-        <span class="fl-chg fl-dn">▼ 4d</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-wam">87<span class="fl-unit">d</span></span>
-        <span class="fl-status fl-adequate">Adequate</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 6 — Near-Term Maturities -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Near-Term Maturities</span>
-        <span class="fl-chg fl-monitor">14d window</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-warn" id="fl-maturities">$450<span class="fl-unit">M</span></span>
-        <span class="fl-status fl-monitor">Monitor</span>
-      </div>
-    </div>
-
-  </div><!-- /fl-bar -->
-
-  <!-- ═══════════════════════════════════════════════════════════════════
-       FL-BAR-MKTS — Market Rates & Risk KPI Strip (9 cards)
-       ─────────────────────────────────────────────────────────────────
-       Purpose : Live market-rate context row (SOFR → VIX).
-                 Sits directly below the Funding & Liquidity bar.
-       Data     : Wire card IDs to /api/market-data & /api/ticker —
-                  SOFR/EFFR from nyfed/fred; DXY/WTI/VIX from yahoo;
-                  2s10s from fred.DGS2 & fred.DGS10; RRP from nyfed.
-       Layout   : 9 cards, single row, ~72px.
-                  ≤840px: 3-col wrap. ≤520px: 2-col wrap, no sparklines.
-       SVG IDs  : Prefixed spk-m-* to avoid collision with fl-bar above.
-  ════════════════════════════════════════════════════════════════════ -->
-  <div class="fl-bar fl-bar-mkts" id="fl-bar-mkts" role="region" aria-label="Market Rates &amp; Risk">
-
-    <!-- Card 1 — SOFR (with sparkline — downtrend = tightening, green) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">SOFR</span>
-        <span class="fl-chg fl-dn">▼ 1bp</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-sofr">3.57<span class="fl-unit">%</span></span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-m-sofr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#22d3a0" stop-opacity="0.2"/>
-                <stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,4 6,6 12,5 18,8 24,9 30,10 36,12 42,14 42,18 0,18"
-                     fill="url(#spk-m-sofr)"/>
-            <polyline points="0,4 6,6 12,5 18,8 24,9 30,10 36,12 42,14"
-                      fill="none" stroke="#22d3a0" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-strong">Strong</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 2 — EFFR (flat trend) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">EFFR</span>
-        <span class="fl-chg fl-flat">— unch.</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-effr">3.64<span class="fl-unit">%</span></span>
-        <span class="fl-status fl-strong">Strong</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 3 — Fed Funds Target Range (compact value, no sparkline) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">Fed Range</span>
-        <span class="fl-chg fl-flat">— unch.</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-value-sm" id="fl-fedrange">3.50–3.75<span class="fl-unit">%</span></span>
-        <span class="fl-status fl-adequate">Target</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 4 — 2s10s Spread (with sparkline — narrowing) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">2s10s</span>
-        <span class="fl-chg fl-dn">▼ 3bp</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-positive" id="fl-2s10s">+50<span class="fl-unit">bp</span></span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-m-curve" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.2"/>
-                <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,2 6,3 12,2 18,4 24,6 30,8 36,10 42,13 42,18 0,18"
-                     fill="url(#spk-m-curve)"/>
-            <polyline points="0,2 6,3 12,2 18,4 24,6 30,8 36,10 42,13"
-                      fill="none" stroke="#60a5fa" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-adequate">Steepening</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 5 — IG Spread / OAS (tight = strong) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">IG OAS</span>
-        <span class="fl-chg fl-dn">▼ 4bp</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value" id="fl-igoas">82<span class="fl-unit">bp</span></span>
-        <span class="fl-status fl-strong">Tight</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 6 — RRP (drained = very strong signal, system flushed) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">RRP</span>
-        <span class="fl-chg fl-dn">▼ drained</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-positive" id="fl-rrp">~$0<span class="fl-unit">B</span></span>
-        <span class="fl-status fl-strong">V. Strong</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 7 — DXY (elevated = monitor, amber tint) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">DXY</span>
-        <span class="fl-chg fl-monitor">▲ 0.4</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-warn" id="fl-dxy">98.8</span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-m-dxy" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#f59e0b" stop-opacity="0.22"/>
-                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,16 6,14 12,15 18,11 24,9 30,6 36,4 42,2 42,18 0,18"
-                     fill="url(#spk-m-dxy)"/>
-            <polyline points="0,16 6,14 12,15 18,11 24,9 30,6 36,4 42,2"
-                      fill="none" stroke="#f59e0b" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-monitor">Monitor</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 8 — WTI Oil (surging = monitor/alert, red-amber tint) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">WTI Oil</span>
-        <span class="fl-chg fl-monitor">▲ 6.7%</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-warn" id="fl-wti">$103<span class="fl-unit">/bbl</span></span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-m-oil" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#f87171" stop-opacity="0.25"/>
-                <stop offset="100%" stop-color="#f87171" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,18 6,16 12,15 18,13 24,10 30,8 36,4 42,0 42,18 0,18"
-                     fill="url(#spk-m-oil)"/>
-            <polyline points="0,18 6,16 12,15 18,13 24,10 30,8 36,4 42,0"
-                      fill="none" stroke="#f87171" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-monitor">Monitor</span>
-      </div>
-    </div>
-
-    <div class="fl-divider" aria-hidden="true"></div>
-
-    <!-- Card 9 — VIX (elevated but sub-20 = amber/mild) -->
-    <div class="fl-card">
-      <div class="fl-top">
-        <span class="fl-label">VIX</span>
-        <span class="fl-chg fl-monitor">▲ 1.2</span>
-      </div>
-      <div class="fl-bottom">
-        <span class="fl-value fl-warn" id="fl-vix">19.9</span>
-        <span class="fl-spark-wrap" aria-hidden="true">
-          <svg class="fl-spark" viewBox="0 0 42 18" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="spk-m-vix" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stop-color="#f59e0b" stop-opacity="0.2"/>
-                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <polygon points="0,14 6,16 12,12 18,14 24,10 30,9 36,6 42,4 42,18 0,18"
-                     fill="url(#spk-m-vix)"/>
-            <polyline points="0,14 6,16 12,12 18,14 24,10 30,9 36,6 42,4"
-                      fill="none" stroke="#f59e0b" stroke-width="1.5"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        <span class="fl-status fl-monitor">Mildly Elev.</span>
-      </div>
-    </div>
-
-  </div><!-- /fl-bar-mkts -->
-
-  <!-- ═══════════════════════════════════════════════
-       PRIMARY GRID — desktop: 2-col × 2-row
-         Row 1: Live Catalyst (left)  |  News & Intelligence (right)
-         Row 2: Treasury Yields (left) |  FX Converter (right)
-       Mobile: single-column stack (catalyst → news → yields → fx)
-  ═══════════════════════════════════════════════════ -->
-  <div class="primary-grid">
-
-    <!-- === LIVE CATALYST (Row 1, Left) ===========================
-         Compact Bloomberg TV iframe.
-         Passive macro awareness — never dominant.
-    ============================================================== -->
-    <section class="desk-section secondary-card" id="sec-catalyst">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Live Catalyst</h2>
-          <span class="section-desc">Bloomberg Television</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="live-indicator" id="live-dot">
-            <span class="live-pip"></span>LIVE
-          </span>
-          <a class="catalyst-ext-link"
-             href="https://www.youtube.com/@BloombergTelevision/live"
-             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
-        </div>
-      </div>
-      <!-- 16:9 responsive iframe wrapper. Default state = fallback link. -->
-      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
-        <div class="catalyst-fallback" id="catalyst-default">
-          <span class="catalyst-fb-msg">Bloomberg Television</span>
-          <a href="https://www.youtube.com/@BloombergTelevision/live"
-             target="_blank" rel="noopener" class="catalyst-fb-link">
-            Watch Live &#x2197;</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- === NEWS & INTELLIGENCE (Row 1, Right) ====================
-         Scrollable feed from worker /api/news.
-         Headline · Source · Timestamp only.
-         Max 8 items visible before scroll.
-    ============================================================== -->
-    <section class="desk-section secondary-card" id="sec-news">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">News &amp; Intelligence</h2>
-          <span class="section-desc">Fed &middot; ECB &middot; Reuters &middot; WSJ &middot; CNBC</span>
-        </div>
-        <div class="section-hd-right">
-          <!-- Source-filter segmented control — persisted in localStorage -->
-          <div class="news-filter-toggle" id="news-filter-toggle" role="group" aria-label="News source filter">
-            <button class="nft-btn" data-mode="all">All</button>
-            <button class="nft-btn" data-mode="wsj">WSJ First</button>
-          </div>
-          <span class="news-count-badge" id="news-count"></span>
-          <span class="data-source" id="news-updated-lbl"></span>
-        </div>
-      </div>
-      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
-        <!-- populated by renderNews() -->
-        <div class="news-empty">Loading news&hellip;</div>
-      </div>
-    </section>
-
-    <!-- === SHORT-TERM TREASURY YIELDS (Row 2, Left) ==============
-         Compact grouped line chart (1M/3M/6M × T-1/T-7/T-14)
-         with compact precision data table below.
-         Chart height and table density reduced ~50% vs full-width.
-    ============================================================== -->
-    <section class="desk-section" id="sec-yields">
-
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Short-Term Treasury Yields</h2>
-          <span class="section-desc">1M &nbsp;|&nbsp; 3M &nbsp;|&nbsp; 6M &nbsp;&nbsp;&middot;&nbsp;&nbsp; T-1 vs T-7 vs T-14</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="spread-pill" id="yield-spread-pill"></span>
-          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
-        </div>
-      </div>
-
-      <!-- Grouped line chart (compact height) -->
-      <div class="chart-shell">
-        <canvas id="yield-bar-canvas"></canvas>
-      </div>
-
-      <!-- Chart legend -->
-      <div class="chart-legend" id="chart-legend"></div>
-
-      <!-- Compact precision data table -->
-      <div class="yield-table-shell">
-        <table class="yield-table" id="yield-data-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
-    </section>
-
-    <!-- === FX CONVERTER (Row 2, Right) ===========================
-         Two preset rows (250K–1M, 5M–10M).
-         Autocomplete currency inputs with full names.
-         Bidirectional rates + trend indicator.
-    ============================================================== -->
-    <section class="desk-section" id="sec-fx">
-
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">FX Converter</h2>
-          <span class="section-desc">16 currencies &middot; Live cross-rates</span>
-        </div>
-        <div class="section-hd-right">
-          <span id="fx-rate-trend" class="fx-trend"></span>
-          <span class="data-source">Yahoo Finance &middot; 15-min</span>
-        </div>
-      </div>
-
-      <div class="fx-body">
-
-        <!-- Row 1 presets: notional 250K → 1M -->
-        <div class="fx-preset-row" id="fx-row-1">
-          <button class="fx-preset" data-amount="250000">250K</button>
-          <button class="fx-preset" data-amount="500000">500K</button>
-          <button class="fx-preset" data-amount="750000">750K</button>
-          <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
-        </div>
-
-        <!-- Row 2 presets: large notionals -->
-        <div class="fx-preset-row" id="fx-row-2">
-          <button class="fx-preset" data-amount="5000000">5M</button>
-          <button class="fx-preset" data-amount="10000000">10M</button>
-          <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
-        </div>
-
-        <!-- Converter inputs -->
-        <div class="fx-inputs">
-          <div class="fx-amount-wrap">
-            <label class="fx-label">Amount</label>
-            <div class="fx-amount-inner">
-              <input type="number" id="fx-amount" class="fx-amount"
-                     value="1000000" step="250000" autocomplete="off">
-              <span id="fx-base-badge" class="fx-base-badge">USD</span>
-            </div>
-          </div>
-          <div class="fx-ccy-col">
-            <label class="fx-label">From</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-base" class="fx-ccy-input"
-                     value="USD" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-base-list" class="fx-dropdown"></div>
-            </div>
-          </div>
-          <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
-          <div class="fx-ccy-col">
-            <label class="fx-label">To</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-quote" class="fx-ccy-input"
-                     value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-quote-list" class="fx-dropdown"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Result panel -->
-        <div class="fx-result-panel">
-          <div class="fx-result-main" id="fx-result">--</div>
-          <div class="fx-result-rates">
-            <span class="fx-rate-fwd" id="fx-rate-line"></span>
-            <span class="fx-rate-rev" id="fx-reverse-rate"></span>
-          </div>
-        </div>
-
-      </div><!-- /fx-body -->
-
-    </section>
-
-  </div><!-- /primary-grid -->
-
-  <!-- ═══════════════════════════════════════════════
-       FUNDING & LIQUIDITY — full-width strip below grid
-       5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
-  ═══════════════════════════════════════════════════ -->
+  <!-- ====================== FUNDING & LIQUIDITY ======================
+       5 cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
+  ====================================================================== -->
   <section class="desk-section" id="sec-funding">
-
     <div class="section-hd">
       <div class="section-hd-left">
         <h2 class="section-title">Funding &amp; Liquidity</h2>
@@ -620,16 +107,74 @@
         <span class="data-source">NY Fed &middot; FRED &middot; Daily</span>
       </div>
     </div>
+    <div class="funding-grid" id="funding-grid"></div>
+  </section>
 
-    <div class="funding-grid" id="funding-grid">
-      <!-- 5 metric cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M — populated by renderFunding() -->
+  <!-- ====================== FX CONVERTER ======================
+       Two preset rows. Autocomplete. Bidirectional rates.
+  ====================================================================== -->
+  <section class="desk-section" id="sec-fx">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">FX Converter</h2>
+        <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+      </div>
+      <div class="section-hd-right">
+        <span id="fx-rate-trend" class="fx-trend"></span>
+        <span class="data-source">Yahoo Finance &middot; 15-min</span>
+      </div>
     </div>
-
+    <div class="fx-body">
+      <div class="fx-preset-row" id="fx-row-1">
+        <button class="fx-preset" data-amount="250000">250K</button>
+        <button class="fx-preset" data-amount="500000">500K</button>
+        <button class="fx-preset" data-amount="750000">750K</button>
+        <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
+      </div>
+      <div class="fx-preset-row" id="fx-row-2">
+        <button class="fx-preset" data-amount="5000000">5M</button>
+        <button class="fx-preset" data-amount="10000000">10M</button>
+        <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
+      </div>
+      <div class="fx-inputs">
+        <div class="fx-amount-wrap">
+          <label class="fx-label">Amount</label>
+          <div class="fx-amount-inner">
+            <input type="number" id="fx-amount" class="fx-amount"
+                   value="1000000" step="250000" autocomplete="off">
+            <span id="fx-base-badge" class="fx-base-badge">USD</span>
+          </div>
+        </div>
+        <div class="fx-ccy-col">
+          <label class="fx-label">From</label>
+          <div class="fx-ccy-wrap">
+            <input type="text" id="fx-base" class="fx-ccy-input"
+                   value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-base-list" class="fx-dropdown"></div>
+          </div>
+        </div>
+        <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
+        <div class="fx-ccy-col">
+          <label class="fx-label">To</label>
+          <div class="fx-ccy-wrap">
+            <input type="text" id="fx-quote" class="fx-ccy-input"
+                   value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-quote-list" class="fx-dropdown"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fx-result-panel">
+        <div class="fx-result-main" id="fx-result">--</div>
+        <div class="fx-result-rates">
+          <span class="fx-rate-fwd" id="fx-rate-line"></span>
+          <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>
 
-<!-- === FOOTER ========================================= -->
 <footer id="app-footer">
   <span>Internal use only &mdash; not financial advice</span>
   <span class="footer-dot">&middot;</span>
@@ -638,7 +183,6 @@
   <span>Press <kbd>?</kbd> for shortcuts</span>
 </footer>
 
-<!-- === QUICK NOTES (floating) ========================= -->
 <div id="notes-panel" class="notes-panel" style="display:none">
   <div class="notes-hd">
     <span>Quick Notes</span>
@@ -652,7 +196,6 @@
   </div>
 </div>
 
-<!-- === SHORTCUTS MODAL ================================ -->
 <div id="shortcuts-modal" class="modal-bg" style="display:none">
   <div class="modal-card">
     <h3>Keyboard Shortcuts</h3>
@@ -668,6 +211,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260413"></script>
+<script src="app.js?v=20260415"></script>
 </body>
 </html>
