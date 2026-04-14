@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260410">
+  <link rel="stylesheet" href="style.css?v=20260415">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -211,62 +211,6 @@
 
   </section>
 
-  <!-- ═══════════════════════════════════════════════
-       SECONDARY ZONE — desktop: 2-col side by side
-                         mobile:  stacked
-       Left  → Live Catalyst (Bloomberg TV)
-       Right → News & Intelligence
-  ═══════════════════════════════════════════════════ -->
-  <div class="secondary-zone" id="secondary-zone">
-
-    <!-- === LIVE CATALYST ============================
-         Compact Bloomberg TV iframe.
-         Passive macro awareness — never dominant.
-    ================================================= -->
-    <section class="desk-section secondary-card" id="sec-catalyst">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Live Catalyst</h2>
-          <span class="section-desc">Bloomberg Television</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="live-indicator" id="live-dot">
-            <span class="live-pip"></span>LIVE
-          </span>
-          <a class="catalyst-ext-link"
-             href="https://www.youtube.com/@BloombergTelevision/live"
-             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
-        </div>
-      </div>
-      <!-- 16:9 responsive iframe wrapper -->
-      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
-        <div class="catalyst-loading">Loading stream&hellip;</div>
-      </div>
-    </section>
-
-    <!-- === NEWS & INTELLIGENCE ======================
-         Scrollable feed from worker /api/news.
-         Headline · Source · Timestamp only.
-         Max 8 items visible before scroll.
-    ================================================= -->
-    <section class="desk-section secondary-card" id="sec-news">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">News &amp; Intelligence</h2>
-          <span class="section-desc">Fed &middot; ECB &middot; Reuters &middot; WSJ &middot; CNBC</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="news-count-badge" id="news-count"></span>
-          <span class="data-source" id="news-updated-lbl"></span>
-        </div>
-      </div>
-      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
-        <!-- populated by renderNews() -->
-        <div class="news-empty">Loading news&hellip;</div>
-      </div>
-    </section>
-
-  </div><!-- /secondary-zone -->
 
 </main>
 
@@ -309,6 +253,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260410"></script>
+<script src="app.js?v=20260415"></script>
 </body>
 </html>
