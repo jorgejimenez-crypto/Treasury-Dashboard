@@ -18,6 +18,7 @@ var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev'
 var REFRESH_MS          = 15 * 60 * 1000;
 var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
+var NEWS_REFRESH_MS     = 30 * 60 * 1000;
 
 // Silent alert thresholds (background risk monitoring — no panel displayed)
 var THRESHOLDS = {
@@ -83,6 +84,7 @@ var tickerBackoff       = TICKER_REFRESH_MS;
 var lastManualRefresh   = 0;
 var fxConverterReady    = false;
 var liveStreamLoaded    = false;   // Bloomberg iframe injected once
+var newsTimer           = null;    // 30-min news refresh
 var lastRefreshTime     = 0;
 var fetchInFlight       = 0;
 var fetchRetryCount     = 0;
@@ -780,6 +782,100 @@ function computeFx() {
 }
 
 
+// === NEWS & INTELLIGENCE — WSJ only =============================
+// Filters /api/news response to WSJ sources only.
+// Falls back to localStorage cache (2 hr) on fetch failure.
+
+var NEWS_REFRESH_MS_STORED = NEWS_REFRESH_MS; // keep ref
+
+function formatTime(dateStr) {
+  try {
+    var d = new Date(dateStr);
+    if (isNaN(d)) return '';
+    var diff = Date.now() - d;
+    if (diff < 60000)    return 'just now';
+    if (diff < 3600000)  return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch(e) { return ''; }
+}
+
+function renderNews(items) {
+  var feed    = document.getElementById('news-list');
+  var counter = document.getElementById('news-count');
+  var updLbl  = document.getElementById('news-updated-lbl');
+  if (!feed) return;
+
+  // Filter to WSJ sources only
+  var wsj = (items || []).filter(function(item) {
+    return item.source && item.source.indexOf('WSJ') === 0;
+  });
+
+  if (!wsj.length) {
+    feed.innerHTML = '<div class="news-empty">No WSJ articles available.</div>';
+    if (counter) counter.textContent = '';
+    return;
+  }
+
+  var shown = wsj.slice(0, 10);
+  if (counter) counter.textContent = wsj.length;
+  if (updLbl && shown[0] && shown[0].date) updLbl.textContent = formatTime(shown[0].date);
+
+  feed.innerHTML = '';
+  shown.forEach(function(item) {
+    var el = document.createElement('article');
+    el.className = 'news-item';
+
+    // Tag pill
+    if (item.tag) {
+      var tag = document.createElement('span');
+      tag.className   = 'news-tag news-tag-' + item.tag.toUpperCase();
+      tag.textContent = item.tag;
+      el.appendChild(tag);
+    }
+
+    // Headline
+    var title = document.createElement('div');
+    title.className = 'news-title';
+    if (item.link) {
+      var a = document.createElement('a');
+      a.href = item.link; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = item.title;
+      title.appendChild(a);
+    } else {
+      title.textContent = item.title;
+    }
+    el.appendChild(title);
+
+    // Meta: source · time
+    var meta = document.createElement('div');
+    meta.className = 'news-meta';
+    var parts = [];
+    if (item.source) parts.push('<span class="news-source">' + item.source + '</span>');
+    if (item.date)   parts.push('<span class="news-time">'   + formatTime(item.date) + '</span>');
+    meta.innerHTML = parts.join('<span class="news-sep"> · </span>');
+    el.appendChild(meta);
+
+    feed.appendChild(el);
+  });
+}
+
+function fetchNews() {
+  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
+  fetch(WORKER_URL + '/api/news')
+    .then(function(r) { if (!r.ok) throw new Error('news ' + r.status); return r.json(); })
+    .then(function(data) {
+      var items = (data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+      cacheData('news', items);
+      renderNews(items);
+    })
+    .catch(function() {
+      var cached = getCachedData('news', 7200000);
+      if (cached) renderNews(cached);
+    });
+}
+
+
 // === LIVE CATALYST — Bloomberg TV ===============================
 // Lazy-injects a muted YouTube live iframe once on first render.
 // The outer wrapper uses padding-top: 56.25% for 16:9 aspect ratio.
@@ -912,6 +1008,10 @@ function renderDashboard(data) {
   // Live Catalyst (lazy — injected once)
   initLiveStream();
 
+  // News — show cached immediately; live fetch runs on separate timer
+  var cachedNews = getCachedData('news', 7200000);
+  if (cachedNews) renderNews(cachedNews);
+
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
@@ -1033,7 +1133,9 @@ var cached = getCachedData('market', 600000);
 if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
-refreshTimer = setInterval(fetchData,  REFRESH_MS);
+fetchNews();
+refreshTimer = setInterval(fetchData, REFRESH_MS);
+newsTimer    = setInterval(fetchNews, NEWS_REFRESH_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();

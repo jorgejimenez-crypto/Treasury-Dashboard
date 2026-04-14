@@ -802,6 +802,77 @@ body {
 }
 
 
+/* === NEWS & INTELLIGENCE =================================== */
+
+.news-count-badge {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+  color: var(--blue-lt);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  font-family: var(--mono);
+}
+.news-count-badge:empty { display: none; }
+
+.news-feed {
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-md) transparent;
+}
+.news-feed::-webkit-scrollbar       { width: 4px; }
+.news-feed::-webkit-scrollbar-track { background: transparent; }
+.news-feed::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 2px; }
+
+.news-item {
+  padding: 11px 2px 11px 0;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.news-item:last-child { border-bottom: none; }
+.news-item:hover      { background: rgba(255,255,255,0.025); }
+
+.news-tag {
+  display: inline-block;
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  padding: 1px 6px; border-radius: 3px; margin-bottom: 5px;
+  font-family: var(--mono);
+  background: var(--bg-hover); color: var(--text-3); border: 1px solid var(--border);
+}
+.news-tag-FED, .news-tag-RATES   { background: var(--blue-bg);   color: var(--blue-lt);  border-color: var(--blue-border); }
+.news-tag-MARKETS                { background: var(--green-bg);  color: var(--green);    border-color: var(--green-border); }
+.news-tag-ECONOMY                { background: var(--indigo-bg); color: #a5b4fc;         border-color: rgba(99,102,241,0.3); }
+.news-tag-USNEWS                 { background: rgba(14,165,233,0.09); color: #38bdf8;    border-color: rgba(14,165,233,0.28); }
+.news-tag-FOMC                   { background: var(--amber-bg);  color: var(--amber);    border-color: var(--amber-border); }
+
+.news-title {
+  font-size: 12.5px; font-weight: 500; color: var(--text);
+  line-height: 1.45; margin-bottom: 4px;
+}
+.news-title a { color: inherit; text-decoration: none; transition: color 0.12s; }
+.news-title a:hover { color: var(--blue-lt); }
+
+.news-meta {
+  display: flex; align-items: center; gap: 5px;
+  flex-wrap: wrap; font-size: 10.5px;
+}
+.news-source { color: var(--text-2); font-weight: 600; font-family: var(--mono); }
+.news-sep    { color: var(--text-3); }
+.news-time   { color: var(--text-3); font-family: var(--mono); }
+
+.news-empty {
+  font-size: 12px; color: var(--text-3);
+  font-family: var(--mono); padding: 24px 0; text-align: center;
+}
+
+
 /* === FOOTER ================================================ */
 
 #app-footer {
