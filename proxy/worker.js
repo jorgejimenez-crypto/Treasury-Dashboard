@@ -296,8 +296,8 @@ async function handleTicker() {
 //   - If entire fetch fails: caller falls back to 2hr localStorage cache
 // ============================================
 
-var NEWS_CACHE_TTL = 420;   // 7 minutes — faster refresh during fast-moving market events
-var NEWS_CACHE_KEY = 'https://treasury-news-v3.cache/api/news';  // v3: bumped after multi-source upgrade
+var NEWS_CACHE_TTL = 420;   // 7 minutes
+var NEWS_CACHE_KEY = 'https://treasury-news-v4.cache/api/news';  // v4: rss2json proxy fix
 
 async function handleNews(env) {
   // ── 1. Check Cloudflare edge cache ──────────────────────────
@@ -598,95 +598,68 @@ function findClosestObs(obs, targetMs) {
 }
 
 // ============================================
-// WSJ RSS FETCHING  (dedicated — separate from generic fetchRSS)
+// WSJ RSS FETCHING  via rss2json.com proxy
 //
-// WSJ feeds require a browser-like User-Agent to avoid 403s.
-// Each feed is fetched independently:  one failure ≠ all fail.
-// Items are normalised to the shared schema and tagged with
-// category (MARKETS | ECONOMY | USNEWS) for CSS class binding.
+// ROOT CAUSE of prior failure:
+//   feeds.a.dj.com blocks ALL Cloudflare datacenter IPs at the ASN
+//   level — this is a Dow Jones WAF rule, not a rate-limit or UA
+//   check. Every fetch() from any CF Worker gets a 403 regardless
+//   of User-Agent, Referer, or retry count.
+//
+// FIX:
+//   Route through rss2json.com — a residential-IP RSS→JSON proxy.
+//   It fetches feeds.a.dj.com from non-datacenter IPs, which are
+//   not blocked. No API key required for free-tier usage.
+//
+// rss2json response shape:
+//   { status:"ok", items:[{ title, link, pubDate:"YYYY-MM-DD HH:MM:SS",
+//     description, author }] }
+//
+// Note: pubDate is NOT RFC 822 — it uses "YYYY-MM-DD HH:MM:SS" format.
+// The date is stored as-is; renderNews/formatTime handle it gracefully.
 // ============================================
 
-// Rotate through 3 UA strings — WSJ rate-limits by UA pattern, rotation reduces repeat 403s
-var WSJ_UA_POOL = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
-];
-var wsj_ua_idx = 0;
-function nextWSJUA() { wsj_ua_idx = (wsj_ua_idx + 1) % WSJ_UA_POOL.length; return WSJ_UA_POOL[wsj_ua_idx]; }
+var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
 async function fetchWSJFeed(feedDef) {
-  // Attempt 1 — rotating UA
-  var ua1 = nextWSJUA();
   try {
-    var resp = await fetch(feedDef.url, {
-      headers: {
-        'User-Agent':    ua1,
-        'Accept':        'application/rss+xml, application/xml, text/xml, */*',
-        'Cache-Control': 'no-cache',
-        'Referer':       'https://www.wsj.com/',
-      },
-      cf: { cacheTtl: 0 },
+    var proxyUrl = RSS2JSON_BASE + encodeURIComponent(feedDef.url);
+    var resp = await fetch(proxyUrl, {
+      headers: { 'Accept': 'application/json' },
+      cf: { cacheTtl: 300 },   // 5-min Cloudflare edge cache on the proxy response
     });
-    if (resp.ok) {
-      var xml = await resp.text();
-      return parseWSJItems(xml, feedDef.source, feedDef.category);
-    }
-    // On 403 / 429 → wait 1.5s and retry with a different UA
-    if (resp.status === 403 || resp.status === 429) {
-      await new Promise(function(r) { setTimeout(r, 1500); });
-      var ua2 = nextWSJUA();
-      var resp2 = await fetch(feedDef.url, {
-        headers: { 'User-Agent': ua2, 'Accept': 'application/rss+xml, application/xml, text/xml, */*', 'Referer': 'https://www.wsj.com/' },
-        cf: { cacheTtl: 0 },
+    if (!resp.ok) return [];
+
+    var data = await resp.json();
+    if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return [];
+
+    var items = [];
+    for (var i = 0; i < data.items.length && items.length < 15; i++) {
+      var item = data.items[i];
+      if (!item.title) continue;
+
+      var title = item.title  || '';
+      var desc  = item.description || item.content || '';
+      var resolvedCategory = classifyWSJ(title, desc, feedDef.category);
+
+      items.push({
+        title:   decodeEntities(title),
+        link:    item.link || '',
+        date:    item.pubDate || '',   // "YYYY-MM-DD HH:MM:SS" — handled by formatTime
+        summary: decodeEntities(desc).substring(0, 200),
+        source:  feedDef.source,      // "WSJ Markets" | "WSJ Economy" | "WSJ US News"
+        tag:     resolvedCategory,
+        isGov:   false,
       });
-      if (resp2.ok) {
-        var xml2 = await resp2.text();
-        return parseWSJItems(xml2, feedDef.source, feedDef.category);
-      }
     }
-    return [];  // both attempts failed — silent fallback, other sources still render
+    return items;
   } catch (e) {
     return [];
   }
 }
 
-function parseWSJItems(xml, source, category) {
-  var items = [];
-  var itemRx = /<item>([\s\S]*?)<\/item>/gi;
-  var match;
-  while ((match = itemRx.exec(xml)) !== null && items.length < 15) {
-    var block = match[1];
-    var title   = extractXmlTag(block, 'title');
-    var link    = extractXmlTag(block, 'link')
-               || extractXmlTag(block, 'guid')   // WSJ sometimes puts link in <guid>
-               || '';
-    var pubDate = extractXmlTag(block, 'pubDate') || '';
-    var desc    = extractXmlTag(block, 'description') || '';
-
-    if (!title) continue;
-
-    // Refine category based on article content — keeps strong semantic signals
-    // (e.g. a Markets feed article about Fed policy → FED)
-    var resolvedCategory = classifyWSJ(title, desc, category);
-
-    items.push({
-      title:   decodeEntities(title),
-      link:    link.trim(),
-      date:    pubDate,
-      summary: decodeEntities(desc).substring(0, 200),
-      source:  source,      // "WSJ Markets" | "WSJ Economy" | "WSJ US News"
-      tag:     resolvedCategory,
-      isGov:   false,
-    });
-  }
-  return items;
-}
-
 // Lightweight classifier for WSJ items.
-// Unlike the general classifyArticle, this preserves the caller's
-// category (MARKETS / ECONOMY / USNEWS) as the default — only
-// overrides for unambiguous macro/policy signals.
+// Preserves feed-level category as default; overrides only on strong signals.
 function classifyWSJ(title, desc, defaultCategory) {
   var text = ((title || '') + ' ' + (desc || '')).toLowerCase();
   if (/\bfomc\b|federal open market|interest rate decision|monetary policy/.test(text)) return 'FED';
@@ -694,17 +667,13 @@ function classifyWSJ(title, desc, defaultCategory) {
   if (/\byield curve\b|\btreasury yield\b|\bsofr\b|\beffr\b/.test(text))               return 'RATES';
   if (/\bgdp\b|gross domestic product/.test(text))                                       return 'ECONOMY';
   if (/\bnonfarm payroll|\bunemployment rate|\bjobless claims/.test(text))               return 'ECONOMY';
-  // Default: honour the caller's category (MARKETS | ECONOMY | USNEWS)
   return defaultCategory;
 }
 
 async function fetchAllWSJ() {
-  // All 3 WSJ feeds in parallel — failures are silent (return [])
   var results = await Promise.all(WSJ_FEEDS.map(fetchWSJFeed));
   var combined = [];
-  for (var i = 0; i < results.length; i++) {
-    combined = combined.concat(results[i]);
-  }
+  for (var i = 0; i < results.length; i++) combined = combined.concat(results[i]);
   return combined;
 }
 
