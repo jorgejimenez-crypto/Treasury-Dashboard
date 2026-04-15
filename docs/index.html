@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260415b">
+  <link rel="stylesheet" href="style.css?v=20260415c">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -60,34 +60,81 @@
 
 <!-- ====================== MAIN DASHBOARD ======================
      Layout:
-       Row 1: News & Intelligence (full-width)
-       Row 2: FX Converter · Treasury Yields · Live Catalyst (equal height)
-       Row 3: Funding & Liquidity (full-width)
+       Row 1: Live Catalyst · News & Intelligence  (50/50)
+       Row 2: Short-Term Treasury Yields · FX Converter  (50/50)
+       Row 3: Funding & Liquidity  (full-width)
 ============================================================== -->
 <main id="dashboard">
 
-  <!-- News & Intelligence — WSJ only (Row 1, full-width) -->
-  <section class="desk-section" id="sec-news">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">News &amp; Intelligence</h2>
-        <span class="section-desc">Wall Street Journal</span>
-      </div>
-      <div class="section-hd-right">
-        <span class="news-count-badge" id="news-count"></span>
-        <span class="data-source" id="news-updated-lbl"></span>
-      </div>
-    </div>
-    <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
-      <div class="news-empty">Loading news&hellip;</div>
-    </div>
-  </section>
+  <!-- ────────── ROW 1 — Live Catalyst + News ────────── -->
+  <div class="row-pair" id="row-1">
 
-  <!-- ====================== ROW 2 — BALANCED TRIPLE ======================
-       Equal-height 3-column row: FX Converter · Treasury Yields · Live Catalyst
-       Grid auto-equalizes heights. Each panel's body flexes to fill.
-  ====================================================================== -->
-  <div class="row-triple" id="row-triple">
+    <!-- Live Catalyst -->
+    <section class="desk-section row-panel" id="sec-catalyst">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Live Catalyst</h2>
+          <span class="section-desc">Bloomberg Television</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="live-indicator" id="live-dot">
+            <span class="live-pip"></span>LIVE
+          </span>
+          <a class="catalyst-ext-link"
+             href="https://www.youtube.com/@BloombergTelevision/live"
+             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
+        </div>
+      </div>
+      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
+        <div class="catalyst-loading">Loading stream&hellip;</div>
+      </div>
+    </section>
+
+    <!-- News & Intelligence — WSJ only -->
+    <section class="desk-section row-panel" id="sec-news">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">News &amp; Intelligence</h2>
+          <span class="section-desc">Wall Street Journal</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="news-count-badge" id="news-count"></span>
+          <span class="data-source" id="news-updated-lbl"></span>
+        </div>
+      </div>
+      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
+        <div class="news-empty">Loading news&hellip;</div>
+      </div>
+    </section>
+
+  </div><!-- /row-1 -->
+
+  <!-- ────────── ROW 2 — Treasury Yields + FX Converter ────────── -->
+  <div class="row-pair" id="row-2">
+
+    <!-- Short-Term Treasury Yields -->
+    <section class="desk-section row-panel" id="sec-yields">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Short-Term Treasury Yields</h2>
+          <span class="section-desc">1M &middot; 3M &middot; 6M &nbsp;&middot;&nbsp; T-1 / T-7 / T-14</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="spread-pill" id="yield-spread-pill"></span>
+          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+        </div>
+      </div>
+      <div class="chart-shell">
+        <canvas id="yield-bar-canvas"></canvas>
+      </div>
+      <div class="chart-legend" id="chart-legend"></div>
+      <div class="yield-table-shell">
+        <table class="yield-table" id="yield-data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- FX Converter -->
     <section class="desk-section row-panel" id="sec-fx">
@@ -150,52 +197,7 @@
       </div>
     </section>
 
-    <!-- Treasury Yields -->
-    <section class="desk-section row-panel" id="sec-yields">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Treasury Yields</h2>
-          <span class="section-desc">1M &middot; 3M &middot; 6M &nbsp;&middot;&nbsp; T-1 / T-7 / T-14</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="spread-pill" id="yield-spread-pill"></span>
-          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
-        </div>
-      </div>
-      <div class="chart-shell">
-        <canvas id="yield-bar-canvas"></canvas>
-      </div>
-      <div class="chart-legend" id="chart-legend"></div>
-      <div class="yield-table-shell">
-        <table class="yield-table" id="yield-data-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Live Catalyst -->
-    <section class="desk-section row-panel" id="sec-catalyst">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Live Catalyst</h2>
-          <span class="section-desc">Bloomberg Television</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="live-indicator" id="live-dot">
-            <span class="live-pip"></span>LIVE
-          </span>
-          <a class="catalyst-ext-link"
-             href="https://www.youtube.com/@BloombergTelevision/live"
-             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
-        </div>
-      </div>
-      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
-        <div class="catalyst-loading">Loading stream&hellip;</div>
-      </div>
-    </section>
-
-  </div><!-- /row-triple -->
+  </div><!-- /row-2 -->
 
   <!-- ====================== FUNDING & LIQUIDITY ======================
        5 cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M

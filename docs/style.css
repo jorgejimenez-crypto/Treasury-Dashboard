@@ -722,137 +722,127 @@ body {
 .fx-trend-flat { color:var(--text-3); }
 
 
-/* === ROW 2 — BALANCED TRIPLE ===============================
-   FX Converter · Treasury Yields · Live Catalyst
-   3 equal-width, equal-height panels. Grid auto-stretches
-   children so the tallest (Live Catalyst iframe) drives the row
-   height, and Forex/Yields fill to match.                    */
+/* === ROW-PAIR LAYOUT ==========================================
+   Two 50/50 rows on desktop, stacking below 900px:
+     Row 1: Live Catalyst + News & Intelligence
+     Row 2: Short-Term Treasury Yields + FX Converter
+   Grid auto-stretches both panels in each row to equal height.
+   Inside each panel, content flexes so the body fills vertically. */
 
-.row-triple {
-  --row-panel-pad-y: 22px;
-  --row-panel-pad-x: 22px;
-  --row-panel-min-h: 460px;   /* floor — grid stretches up from here */
+.row-pair {
+  --row-panel-pad-y: 24px;
+  --row-panel-pad-x: 26px;
+  --row-panel-min-h: 440px;     /* floor — grid stretches up from here */
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
   align-items: stretch;
 }
 
-/* Uniform panel shell — same padding, radius, border across all three */
-.row-triple > .row-panel {
+/* Uniform panel shell — same padding/radius/border for both panels */
+.row-pair > .row-panel {
   display: flex;
   flex-direction: column;
   padding: var(--row-panel-pad-y) var(--row-panel-pad-x);
   min-height: var(--row-panel-min-h);
-  min-width: 0;               /* allow children to shrink inside grid cell */
+  min-width: 0;                 /* allow children to shrink inside grid cell */
 }
 
-/* Uniform section-header sizing inside row-triple */
-.row-triple .section-hd {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  gap: 8px;
-}
-.row-triple .section-title { font-size: 15px; letter-spacing: -0.2px; }
-.row-triple .section-desc  { font-size: 9.5px; letter-spacing: 0.6px; }
-.row-triple .data-source   { font-size: 9.5px; }
-
-/* ── Live Catalyst: iframe wrapper fills remaining column height ─── */
-.row-triple #sec-catalyst .catalyst-frame-wrap {
-  flex: 1 1 auto;
-  padding-top: 0;           /* drop 16:9 aspect ratio — flex sets height */
-  min-height: 220px;
-}
-
-/* ── FX Converter: body + result panel fill ──────────────────────── */
-.row-triple #sec-fx .fx-body {
-  flex: 1 1 auto;
-  max-width: none;          /* override 720px cap */
-  display: flex;
-  flex-direction: column;
+/* Uniform section-header sizing — slightly larger than 3-col variant */
+.row-pair .section-hd {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
   gap: 10px;
 }
-.row-triple #sec-fx .fx-result-panel {
-  flex: 1 1 auto;
-  min-height: 74px;
-  padding: 14px 18px;
-}
-.row-triple #sec-fx .fx-result-main { font-size: 24px; }
-.row-triple #sec-fx .fx-preset { padding: 5px 12px; font-size: 10.5px; }
-.row-triple #sec-fx .fx-amount,
-.row-triple #sec-fx .fx-ccy-input { padding: 8px 11px; font-size: 13px; }
-.row-triple #sec-fx .fx-swap { width: 32px; height: 32px; font-size: 15px; }
+.row-pair .section-title { font-size: 17px; letter-spacing: -0.3px; }
+.row-pair .section-desc  { font-size: 10px; letter-spacing: 0.7px; }
+.row-pair .data-source   { font-size: 10px; }
 
-/* ── Treasury Yields: chart fixed, table stretches to fill ────────── */
-.row-triple #sec-yields .chart-shell {
-  height: 170px;
-  flex: 0 0 170px;          /* fixed so yield chart stays compact */
-  margin-bottom: 8px;
-  padding: 8px 8px 4px;
+/* ── Live Catalyst: iframe wrapper fills remaining panel height ─── */
+.row-pair #sec-catalyst .catalyst-frame-wrap {
+  flex: 1 1 auto;
+  padding-top: 0;               /* drop 16:9 — flex sets height instead */
+  min-height: 260px;
 }
-.row-triple #sec-yields .chart-legend {
-  margin-bottom: 8px;
-  gap: 10px;
+
+/* ── News & Intelligence: feed scrolls inside the stretched panel ── */
+.row-pair #sec-news .news-feed {
+  flex: 1 1 auto;
+  max-height: none;             /* override 360px cap — let it fill */
+  min-height: 260px;
 }
-.row-triple #sec-yields .leg-item { font-size: 10px; }
-.row-triple #sec-yields .yield-table-shell {
+
+/* ── Treasury Yields: chart fixed, table stretches to fill bottom ── */
+.row-pair #sec-yields .chart-shell {
+  height: 220px;
+  flex: 0 0 220px;
+  margin-bottom: 12px;
+  padding: 10px 10px 6px;
+}
+.row-pair #sec-yields .chart-legend {
+  margin-bottom: 12px;
+  gap: 14px;
+}
+.row-pair #sec-yields .leg-item { font-size: 11px; }
+.row-pair #sec-yields .yield-table-shell {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.row-triple #sec-yields .yield-table {
+.row-pair #sec-yields .yield-table {
   flex: 1 1 auto;
-  height: 100%;             /* so tbody rows distribute evenly */
-  font-size: 10.5px;
+  height: 100%;                 /* so tbody rows distribute evenly */
   min-width: 0;
+  font-size: 11.5px;
 }
-.row-triple #sec-yields .yield-table thead th {
-  padding: 6px 8px;
-  font-size: 8.5px;
+.row-pair #sec-yields .yield-table thead th {
+  padding: 7px 10px;
+  font-size: 9px;
 }
-.row-triple #sec-yields .yield-table .yt-hd-mat { padding-left: 12px; }
-.row-triple #sec-yields .yield-table tbody { height: 100%; }
-.row-triple #sec-yields .yield-table tbody td { padding: 6px 8px; }
-.row-triple #sec-yields .yt-mat { padding-left: 12px !important; font-size: 11px; }
-.row-triple #sec-yields .yt-latest { font-size: 11.5px; }
-/* Column dividers carried over from original compact style */
-.row-triple #sec-yields .yt-hd-t7,
-.row-triple #sec-yields .yield-table tbody td:nth-child(3),
-.row-triple #sec-yields .yt-hd-t14,
-.row-triple #sec-yields .yield-table tbody td:nth-child(4) {
+.row-pair #sec-yields .yield-table .yt-hd-mat { padding-left: 14px; }
+.row-pair #sec-yields .yield-table tbody { height: 100%; }
+.row-pair #sec-yields .yield-table tbody td { padding: 7px 10px; }
+.row-pair #sec-yields .yt-mat    { padding-left: 14px !important; font-size: 12px; }
+.row-pair #sec-yields .yt-latest { font-size: 12.5px; }
+/* Column dividers for T-7 and T-14 — match the chart's dashed/dotted lines */
+.row-pair #sec-yields .yt-hd-t7,
+.row-pair #sec-yields .yield-table tbody td:nth-child(3),
+.row-pair #sec-yields .yt-hd-t14,
+.row-pair #sec-yields .yield-table tbody td:nth-child(4) {
   border-left: 1px solid var(--border-md);
 }
 
-/* ── Breakpoints ─────────────────────────────────────────────────── */
-/* At narrower desktop, Catalyst full-width below FX + Yields */
-@media (max-width: 1100px) {
-  .row-triple {
-    grid-template-columns: 1fr 1fr;
-  }
-  .row-triple #sec-catalyst {
-    grid-column: 1 / -1;
-    min-height: 340px;
-  }
-  .row-triple #sec-catalyst .catalyst-frame-wrap {
-    padding-top: 40%;       /* cinematic aspect when wide */
-    min-height: 0;
-  }
-  .row-triple #sec-catalyst .catalyst-frame-wrap iframe { position: absolute; inset: 0; }
+/* ── FX Converter: body flexes; result panel absorbs any remainder ── */
+.row-pair #sec-fx .fx-body {
+  flex: 1 1 auto;
+  max-width: none;              /* override 720px cap */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-/* Single column below 768px */
-@media (max-width: 768px) {
-  .row-triple {
+.row-pair #sec-fx .fx-result-panel {
+  flex: 1 1 auto;
+  min-height: 96px;
+  padding: 16px 20px;
+}
+.row-pair #sec-fx .fx-result-main { font-size: 28px; }
+
+/* ── Breakpoints ─────────────────────────────────────────────────── */
+/* Stack to single column below 900px for tablet / mobile */
+@media (max-width: 900px) {
+  .row-pair {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-  .row-triple > .row-panel { min-height: 0; }
-  .row-triple #sec-catalyst { grid-column: auto; min-height: 0; }
-  .row-triple #sec-catalyst .catalyst-frame-wrap {
+  .row-pair > .row-panel { min-height: 0; }
+  /* Restore 16:9 aspect for Live Catalyst when stacked (column is full-width) */
+  .row-pair #sec-catalyst .catalyst-frame-wrap {
     flex: 0 0 auto;
-    padding-top: 56.25%;    /* restore 16:9 for stacked mobile */
+    padding-top: 56.25%;
   }
-  .row-triple #sec-yields .chart-shell { flex: 0 0 160px; height: 160px; }
+  .row-pair #sec-news .news-feed { max-height: 320px; }
+  .row-pair #sec-yields .chart-shell { flex: 0 0 190px; height: 190px; }
 }
 
 
