@@ -103,35 +103,57 @@ var FOMC_2026 = [
 ];
 
 // ============================================
-// WSJ RSS FEEDS  (fetched separately via fetchWSJFeed)
+// WSJ FEEDS  — multi-strategy resilient fetch
 //
 // Three target categories per spec:
-//   MARKETS  — RSSMarketsMain.xml  (equity, bond, commodities markets)
-//   ECONOMY  — RSSBusiness.xml     (macro, trade, employment, GDP)
-//   USNEWS   — WSJcomUSBusiness.xml (broader US business/political economy)
+//   MARKETS  — equity, bond, commodities markets
+//   ECONOMY  — macro, trade, employment, GDP, Fed
+//   USNEWS   — broader US business/political economy
 //
-// feeds.a.dj.com occasionally rate-limits Cloudflare Worker IPs.
-// Each feed is fetched independently so a single failure doesn't
-// block the others, and the 10-min cache means most requests
-// are served from cache rather than hitting WSJ servers directly.
+// Strategy chain (see fetchWSJFeed below):
+//   1. PRIMARY   — Google News RSS filtered to site:wsj.com + category
+//                  terms + when:3d. Google aggregates WSJ content and
+//                  serves from IPs that are NOT ASN-blocked by Dow Jones.
+//                  Standard RSS XML — parsed inline.
+//   2. SECONDARY — rss2json.com proxy of feeds.a.dj.com (kept for
+//                  resilience; rejected if newest item > WSJ_MAX_AGE_HOURS
+//                  to protect against the stale-cache failure mode that
+//                  motivated this rewrite).
+//
+// Direct fetch of feeds.a.dj.com is intentionally NOT attempted —
+// Dow Jones WAF blocks the entire Cloudflare Worker ASN; every
+// attempt returns 403 regardless of User-Agent or headers.
 // ============================================
 var WSJ_FEEDS = [
   {
-    url:      'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
-    source:   'WSJ Markets',
-    category: 'MARKETS',
+    source:       'WSJ Markets',
+    category:     'MARKETS',
+    google_query: 'site:wsj.com (markets OR stocks OR bonds OR commodities)',
+    dj_url:       'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
   },
   {
-    url:      'https://feeds.a.dj.com/rss/RSSBusiness.xml',
-    source:   'WSJ Economy',
-    category: 'ECONOMY',
+    source:       'WSJ Economy',
+    category:     'ECONOMY',
+    google_query: 'site:wsj.com (economy OR "federal reserve" OR inflation OR "interest rate" OR FOMC)',
+    dj_url:       'https://feeds.a.dj.com/rss/RSSBusiness.xml',
   },
   {
-    url:      'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
-    source:   'WSJ US News',
-    category: 'USNEWS',
+    source:       'WSJ US News',
+    category:     'USNEWS',
+    google_query: 'site:wsj.com (business OR "u.s." OR treasury OR tariff)',
+    dj_url:       'https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml',
   },
 ];
+
+// Maximum age for WSJ items in hours. Feeds serving items older than this
+// are rejected outright — this is the safety valve against stale-proxy
+// failure modes (rss2json serving a 15-month-old cache silently).
+var WSJ_MAX_AGE_HOURS = 72;
+
+// Default age filter for all non-WSJ sources (applied in handleNews).
+// Expose per-source overrides here if a specific feed needs a different window.
+var DEFAULT_MAX_AGE_HOURS = 72;
+var SOURCE_MAX_AGE_HOURS  = { /* e.g., 'Investopedia': 168 */ };
 
 var RSS_FEEDS = [
   // ── Government / Central Bank (always pinned, never keyword-filtered) ──────
@@ -297,7 +319,7 @@ async function handleTicker() {
 // ============================================
 
 var NEWS_CACHE_TTL = 420;   // 7 minutes
-var NEWS_CACHE_KEY = 'https://treasury-news-v4.cache/api/news';  // v4: rss2json proxy fix
+var NEWS_CACHE_KEY = 'https://treasury-news-v5.cache/api/news';  // v5: Google News primary + failure tracking
 
 async function handleNews(env) {
   // ── 1. Check Cloudflare edge cache ──────────────────────────
@@ -318,20 +340,32 @@ async function handleNews(env) {
   } catch (e) { /* cache API unavailable — fall through to fetch */ }
 
   // ── 2. Fetch all news sources in parallel ───────────────────
-  var allItems = [];
+  var allItems      = [];
+  var failedSources = [];   // observability: sources that returned 0 items or errored
 
-  // WSJ (Economy · Markets · US News) — primary source per spec
+  // WSJ (Markets · Economy · US News) — resilient multi-strategy fetch
   try {
-    var wsjItems = await fetchAllWSJ();
-    allItems = allItems.concat(wsjItems);
-  } catch (e) { /* all WSJ failed — continue with other sources */ }
+    var wsjResult = await fetchAllWSJ();
+    allItems      = allItems.concat(wsjResult.items);
+    failedSources = failedSources.concat(wsjResult.failures);
+  } catch (e) {
+    // Catastrophic failure of the WSJ pipeline itself (not per-feed)
+    console.error('[news] fetchAllWSJ threw: ' + e.message);
+    WSJ_FEEDS.forEach(function(f) {
+      failedSources.push({ source: f.source, category: f.category, error: 'pipeline_exception:' + e.message, attempted: [] });
+    });
+  }
 
-  // Government / wire feeds (Fed, ECB, Reuters, MarketWatch, CNBC, Yahoo)
+  // Government / wire feeds (Fed, ECB, Reuters, MarketWatch, CNBC, Yahoo, FT, Investopedia)
   var rssResults = await Promise.all(RSS_FEEDS.map(function(feed) {
     return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
   }));
   for (var i = 0; i < rssResults.length; i++) {
-    allItems = allItems.concat(rssResults[i]);
+    var r = rssResults[i];
+    allItems = allItems.concat(r.items);
+    if (r.error && r.items.length === 0) {
+      failedSources.push({ source: RSS_FEEDS[i].source, category: RSS_FEEDS[i].tag, error: r.error, attempted: [{ strategy: 'direct-rss', ok: false, error: r.error }] });
+    }
   }
 
   // Optional NewsAPI enhancement (uses NEWSAPI_KEY secret)
@@ -340,16 +374,34 @@ async function handleNews(env) {
     try {
       var naItems = await fetchNewsAPI(newsapiKey);
       allItems = allItems.concat(naItems);
-    } catch (e) { /* continue with RSS only */ }
+    } catch (e) {
+      console.error('[news] NewsAPI enhancement failed: ' + e.message);
+    }
   }
 
-  // ── 3. Age filter: drop items older than 72 h ───────────────
-  var cutoff = Date.now() - (72 * 60 * 60 * 1000);
+  // ── 3. Age filter: per-source, observable ───────────────────
+  // Items older than the per-source cap are dropped. Count drops per
+  // source so /api/news can surface "silently discarded" items.
+  var ageDropped = {};
   allItems = allItems.filter(function(item) {
     if (!item.date) return true;
     var d = new Date(item.date);
-    return isNaN(d.getTime()) || d.getTime() >= cutoff;
+    if (isNaN(d.getTime())) return true;
+    var maxAge = SOURCE_MAX_AGE_HOURS[item.source] || DEFAULT_MAX_AGE_HOURS;
+    var cutoff = Date.now() - (maxAge * 3600 * 1000);
+    var keep   = d.getTime() >= cutoff;
+    if (!keep) {
+      ageDropped[item.source] = (ageDropped[item.source] || 0) + 1;
+    }
+    return keep;
   });
+  var droppedKeys = Object.keys(ageDropped);
+  if (droppedKeys.length) {
+    droppedKeys.forEach(function(k) {
+      console.log('[agefilter] dropped ' + ageDropped[k] + ' items from ' + k
+        + ' (older than ' + (SOURCE_MAX_AGE_HOURS[k] || DEFAULT_MAX_AGE_HOURS) + 'h)');
+    });
+  }
 
   // ── 4. Relevance filter (non-gov only) ──────────────────────
   var FIN_KEYWORDS = [
@@ -401,11 +453,13 @@ async function handleNews(env) {
   }
 
   var payload = JSON.stringify({
-    timestamp: new Date().toISOString(),
-    total: deduped.length,
-    wsj_count: deduped.filter(function(i){ return i.source && i.source.indexOf('WSJ') === 0; }).length,
-    source_counts: sourceCounts,
-    items: deduped,
+    timestamp:      new Date().toISOString(),
+    total:          deduped.length,
+    wsj_count:      deduped.filter(function(i){ return i.source && i.source.indexOf('WSJ') === 0; }).length,
+    source_counts:  sourceCounts,
+    failed_sources: failedSources,   // observability: which feeds returned 0 and why
+    age_dropped:    ageDropped,      // observability: items dropped by per-source age filter
+    items:          deduped,
   });
 
   var respHeaders = Object.assign({}, CORS, {
@@ -598,83 +652,253 @@ function findClosestObs(obs, targetMs) {
 }
 
 // ============================================
-// WSJ RSS FETCHING  via rss2json.com proxy
+// WSJ FETCHING — Multi-strategy resilient chain
 //
-// ROOT CAUSE of prior failure:
-//   feeds.a.dj.com blocks ALL Cloudflare datacenter IPs at the ASN
-//   level — this is a Dow Jones WAF rule, not a rate-limit or UA
-//   check. Every fetch() from any CF Worker gets a 403 regardless
-//   of User-Agent, Referer, or retry count.
+// Each WSJ feed goes through an ordered attempt chain. The first
+// strategy that returns a non-empty, non-stale result wins. Every
+// attempt — success or failure — is logged with a [WSJ][Source]
+// prefix, and the per-attempt record is attached to the returned
+// result so /api/news can expose it via failed_sources[].
 //
-// FIX:
-//   Route through rss2json.com — a residential-IP RSS→JSON proxy.
-//   It fetches feeds.a.dj.com from non-datacenter IPs, which are
-//   not blocked. No API key required for free-tier usage.
+// Strategy 1 (PRIMARY): Google News RSS
+//   URL pattern: news.google.com/rss/search?q=<query>
+//   Query:       site:wsj.com + category terms + when:3d
+//   Why:         Google News aggregates WSJ content and serves the RSS
+//                from google.com IPs which are NOT blocked by DJ's WAF.
+//                Returns valid RSS 2.0 XML (same parser as other feeds).
+//                Time-windowed (when:3d) so items are inherently fresh.
+//   Caveat:      <link> is a Google redirect (news.google.com/rss/articles/...).
+//                Browser follows it to the actual wsj.com article.
 //
-// rss2json response shape:
-//   { status:"ok", items:[{ title, link, pubDate:"YYYY-MM-DD HH:MM:SS",
-//     description, author }] }
+// Strategy 2 (SECONDARY): rss2json.com proxy of feeds.a.dj.com
+//   Why:         Kept as safety net in case Google News ever changes
+//                format or starts rate-limiting us. Free tier, no key.
+//   Hard reject: If the newest item is older than WSJ_MAX_AGE_HOURS we
+//                REJECT the entire response — this defends against the
+//                "rss2json serves a 15-month-old cache and we silently
+//                keep them" bug that motivated this rewrite.
 //
-// Note: pubDate is NOT RFC 822 — it uses "YYYY-MM-DD HH:MM:SS" format.
-// The date is stored as-is; renderNews/formatTime handle it gracefully.
+// Direct fetch of feeds.a.dj.com is NOT attempted — Dow Jones WAF
+// ASN-blocks every Cloudflare Worker IP (verified historically).
 // ============================================
 
-var RSS2JSON_BASE = 'https://api.rss2json.com/v1/api.json?rss_url=';
+var GOOGLE_NEWS_BASE = 'https://news.google.com/rss/search?';
+var RSS2JSON_BASE    = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
-async function fetchWSJFeed(feedDef) {
-  try {
-    var proxyUrl = RSS2JSON_BASE + encodeURIComponent(feedDef.url);
-    var resp = await fetch(proxyUrl, {
-      headers: { 'Accept': 'application/json' },
-      cf: { cacheTtl: 300 },   // 5-min Cloudflare edge cache on the proxy response
-    });
-    if (!resp.ok) return [];
-
-    var data = await resp.json();
-    if (!data || data.status !== 'ok' || !Array.isArray(data.items)) return [];
-
-    var items = [];
-    for (var i = 0; i < data.items.length && items.length < 15; i++) {
-      var item = data.items[i];
-      if (!item.title) continue;
-
-      var title = item.title  || '';
-      var desc  = item.description || item.content || '';
-      var resolvedCategory = classifyWSJ(title, desc, feedDef.category);
-
-      items.push({
-        title:   decodeEntities(title),
-        link:    item.link || '',
-        date:    item.pubDate || '',   // "YYYY-MM-DD HH:MM:SS" — handled by formatTime
-        summary: decodeEntities(desc).substring(0, 200),
-        source:  feedDef.source,      // "WSJ Markets" | "WSJ Economy" | "WSJ US News"
-        tag:     resolvedCategory,
-        isGov:   false,
-      });
-    }
-    return items;
-  } catch (e) {
-    return [];
-  }
+// Build a Google News RSS URL. `days` is the lookback window (1-7).
+function buildGoogleNewsUrl(query, days) {
+  var q = encodeURIComponent(query + ' when:' + (days || 3) + 'd');
+  return GOOGLE_NEWS_BASE + 'q=' + q + '&hl=en-US&gl=US&ceid=US:en';
 }
 
-// Lightweight classifier for WSJ items.
-// Preserves feed-level category as default; overrides only on strong signals.
+/**
+ * fetchWSJFeed(feedDef) — resilient WSJ feed fetcher
+ *
+ * @param {Object} feedDef  One entry of WSJ_FEEDS
+ *        { source, category, google_query, dj_url }
+ * @returns {Object} result
+ *        {
+ *          source:        string,          // "WSJ Markets"
+ *          category:      string,          // "MARKETS"
+ *          items:         Array<NewsItem>, // [] if all strategies failed
+ *          strategy_used: string | null,   // "google-news" | "rss2json" | null
+ *          attempted:     Array<Attempt>,  // ordered log of every strategy tried
+ *          error:         string | null,   // set only when all strategies failed
+ *        }
+ *
+ *  Attempt: { strategy, ok, count?, error?, stale?, newestAgeHours? }
+ */
+async function fetchWSJFeed(feedDef) {
+  var label = '[WSJ][' + feedDef.source + ']';
+  var result = {
+    source:        feedDef.source,
+    category:      feedDef.category,
+    items:         [],
+    strategy_used: null,
+    attempted:     [],
+    error:         null,
+  };
+
+  // ── Strategy 1: Google News RSS (PRIMARY) ─────────────────────
+  try {
+    console.log(label + ' attempting strategy=google-news');
+    var gItems = await fetchWSJViaGoogleNews(feedDef);
+    if (gItems.length > 0) {
+      console.log(label + ' google-news OK items=' + gItems.length);
+      result.items         = gItems;
+      result.strategy_used = 'google-news';
+      result.attempted.push({ strategy: 'google-news', ok: true, count: gItems.length });
+      return result;
+    }
+    console.error(label + ' google-news returned 0 items');
+    result.attempted.push({ strategy: 'google-news', ok: false, count: 0 });
+  } catch (e) {
+    console.error(label + ' google-news EXCEPTION: ' + e.message);
+    result.attempted.push({ strategy: 'google-news', ok: false, error: e.message });
+  }
+
+  // ── Strategy 2: rss2json proxy (SECONDARY, staleness-guarded) ──
+  try {
+    console.log(label + ' attempting strategy=rss2json');
+    var rItems = await fetchWSJViaRSS2JSON(feedDef);
+    if (rItems.length === 0) {
+      console.error(label + ' rss2json returned 0 items');
+      result.attempted.push({ strategy: 'rss2json', ok: false, count: 0 });
+    } else {
+      // Staleness gate: reject the entire response if newest item is
+      // older than WSJ_MAX_AGE_HOURS. This defends against rss2json
+      // serving a months-old cached response silently.
+      var newestMs = rItems.reduce(function(m, it) {
+        var d = new Date(it.date || 0).getTime();
+        return (!isNaN(d) && d > m) ? d : m;
+      }, 0);
+      var ageHours = newestMs ? (Date.now() - newestMs) / 3600000 : Infinity;
+
+      if (ageHours > WSJ_MAX_AGE_HOURS) {
+        console.error(label + ' rss2json REJECTED as stale — newest=' + Math.round(ageHours) + 'h old (max=' + WSJ_MAX_AGE_HOURS + 'h)');
+        result.attempted.push({ strategy: 'rss2json', ok: false, stale: true, newestAgeHours: Math.round(ageHours) });
+      } else {
+        console.log(label + ' rss2json OK items=' + rItems.length + ' newestAge=' + Math.round(ageHours) + 'h');
+        result.items         = rItems;
+        result.strategy_used = 'rss2json';
+        result.attempted.push({ strategy: 'rss2json', ok: true, count: rItems.length });
+        return result;
+      }
+    }
+  } catch (e) {
+    console.error(label + ' rss2json EXCEPTION: ' + e.message);
+    result.attempted.push({ strategy: 'rss2json', ok: false, error: e.message });
+  }
+
+  // ── All strategies exhausted ──────────────────────────────────
+  console.error(label + ' ALL STRATEGIES FAILED — returning 0 items');
+  result.error = 'all_strategies_failed';
+  return result;
+}
+
+/**
+ * Strategy 1 — Fetch WSJ items via Google News RSS aggregation.
+ * Returns an array of parsed news items (may be empty on non-exceptional
+ * "no results" responses). Throws only on HTTP errors or malformed XML.
+ */
+async function fetchWSJViaGoogleNews(feedDef) {
+  var url = buildGoogleNewsUrl(feedDef.google_query, 3);
+  var resp = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept':     'application/rss+xml, application/xml, text/xml, */*',
+    },
+    cf: { cacheTtl: 300 },    // 5-min Cloudflare edge cache
+  });
+  if (!resp.ok) {
+    throw new Error('HTTP ' + resp.status);
+  }
+  var xml = await resp.text();
+
+  // Parse items inline so we can strip the Google "— WSJ" suffix and
+  // route titles through classifyWSJ() instead of the generic classifier.
+  var items = [];
+  var itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  var match;
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 15) {
+    var block   = match[1];
+    var rawTitle = extractXmlTag(block, 'title');
+    var link    = extractXmlTag(block, 'link');
+    var pubDate = extractXmlTag(block, 'pubDate');
+    var desc    = extractXmlTag(block, 'description');
+    if (!rawTitle) continue;
+
+    // Google News appends "- WSJ" or "- The Wall Street Journal" to titles
+    var title = rawTitle.replace(/\s*[-–—]\s*(WSJ|The Wall Street Journal)\s*$/i, '').trim();
+
+    var resolvedCategory = classifyWSJ(title, desc || '', feedDef.category);
+    items.push({
+      title:   decodeEntities(title),
+      link:    link || '',
+      date:    pubDate || '',
+      summary: desc ? decodeEntities(desc).substring(0, 200) : '',
+      source:  feedDef.source,
+      tag:     resolvedCategory,
+      isGov:   false,
+    });
+  }
+  return items;
+}
+
+/**
+ * Strategy 2 — Fetch WSJ items via rss2json.com proxy of feeds.a.dj.com.
+ * Returns an array of items (may be empty). Throws on HTTP or parse errors.
+ * The caller (fetchWSJFeed) is responsible for the staleness check — this
+ * function just parses whatever rss2json returns.
+ */
+async function fetchWSJViaRSS2JSON(feedDef) {
+  var url = RSS2JSON_BASE + encodeURIComponent(feedDef.dj_url);
+  var resp = await fetch(url, {
+    headers: { 'Accept': 'application/json' },
+    cf: { cacheTtl: 300 },
+  });
+  if (!resp.ok) {
+    throw new Error('HTTP ' + resp.status);
+  }
+  var data = await resp.json();
+  if (!data || data.status !== 'ok' || !Array.isArray(data.items)) {
+    throw new Error('bad_payload status=' + (data && data.status));
+  }
+  var items = [];
+  for (var i = 0; i < data.items.length && items.length < 15; i++) {
+    var item = data.items[i];
+    if (!item.title) continue;
+    var desc = item.description || item.content || '';
+    var resolvedCategory = classifyWSJ(item.title, desc, feedDef.category);
+    items.push({
+      title:   decodeEntities(item.title),
+      link:    item.link || '',
+      date:    item.pubDate || '',     // "YYYY-MM-DD HH:MM:SS" — handled by formatTime
+      summary: decodeEntities(desc).substring(0, 200),
+      source:  feedDef.source,
+      tag:     resolvedCategory,
+      isGov:   false,
+    });
+  }
+  return items;
+}
+
+/**
+ * Fetch all WSJ categories in parallel and return both the combined
+ * item list and per-feed failure records (for failed_sources[]).
+ */
+async function fetchAllWSJ() {
+  var results = await Promise.all(WSJ_FEEDS.map(fetchWSJFeed));
+  var combined = [];
+  var failures = [];
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    if (r.items.length > 0) {
+      combined = combined.concat(r.items);
+    } else {
+      failures.push({
+        source:    r.source,
+        category:  r.category,
+        error:     r.error || 'no_items',
+        attempted: r.attempted,
+      });
+    }
+  }
+  return { items: combined, failures: failures };
+}
+
+/**
+ * Lightweight classifier for WSJ items. Preserves feed-level category
+ * as default; overrides only on strong topical signals.
+ */
 function classifyWSJ(title, desc, defaultCategory) {
   var text = ((title || '') + ' ' + (desc || '')).toLowerCase();
   if (/\bfomc\b|federal open market|interest rate decision|monetary policy/.test(text)) return 'FED';
   if (/\binflation\b|\bcpi\b|price index|core pce/.test(text))                          return 'FED';
-  if (/\byield curve\b|\btreasury yield\b|\bsofr\b|\beffr\b/.test(text))               return 'RATES';
+  if (/\byield curve\b|\btreasury yield\b|\bsofr\b|\beffr\b/.test(text))                 return 'RATES';
   if (/\bgdp\b|gross domestic product/.test(text))                                       return 'ECONOMY';
   if (/\bnonfarm payroll|\bunemployment rate|\bjobless claims/.test(text))               return 'ECONOMY';
   return defaultCategory;
-}
-
-async function fetchAllWSJ() {
-  var results = await Promise.all(WSJ_FEEDS.map(fetchWSJFeed));
-  var combined = [];
-  for (var i = 0; i < results.length; i++) combined = combined.concat(results[i]);
-  return combined;
 }
 
 
@@ -682,7 +906,14 @@ async function fetchAllWSJ() {
 // RSS FEED PARSING  (original -- untouched)
 // ============================================
 
+/**
+ * Fetch a generic RSS feed and parse it.
+ * @returns {Object} { items: NewsItem[], error: string | null }
+ *   — items is [] on failure; error is non-null when something went wrong,
+ *     so handleNews() can surface it via failed_sources[].
+ */
 async function fetchRSS(url, sourceName, tag, isGov) {
+  var label = '[rss][' + sourceName + ']';
   try {
     var resp = await fetch(url, {
       headers: {
@@ -690,10 +921,20 @@ async function fetchRSS(url, sourceName, tag, isGov) {
         'Accept':     'application/rss+xml, application/xml, text/xml, */*',
       },
     });
-    var xml = await resp.text();
-    return parseRSS(xml, sourceName, tag, isGov !== false);
+    if (!resp.ok) {
+      console.error(label + ' HTTP ' + resp.status);
+      return { items: [], error: 'http_' + resp.status };
+    }
+    var xml   = await resp.text();
+    var items = parseRSS(xml, sourceName, tag, isGov !== false);
+    if (items.length === 0) {
+      console.error(label + ' parsed 0 items (feed may be empty or schema unexpected)');
+      return { items: [], error: 'no_items_parsed' };
+    }
+    return { items: items, error: null };
   } catch (e) {
-    return [];
+    console.error(label + ' EXCEPTION: ' + e.message);
+    return { items: [], error: 'exception:' + e.message };
   }
 }
 
