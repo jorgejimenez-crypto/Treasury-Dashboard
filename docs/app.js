@@ -331,48 +331,75 @@ function renderYieldsChart(data) {
   var hasDL = false;
   try { hasDL = typeof ChartDataLabels !== 'undefined'; } catch(e) {}
 
-  // Shared datalabel config — ALL bars get labeled, not just T-1
-  var dlBase = {
-    display: true, anchor: 'end', align: 'top', offset: 2,
-    font: { size: 11, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
+  /* === TREASURY YIELDS CHART REFINEMENT ===
+   * A. ALL 9 bars get bold white labels — no bar unlabeled
+   * B. 3 series visually distinct: blue (solid) / amber-slate / cool-gray
+   * C. Y-axis zoomed to data range (not starting at 0) so bps diffs are visible
+   * D. Rich tooltips with maturity + period + rate + bps delta
+   */
+
+  // Datalabel config — every bar shows its rate in bold white
+  var dlConf = function(clr, sz) { return {
+    display: true, anchor: 'end', align: 'top', offset: 3,
+    color: clr,
+    font: { size: sz, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
     formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
-  };
+  }; };
 
   var datasets = [
     {
       label: 'T-1 (Latest)',
       data: t1,
-      backgroundColor: 'rgba(59,130,246,0.75)',
-      borderColor: '#3b82f6',
-      borderWidth: 1.5,
-      borderRadius: 6,
-      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#e2e8f0', font: { size: 12, weight: '700', family: dlBase.font.family } }) : { display: false }
+      backgroundColor: '#3b82f6',             // solid blue — hero
+      borderColor: '#2563eb',
+      borderWidth: 2,
+      borderRadius: 5,
+      borderSkipped: false,
+      barPercentage: 0.82,
+      categoryPercentage: 0.72,
+      datalabels: hasDL ? dlConf('#f1f5f9', 12) : { display: false }
     },
     {
       label: 'T-7',
       data: t7,
-      backgroundColor: 'rgba(100,116,139,0.60)',
-      borderColor: '#64748b',
+      backgroundColor: 'rgba(234,179,8,0.55)', // warm amber — clearly different
+      borderColor: '#ca8a04',
       borderWidth: 1.5,
-      borderRadius: 6,
-      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#94a3b8' }) : { display: false }
+      borderRadius: 5,
+      borderSkipped: false,
+      barPercentage: 0.82,
+      categoryPercentage: 0.72,
+      datalabels: hasDL ? dlConf('#fbbf24', 11) : { display: false }
     },
     {
       label: 'T-14',
       data: t14,
-      backgroundColor: 'rgba(148,163,184,0.50)',
-      borderColor: '#94a3b8',
-      borderWidth: 1.5,
-      borderRadius: 6,
-      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#64748b' }) : { display: false }
+      backgroundColor: 'rgba(148,163,184,0.40)', // cool slate — tertiary
+      borderColor: '#64748b',
+      borderWidth: 1,
+      borderRadius: 5,
+      borderSkipped: false,
+      barPercentage: 0.82,
+      categoryPercentage: 0.72,
+      datalabels: hasDL ? dlConf('#94a3b8', 11) : { display: false }
     }
   ];
 
-  // ── 6. Chart options ──────────────────────────────────────────
+  // ── 6. Compute smart Y-axis range ─────────────────────────────
+  // Zoom into the data range so bps differences are visually obvious.
+  // E.g., 3.68–3.74 becomes yMin=3.60, yMax=3.85 (not 0–4).
+  var allVals = t1.concat(t7, t14).filter(function(v) { return v != null; });
+  var dataMin = Math.min.apply(null, allVals);
+  var dataMax = Math.max.apply(null, allVals);
+  var range   = dataMax - dataMin;
+  var yPad    = Math.max(range * 1.5, 0.08); // at least 8 bps visual room
+  var yMin    = Math.floor((dataMin - yPad) * 100) / 100;
+  var yMax    = Math.ceil((dataMax + yPad) * 100) / 100;
+
   var opts = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: { padding: { top: 28, bottom: 6, left: 6, right: 6 } },
+    layout: { padding: { top: 30, bottom: 4, left: 4, right: 4 } },
     plugins: {
       legend: { display: false },
       datalabels: hasDL ? {} : false,
@@ -382,9 +409,9 @@ function renderYieldsChart(data) {
         backgroundColor: 'rgba(10,14,22,0.97)',
         titleColor: '#f1f5f9',
         titleFont: { size: 13, weight: '700' },
-        bodyColor: '#94a3b8',
-        bodyFont: { size: 12 },
-        borderColor: 'rgba(45,63,82,0.9)',
+        bodyColor: '#cbd5e1',
+        bodyFont: { size: 12, family: "'Cascadia Code','Consolas',monospace" },
+        borderColor: 'rgba(59,130,246,0.3)',
         borderWidth: 1,
         padding: 14,
         cornerRadius: 6,
@@ -395,10 +422,11 @@ function renderYieldsChart(data) {
             var v = ctx.parsed.y;
             if (v == null) return '  ' + ctx.dataset.label + ': N/A';
             var t1val = ctx.chart.data.datasets[0].data[ctx.dataIndex];
-            var line = '  ' + ctx.dataset.label + ': ' + v.toFixed(3) + '%';
+            var line = '  ' + ctx.dataset.label + ':  ' + v.toFixed(3) + '%';
             if (ctx.datasetIndex > 0 && t1val != null) {
               var delta = Math.round((t1val - v) * 100);
-              line += '  (' + (delta >= 0 ? '+' : '') + delta + ' bps)';
+              var arrow = delta > 0 ? ' ↑' : delta < 0 ? ' ↓' : '';
+              line += '   ' + (delta >= 0 ? '+' : '') + delta + ' bps' + arrow;
             }
             return line;
           }
@@ -407,15 +435,20 @@ function renderYieldsChart(data) {
     },
     scales: {
       x: {
-        grid: { display: false },
+        grid:  { display: false },
         border: { display: false },
-        ticks: { color: '#94a3b8', font: { size: 14, weight: '700' }, padding: 10 }
+        ticks: { color: '#94a3b8', font: { size: 13, weight: '700' }, padding: 8 }
       },
       y: {
-        grid: { color: 'rgba(30,41,59,0.55)' },
+        min: yMin,
+        max: yMax,
+        grid: { color: 'rgba(30,41,59,0.45)', lineWidth: 0.8 },
         border: { display: false },
         ticks: {
-          color: '#64748b', font: { size: 11 }, padding: 10,
+          color: '#64748b',
+          font: { size: 10, family: "'Cascadia Code','Consolas',monospace" },
+          padding: 8,
+          stepSize: 0.02,
           callback: function(v) { return v.toFixed(2) + '%'; }
         }
       }
@@ -443,13 +476,13 @@ function renderYieldsChart(data) {
       + 'Chart error: ' + e.message + '</div>';
   }
 
-  // ── 8. Update legend swatches ─────────────────────────────────
+  // ── 8. Update legend swatches — match new distinct colors ──────
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(59,130,246,0.70)"></span>T-1 (Latest)</span>'
-      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(100,116,139,0.55)"></span>T-7</span>'
-      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.45)"></span>T-14</span>';
+      '<span class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>T-1 (Latest)</span>'
+      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(234,179,8,0.55);border:1px solid #ca8a04"></span>T-7</span>'
+      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40);border:1px solid #64748b"></span>T-14</span>';
   }
 }
 
@@ -692,7 +725,11 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   }
 }
 
-// ── Precision data table ──────────────────────────────────────
+/* === YIELD DATA PANEL UPGRADE ===================================
+ * Two-part panel:
+ *   1. Compact maturity table (top) — T-1, Δ7d, Δ14d per maturity
+ *   2. Insight cards (bottom) — spreads, range, largest move, direction
+ * ================================================================ */
 
 function buildYieldTable(t1, t7, t14, col1, col7, col14) {
   var table = document.getElementById('yield-data-table');
@@ -701,34 +738,93 @@ function buildYieldTable(t1, t7, t14, col1, col7, col14) {
   var thead = table.querySelector('thead');
   var tbody = table.querySelector('tbody');
 
+  // Compact 4-column table: Maturity | T-1 | Δ7d | Δ14d
   thead.innerHTML = '<tr>'
-    + '<th class="yt-hd-mat">Maturity</th>'
-    + '<th class="yt-hd-val yt-hd-latest">'+col1+'</th>'
-    + '<th class="yt-hd-val yt-hd-t7">'+col7+'</th>'
-    + '<th class="yt-hd-val yt-hd-t14">'+col14+'</th>'
-    + '<th class="yt-hd-delta">Δ 7d (bps)</th>'
-    + '<th class="yt-hd-delta">Δ 14d (bps)</th>'
+    + '<th class="yt-hd-mat">Mat.</th>'
+    + '<th class="yt-hd-val yt-hd-latest">T-1</th>'
+    + '<th class="yt-hd-delta">Δ 7d</th>'
+    + '<th class="yt-hd-delta">Δ 14d</th>'
     + '</tr>';
 
   tbody.innerHTML = '';
-  for (var i=0; i<CURVE_KEYS.length; i++) {
-    var v1=t1[i], v7=t7[i], v14=t14[i];
+  for (var i = 0; i < CURVE_KEYS.length; i++) {
+    var v1 = t1[i], v7 = t7[i], v14 = t14[i];
     var d7  = bps(v1, v7);
     var d14 = bps(v1, v14);
-
-    var cls7  = d7  == null ? '' : d7 >0 ? 'yd-up' : d7 <0 ? 'yd-dn' : '';
-    var cls14 = d14 == null ? '' : d14>0 ? 'yd-up' : d14<0 ? 'yd-dn' : '';
+    var cls7  = d7  == null ? '' : d7 > 0 ? 'yd-up' : d7 < 0 ? 'yd-dn' : '';
+    var cls14 = d14 == null ? '' : d14 > 0 ? 'yd-up' : d14 < 0 ? 'yd-dn' : '';
 
     var tr = document.createElement('tr');
     tr.innerHTML =
-      '<td class="yt-mat">'+CURVE_LABELS[i]+'</td>'
-      +'<td class="yt-val yt-latest">'+(v1 !=null?v1.toFixed(3)+'%':'<span class="yt-na">—</span>')+'</td>'
-      +'<td class="yt-val">'+(v7 !=null?v7.toFixed(3)+'%':'<span class="yt-na">—</span>')+'</td>'
-      +'<td class="yt-val">'+(v14!=null?v14.toFixed(3)+'%':'<span class="yt-na">—</span>')+'</td>'
-      +'<td class="yt-delta '+cls7 +'">'+(d7  !=null?sgn(d7 )+d7 :'—')+'</td>'
-      +'<td class="yt-delta '+cls14+'">'+(d14 !=null?sgn(d14)+d14:'—')+'</td>';
+      '<td class="yt-mat">' + CURVE_LABELS[i] + '</td>'
+      + '<td class="yt-val yt-latest">' + (v1 != null ? v1.toFixed(3) + '%' : '—') + '</td>'
+      + '<td class="yt-delta ' + cls7  + '">' + (d7  != null ? sgn(d7)  + d7  + ' bps' : '—') + '</td>'
+      + '<td class="yt-delta ' + cls14 + '">' + (d14 != null ? sgn(d14) + d14 + ' bps' : '—') + '</td>';
     tbody.appendChild(tr);
   }
+
+  // ── Insight cards below table ─────────────────────────────────
+  buildYieldInsights(t1, t7, t14);
+}
+
+function buildYieldInsights(t1, t7, t14) {
+  var el = document.getElementById('yield-insights');
+  if (!el) return;
+
+  var vals = t1.filter(function(v) { return v != null; });
+  if (!vals.length) { el.innerHTML = ''; return; }
+
+  var cards = [];
+
+  // 1. Short-end range
+  var lo = Math.min.apply(null, vals);
+  var hi = Math.max.apply(null, vals);
+  cards.push({ label: 'Short-End Range', value: lo.toFixed(2) + '% – ' + hi.toFixed(2) + '%', cls: '' });
+
+  // 2. Curve slope 1M→6M
+  if (t1[0] != null && t1[2] != null) {
+    var slope = Math.round((t1[2] - t1[0]) * 100);
+    var slopeCls = slope > 0 ? 'yi-up' : slope < 0 ? 'yi-dn' : 'yi-flat';
+    var slopeWord = slope > 2 ? 'Steepening' : slope < -2 ? 'Inverting' : 'Flat';
+    cards.push({ label: '1M → 6M Slope', value: sgn(slope) + slope + ' bps', sub: slopeWord, cls: slopeCls });
+  }
+
+  // 3. Largest 7-day move
+  var moves7 = [];
+  for (var i = 0; i < CURVE_KEYS.length; i++) {
+    if (t1[i] != null && t7[i] != null) {
+      moves7.push({ mat: CURVE_LABELS[i], d: Math.round((t1[i] - t7[i]) * 100) });
+    }
+  }
+  if (moves7.length) {
+    moves7.sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); });
+    var top = moves7[0];
+    var mvCls = top.d > 0 ? 'yi-up' : top.d < 0 ? 'yi-dn' : 'yi-flat';
+    cards.push({ label: 'Largest 7d Move', value: top.mat + ' ' + sgn(top.d) + top.d + ' bps', cls: mvCls });
+  }
+
+  // 4. Front-end direction
+  var totalBps = 0, count = 0;
+  for (var j = 0; j < CURVE_KEYS.length; j++) {
+    if (t1[j] != null && t7[j] != null) {
+      totalBps += Math.round((t1[j] - t7[j]) * 100);
+      count++;
+    }
+  }
+  if (count) {
+    var avg = totalBps / count;
+    var dirWord = avg > 1 ? 'Rising' : avg < -1 ? 'Easing' : 'Stable';
+    var dirCls  = avg > 1 ? 'yi-up' : avg < -1 ? 'yi-dn' : 'yi-flat';
+    cards.push({ label: 'Front-End Bias', value: dirWord, cls: dirCls });
+  }
+
+  el.innerHTML = cards.map(function(c) {
+    return '<div class="yi-card ' + c.cls + '">'
+      + '<div class="yi-label">' + c.label + '</div>'
+      + '<div class="yi-value">' + c.value + '</div>'
+      + (c.sub ? '<div class="yi-sub">' + c.sub + '</div>' : '')
+      + '</div>';
+  }).join('');
 }
 
 

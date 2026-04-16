@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260416f">
+  <link rel="stylesheet" href="style.css?v=20260416g">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -89,8 +89,8 @@
     <section class="desk-section dash-cell" id="sec-yields-table">
       <div class="section-hd">
         <div class="section-hd-left">
-          <h2 class="section-title">Yield Data</h2>
-          <span class="section-desc">T-1 / T-7 / T-14 &middot; bps deltas</span>
+          <h2 class="section-title">Short-End Analysis</h2>
+          <span class="section-desc">Rates &middot; Deltas &middot; Curve Insights</span>
         </div>
         <div class="section-hd-right">
           <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
@@ -102,6 +102,8 @@
           <tbody></tbody>
         </table>
       </div>
+      <!-- === YIELD INSIGHT CARDS === -->
+      <div id="yield-insights" class="yield-insights"></div>
     </section>
   </div>
 
@@ -259,6 +261,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260416f"></script>
+<script src="app.js?v=20260416g"></script>
 </body>
 </html>

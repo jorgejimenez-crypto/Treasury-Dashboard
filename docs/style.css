@@ -529,24 +529,62 @@ body {
 /* Alternating rows */
 .yield-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
 
+/* === YIELD INSIGHT CARDS ======================================= */
+.yield-insights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.yi-card {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  transition: border-color 0.15s;
+}
+.yi-card:hover { border-color: var(--border-md); }
+.yi-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+.yi-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+  line-height: 1.2;
+}
+.yi-sub {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.yi-up .yi-value { color: var(--green); }
+.yi-dn .yi-value { color: var(--red); }
+.yi-flat .yi-value { color: var(--text-2); }
+.yi-up .yi-sub { color: var(--green); }
+.yi-dn .yi-sub { color: var(--red); }
+
 /* FX section — remove max-width cap */
 #sec-fx .fx-body { max-width: 100%; }
 
-/* === COMPACT TABLE for 50%-width column ====================== */
-#sec-yields-table .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
-#sec-yields-table .yield-table { font-size: 11px; min-width: 0; }
+/* === COMPACT TABLE for Yield Data panel ====================== */
+#sec-yields-table .section-hd { margin-bottom: 12px; padding-bottom: 10px; }
+#sec-yields-table .yield-table { font-size: 12px; min-width: 0; }
 #sec-yields-table .yield-table thead th {
-  padding: 6px 8px; font-size: 8.5px; letter-spacing: 0.4px;
+  padding: 8px 10px; font-size: 9px; letter-spacing: 0.5px;
 }
-#sec-yields-table .yield-table .yt-hd-mat { padding-left: 10px; }
-#sec-yields-table .yield-table tbody td { padding: 6px 8px; }
-#sec-yields-table .yt-mat { padding-left: 10px !important; font-size: 11px; }
-#sec-yields-table .yt-latest { font-size: 11.5px; }
-/* Column dividers for T-7 and T-14 */
-#sec-yields-table .yt-hd-t7,
-#sec-yields-table .yield-table tbody td:nth-child(3) { border-left: 1px solid var(--border-md); }
-#sec-yields-table .yt-hd-t14,
-#sec-yields-table .yield-table tbody td:nth-child(4) { border-left: 1px solid var(--border-md); }
+#sec-yields-table .yield-table .yt-hd-mat { padding-left: 12px; }
+#sec-yields-table .yield-table tbody td { padding: 8px 10px; }
+#sec-yields-table .yt-mat { padding-left: 12px !important; font-size: 13px; }
+#sec-yields-table .yt-latest { font-size: 14px; }
+#sec-yields-table .yt-delta { font-size: 11.5px; }
 
 /* === FUNDING in 50% column — 3-col grid ====================== */
 .dash-cell .funding-grid { grid-template-columns: repeat(3, 1fr); }
