@@ -52,8 +52,8 @@
 
   /* Layout */
   --max-w:       1320px;
-  --section-gap: 56px;      /* generous breathing room — institutional feel */
-  --section-pad: 36px;
+  --section-gap: 24px;      /* tighter for 2-col grid rows */
+  --section-pad: 24px;
   --card-radius: 10px;
   --radius-sm:   5px;
 }
@@ -314,15 +314,41 @@ body {
 .setup-banner code { background:rgba(245,158,11,0.15); padding:2px 6px; border-radius:3px; font-family:var(--mono); font-size:12px; }
 
 
-/* === MAIN LAYOUT =========================================== */
+/* === MAIN LAYOUT — TWO-COLUMN GRID =========================== */
 
 #dashboard {
   max-width: var(--max-w);
   margin: 0 auto;
-  padding: 40px 32px 64px;
+  padding: 32px 32px 64px;
   display: flex;
   flex-direction: column;
-  gap: var(--section-gap);
+  gap: 24px;
+}
+
+/* === DASH ROW — 50/50 equal-height pairs ===================== */
+.dash-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;         /* forces equal height */
+}
+.dash-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;                 /* allow shrink inside grid */
+}
+/* Content areas fill remaining height after section-hd */
+.dash-cell .yields-chart-wrap,
+.dash-cell .yield-table-shell,
+.dash-cell .funding-grid,
+.dash-cell .fx-body,
+.dash-cell .catalyst-frame-wrap,
+.dash-cell .news-feed {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 960px) {
+  .dash-row { grid-template-columns: 1fr; }
 }
 
 
@@ -342,17 +368,17 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 28px;
-  padding-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 .section-hd-left { display:flex; flex-direction:column; gap:3px; }
 .section-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.4px;
+  letter-spacing: -0.3px;
   line-height: 1.1;
 }
 .section-desc {
@@ -391,12 +417,12 @@ body {
 /* === YIELDS GROUPED BAR CHART — standalone wrapper === */
 .yields-chart-wrap {
   position: relative;
-  height: 340px;
+  min-height: 280px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 16px 14px 10px;
-  margin-bottom: 16px;
+  padding: 12px 10px 8px;
+  margin-bottom: 12px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 .yields-chart-wrap canvas {
@@ -498,8 +524,29 @@ body {
 /* Alternating rows */
 .yield-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
 
-/* FX section — remove max-width cap for full-width layout */
+/* FX section — remove max-width cap */
 #sec-fx .fx-body { max-width: 100%; }
+
+/* === COMPACT TABLE for 50%-width column ====================== */
+#sec-yields-table .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
+#sec-yields-table .yield-table { font-size: 11px; min-width: 0; }
+#sec-yields-table .yield-table thead th {
+  padding: 6px 8px; font-size: 8.5px; letter-spacing: 0.4px;
+}
+#sec-yields-table .yield-table .yt-hd-mat { padding-left: 10px; }
+#sec-yields-table .yield-table tbody td { padding: 6px 8px; }
+#sec-yields-table .yt-mat { padding-left: 10px !important; font-size: 11px; }
+#sec-yields-table .yt-latest { font-size: 11.5px; }
+/* Column dividers for T-7 and T-14 */
+#sec-yields-table .yt-hd-t7,
+#sec-yields-table .yield-table tbody td:nth-child(3) { border-left: 1px solid var(--border-md); }
+#sec-yields-table .yt-hd-t14,
+#sec-yields-table .yield-table tbody td:nth-child(4) { border-left: 1px solid var(--border-md); }
+
+/* === FUNDING in 50% column — 3-col grid ====================== */
+.dash-cell .funding-grid { grid-template-columns: repeat(3, 1fr); }
+.dash-cell .fund-value { font-size: 22px; }
+.dash-cell .fund-sub { margin-bottom: 8px; }
 
 
 /* === SECTION 2 — FUNDING & LIQUIDITY ====================== */
@@ -736,12 +783,12 @@ body {
 .fx-trend-flat { color:var(--text-3); }
 
 
-/* Compact News section — cap total height */
-#sec-news .news-feed { max-height: 300px; }
+/* News in grid cell — fills to match catalyst height */
 #sec-news .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
-#sec-news .news-item { padding: 7px 2px 7px 0; }
-#sec-news .news-title { font-size: 11.5px; margin-bottom: 2px; }
-#sec-news .news-meta  { font-size: 9.5px; }
+#sec-news .news-feed { max-height: none; flex: 1 1 auto; overflow-y: auto; }
+#sec-news .news-item { padding: 8px 2px 8px 0; }
+#sec-news .news-title { font-size: 12px; margin-bottom: 2px; }
+#sec-news .news-meta  { font-size: 10px; }
 #sec-news .news-tag   { font-size: 8px; margin-bottom: 3px; }
 
 
@@ -789,10 +836,9 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
 }
-/* Compact Live Catalyst — cap total section to ~300px */
-#sec-catalyst { max-height: 320px; overflow: hidden; }
+/* Live Catalyst in grid cell — iframe fills remaining height */
 #sec-catalyst .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
-#sec-catalyst .catalyst-frame-wrap { padding-top: 0; height: 210px; }
+#sec-catalyst .catalyst-frame-wrap { padding-top: 0; flex: 1 1 auto; min-height: 200px; }
 .catalyst-frame-wrap iframe {
   position: absolute;
   inset: 0;

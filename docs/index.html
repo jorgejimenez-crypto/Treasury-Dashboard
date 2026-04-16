@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260416d">
+  <link rel="stylesheet" href="style.css?v=20260416e">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -61,153 +61,165 @@
 </div>
 
 <!-- ====================== MAIN DASHBOARD ======================
-     Stacked layout (yields-first, content-dense):
-       1. Treasury Yields — full-width hero
-       2. Funding & Liquidity
-       3. FX Converter
-       4. Live Catalyst (compact ~300px)
-       5. News & Intelligence (compact ~350px, 5 headlines)
+     Two-column grid layout:
+       Row 1: Yields Chart (left) + Yields Table (right)
+       Row 2: Funding & Liquidity (left) + FX Converter (right)
+       Row 3: Live Catalyst (left) + News & Intelligence (right)
 ============================================================== -->
 <main id="dashboard">
 
-  <!-- === TREASURY YIELDS HERO === -->
-  <section class="desk-section" id="sec-yields">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">Short-Term Treasury Yields</h2>
-        <span class="section-desc">1M &middot; 3M &middot; 6M &nbsp;&middot;&nbsp; T-1 / T-7 / T-14</span>
+  <!-- === TWO-COLUMN ROW 1: Yields Chart + Yields Table === -->
+  <div class="dash-row">
+    <section class="desk-section dash-cell" id="sec-yields-chart">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Treasury Yields</h2>
+          <span class="section-desc">Grouped Bar &middot; 1M / 3M / 6M</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="spread-pill" id="yield-spread-pill"></span>
+        </div>
       </div>
-      <div class="section-hd-right">
-        <span class="spread-pill" id="yield-spread-pill"></span>
-        <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+      <div id="yields-chart-wrap" class="yields-chart-wrap">
+        <canvas id="yieldsChart"></canvas>
       </div>
-    </div>
-    <!-- === GROUPED BAR CHART — standalone canvas, no skeleton dependency === -->
-    <div id="yields-chart-wrap" class="yields-chart-wrap">
-      <canvas id="yieldsChart"></canvas>
-    </div>
-    <div class="chart-legend" id="chart-legend"></div>
-    <div class="yield-table-shell">
-      <table class="yield-table" id="yield-data-table">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
+      <div class="chart-legend" id="chart-legend"></div>
+    </section>
 
-  <!-- === FUNDING & LIQUIDITY === -->
-  <section class="desk-section" id="sec-funding">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">Funding &amp; Liquidity</h2>
-        <span class="section-desc">Overnight rates and short-term benchmarks</span>
+    <section class="desk-section dash-cell" id="sec-yields-table">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Yield Data</h2>
+          <span class="section-desc">T-1 / T-7 / T-14 &middot; bps deltas</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+        </div>
       </div>
-      <div class="section-hd-right">
-        <span class="sofr-effr-spread" id="funding-spread"></span>
-        <span class="data-source">NY Fed &middot; FRED &middot; Daily</span>
+      <div class="yield-table-shell">
+        <table class="yield-table" id="yield-data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
       </div>
-    </div>
-    <div class="funding-grid" id="funding-grid"></div>
-  </section>
+    </section>
+  </div>
 
-  <!-- === FX CONVERTER === -->
-  <section class="desk-section" id="sec-fx">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">FX Converter</h2>
-        <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+  <!-- === TWO-COLUMN ROW 2: Funding + FX Converter === -->
+  <div class="dash-row">
+    <section class="desk-section dash-cell" id="sec-funding">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Funding &amp; Liquidity</h2>
+          <span class="section-desc">Overnight rates &middot; benchmarks</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="sofr-effr-spread" id="funding-spread"></span>
+          <span class="data-source">NY Fed &middot; FRED</span>
+        </div>
       </div>
-      <div class="section-hd-right">
-        <span id="fx-rate-trend" class="fx-trend"></span>
-        <span class="data-source">Yahoo Finance &middot; 15-min</span>
+      <div class="funding-grid" id="funding-grid"></div>
+    </section>
+
+    <section class="desk-section dash-cell" id="sec-fx">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">FX Converter</h2>
+          <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+        </div>
+        <div class="section-hd-right">
+          <span id="fx-rate-trend" class="fx-trend"></span>
+          <span class="data-source">Yahoo &middot; 15-min</span>
+        </div>
       </div>
-    </div>
-    <div class="fx-body">
-      <div class="fx-preset-row" id="fx-row-1">
-        <button class="fx-preset" data-amount="250000">250K</button>
-        <button class="fx-preset" data-amount="500000">500K</button>
-        <button class="fx-preset" data-amount="750000">750K</button>
-        <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
-      </div>
-      <div class="fx-preset-row" id="fx-row-2">
-        <button class="fx-preset" data-amount="5000000">5M</button>
-        <button class="fx-preset" data-amount="10000000">10M</button>
-        <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
-      </div>
-      <div class="fx-inputs">
-        <div class="fx-amount-wrap">
-          <label class="fx-label">Amount</label>
-          <div class="fx-amount-inner">
-            <input type="number" id="fx-amount" class="fx-amount"
-                   value="1000000" step="250000" autocomplete="off">
-            <span id="fx-base-badge" class="fx-base-badge">USD</span>
+      <div class="fx-body">
+        <div class="fx-preset-row" id="fx-row-1">
+          <button class="fx-preset" data-amount="250000">250K</button>
+          <button class="fx-preset" data-amount="500000">500K</button>
+          <button class="fx-preset" data-amount="750000">750K</button>
+          <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
+        </div>
+        <div class="fx-preset-row" id="fx-row-2">
+          <button class="fx-preset" data-amount="5000000">5M</button>
+          <button class="fx-preset" data-amount="10000000">10M</button>
+          <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
+        </div>
+        <div class="fx-inputs">
+          <div class="fx-amount-wrap">
+            <label class="fx-label">Amount</label>
+            <div class="fx-amount-inner">
+              <input type="number" id="fx-amount" class="fx-amount"
+                     value="1000000" step="250000" autocomplete="off">
+              <span id="fx-base-badge" class="fx-base-badge">USD</span>
+            </div>
+          </div>
+          <div class="fx-ccy-col">
+            <label class="fx-label">From</label>
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-base" class="fx-ccy-input"
+                     value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+              <div id="fx-base-list" class="fx-dropdown"></div>
+            </div>
+          </div>
+          <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
+          <div class="fx-ccy-col">
+            <label class="fx-label">To</label>
+            <div class="fx-ccy-wrap">
+              <input type="text" id="fx-quote" class="fx-ccy-input"
+                     value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+              <div id="fx-quote-list" class="fx-dropdown"></div>
+            </div>
           </div>
         </div>
-        <div class="fx-ccy-col">
-          <label class="fx-label">From</label>
-          <div class="fx-ccy-wrap">
-            <input type="text" id="fx-base" class="fx-ccy-input"
-                   value="USD" maxlength="3" autocomplete="off" spellcheck="false">
-            <div id="fx-base-list" class="fx-dropdown"></div>
-          </div>
-        </div>
-        <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
-        <div class="fx-ccy-col">
-          <label class="fx-label">To</label>
-          <div class="fx-ccy-wrap">
-            <input type="text" id="fx-quote" class="fx-ccy-input"
-                   value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
-            <div id="fx-quote-list" class="fx-dropdown"></div>
+        <div class="fx-result-panel">
+          <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
+          <div class="fx-result-rates">
+            <span class="fx-rate-fwd" id="fx-rate-line"></span>
+            <span class="fx-rate-rev" id="fx-reverse-rate"></span>
           </div>
         </div>
       </div>
-      <div class="fx-result-panel">
-        <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
-        <div class="fx-result-rates">
-          <span class="fx-rate-fwd" id="fx-rate-line"></span>
-          <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+    </section>
+  </div>
+
+  <!-- === TWO-COLUMN ROW 3: Live Catalyst + News === -->
+  <div class="dash-row">
+    <section class="desk-section dash-cell" id="sec-catalyst">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Live Catalyst</h2>
+          <span class="section-desc">Bloomberg Television</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="live-indicator" id="live-dot">
+            <span class="live-pip"></span>LIVE
+          </span>
+          <a class="catalyst-ext-link"
+             href="https://www.youtube.com/@BloombergTelevision/live"
+             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
         </div>
       </div>
-    </div>
-  </section>
+      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
+        <div class="catalyst-loading">Loading stream&hellip;</div>
+      </div>
+    </section>
 
-  <!-- === LIVE CATALYST (compact) === -->
-  <section class="desk-section" id="sec-catalyst">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">Live Catalyst</h2>
-        <span class="section-desc">Bloomberg Television</span>
+    <section class="desk-section dash-cell" id="sec-news">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">News &amp; Intelligence</h2>
+          <span class="section-desc">Wall Street Journal</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="news-count-badge" id="news-count"></span>
+          <span class="data-source" id="news-updated-lbl"></span>
+        </div>
       </div>
-      <div class="section-hd-right">
-        <span class="live-indicator" id="live-dot">
-          <span class="live-pip"></span>LIVE
-        </span>
-        <a class="catalyst-ext-link"
-           href="https://www.youtube.com/@BloombergTelevision/live"
-           target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
+      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
+        <div class="news-empty">Loading news&hellip;</div>
       </div>
-    </div>
-    <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
-      <div class="catalyst-loading">Loading stream&hellip;</div>
-    </div>
-  </section>
-
-  <!-- === NEWS & INTELLIGENCE (compact, 5 headlines) === -->
-  <section class="desk-section" id="sec-news">
-    <div class="section-hd">
-      <div class="section-hd-left">
-        <h2 class="section-title">News &amp; Intelligence</h2>
-        <span class="section-desc">Wall Street Journal</span>
-      </div>
-      <div class="section-hd-right">
-        <span class="news-count-badge" id="news-count"></span>
-        <span class="data-source" id="news-updated-lbl"></span>
-      </div>
-    </div>
-    <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
-      <div class="news-empty">Loading news&hellip;</div>
-    </div>
-  </section>
+    </section>
+  </div>
 
 </main>
 
@@ -247,6 +259,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260416d"></script>
+<script src="app.js?v=20260416e"></script>
 </body>
 </html>
