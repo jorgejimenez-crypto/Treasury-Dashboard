@@ -347,8 +347,13 @@ body {
   flex: 1 1 auto;
 }
 
+/* Row 3 compact — lock catalyst + news to ~320px */
+.dash-row-compact > .dash-cell { max-height: 340px; overflow: hidden; }
+.dash-row-compact .news-feed   { max-height: 240px; }
+
 @media (max-width: 960px) {
   .dash-row { grid-template-columns: 1fr; }
+  .dash-row-compact > .dash-cell { max-height: none; }
 }
 
 

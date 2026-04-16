@@ -331,38 +331,40 @@ function renderYieldsChart(data) {
   var hasDL = false;
   try { hasDL = typeof ChartDataLabels !== 'undefined'; } catch(e) {}
 
+  // Shared datalabel config — ALL bars get labeled, not just T-1
+  var dlBase = {
+    display: true, anchor: 'end', align: 'top', offset: 2,
+    font: { size: 11, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
+    formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
+  };
+
   var datasets = [
     {
       label: 'T-1 (Latest)',
       data: t1,
-      backgroundColor: 'rgba(59,130,246,0.70)',
+      backgroundColor: 'rgba(59,130,246,0.75)',
       borderColor: '#3b82f6',
       borderWidth: 1.5,
       borderRadius: 6,
-      datalabels: hasDL ? {
-        display: true, anchor: 'end', align: 'top', offset: 4,
-        color: '#e2e8f0',
-        font: { size: 13, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
-        formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
-      } : { display: false }
+      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#e2e8f0', font: { size: 12, weight: '700', family: dlBase.font.family } }) : { display: false }
     },
     {
       label: 'T-7',
       data: t7,
-      backgroundColor: 'rgba(100,116,139,0.55)',
+      backgroundColor: 'rgba(100,116,139,0.60)',
       borderColor: '#64748b',
       borderWidth: 1.5,
       borderRadius: 6,
-      datalabels: { display: false }
+      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#94a3b8' }) : { display: false }
     },
     {
       label: 'T-14',
       data: t14,
-      backgroundColor: 'rgba(148,163,184,0.45)',
+      backgroundColor: 'rgba(148,163,184,0.50)',
       borderColor: '#94a3b8',
       borderWidth: 1.5,
       borderRadius: 6,
-      datalabels: { display: false }
+      datalabels: hasDL ? Object.assign({}, dlBase, { color: '#64748b' }) : { display: false }
     }
   ];
 
@@ -370,7 +372,7 @@ function renderYieldsChart(data) {
   var opts = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: { padding: { top: 36, bottom: 6, left: 6, right: 6 } },
+    layout: { padding: { top: 28, bottom: 6, left: 6, right: 6 } },
     plugins: {
       legend: { display: false },
       datalabels: hasDL ? {} : false,
