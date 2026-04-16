@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260417">
+  <link rel="stylesheet" href="style.css?v=20260417b">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -86,24 +86,20 @@
       <div class="chart-legend" id="chart-legend"></div>
     </section>
 
-    <section class="desk-section dash-cell" id="sec-yields-table">
+    <!-- === ECONOMIC CALENDAR === -->
+    <section class="desk-section dash-cell" id="sec-econ-calendar">
       <div class="section-hd">
         <div class="section-hd-left">
-          <h2 class="section-title">Short-End Analysis</h2>
-          <span class="section-desc">Rates &middot; Deltas &middot; Curve Insights</span>
+          <h2 class="section-title">Economic Calendar</h2>
+          <span class="section-desc">US &middot; Medium / High Importance</span>
         </div>
         <div class="section-hd-right">
-          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+          <span class="data-source" id="econ-cal-source">Trading Economics</span>
         </div>
       </div>
-      <div class="yield-table-shell">
-        <table class="yield-table" id="yield-data-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+      <div class="econ-cal-body" id="econ-cal-body">
+        <div class="econ-cal-empty">Loading&hellip;</div>
       </div>
-      <!-- === YIELD INSIGHT CARDS === -->
-      <div id="yield-insights" class="yield-insights"></div>
     </section>
   </div>
 
@@ -261,6 +257,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260417"></script>
+<script src="app.js?v=20260417b"></script>
 </body>
 </html>

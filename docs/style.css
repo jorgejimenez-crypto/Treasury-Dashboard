@@ -339,7 +339,7 @@ body {
 }
 /* Content areas fill remaining height after section-hd */
 .dash-cell .yields-chart-wrap,
-.dash-cell .yield-table-shell,
+.dash-cell .econ-cal-body,
 .dash-cell .funding-grid,
 .dash-cell .fx-body,
 .dash-cell .catalyst-frame-wrap,
@@ -453,140 +453,126 @@ body {
   border-radius: 3px; flex-shrink: 0;
 }
 
-/* Precision data table */
-.yield-table-shell {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* === ECONOMIC CALENDAR ========================================= */
+
+.econ-cal-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.econ-cal-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-md) transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
-.yield-table {
+.econ-cal-scroll::-webkit-scrollbar       { width: 4px; }
+.econ-cal-scroll::-webkit-scrollbar-track { background: transparent; }
+.econ-cal-scroll::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 2px; }
+
+/* Table */
+.econ-cal-table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 12.5px;
-  min-width: 520px;
+  font-size: 11px;
 }
-.yield-table thead th {
+.econ-cal-table thead th {
+  position: sticky; top: 0; z-index: 1;
   background: var(--bg-inset);
-  padding: 10px 16px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  text-align: center;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.yield-table .yt-hd-mat    { text-align: left; padding-left: 20px; }
-.yield-table .yt-hd-latest { color: #3b82f6 !important; } /* T-1 blue — matches chart */
-.yield-table tbody tr { transition: background 0.12s; }
-.yield-table tbody tr:hover { background: var(--bg-hover); }
-.yield-table tbody td {
-  padding: 11px 16px;
-  text-align: center;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.yield-table tbody tr:last-child td { border-bottom: none; }
-
-.yt-mat    { text-align: left !important; padding-left: 20px !important; font-weight: 700; color: var(--text-2); font-size: 13px; }
-.yt-val    { color: var(--text-2); }
-.yt-latest { color: var(--text) !important; font-weight: 700; font-size: 13.5px; }
-.yt-delta  { font-weight: 700; }
-.yt-na     { color: var(--text-3); font-style: italic; }
-.yd-up     { color: var(--green); }
-.yd-dn     { color: var(--red);   }
-
-/* Alternating rows */
-.yield-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
-
-/* === YIELD DATA PANEL — ANALYTICS ============================== */
-.yield-insights {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-top: 10px;
-}
-
-/* Section divider */
-.yi-section {
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-}
-.yi-section:first-child { border-top: none; padding-top: 0; }
-.yi-section-title {
+  padding: 7px 8px;
   font-size: 8.5px;
   font-weight: 700;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
+.ec-th-time  { width: 60px; }
+.ec-th-event { }
+.ec-th-imp   { width: 42px; text-align: center !important; }
+.ec-th-val   { width: 52px; text-align: right !important; }
 
-/* Metric row — side by side */
-.yi-row {
-  display: flex;
-  gap: 6px;
+.econ-cal-table tbody tr {
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
 }
-.yi-row-wrap { flex-wrap: wrap; }
-.yi-metric {
-  flex: 1;
-  min-width: 0;
+.econ-cal-table tbody tr:last-child { border-bottom: none; }
+.econ-cal-table tbody tr:hover { background: var(--bg-hover); }
+.econ-cal-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.012); }
+
+.ec-time {
+  padding: 7px 8px;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.ec-event {
+  padding: 7px 6px;
+  color: var(--text);
+  font-weight: 500;
+  font-size: 11px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ec-imp {
+  padding: 7px 4px;
+  text-align: center;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.ec-imp-high { color: var(--red); }
+.ec-imp-med  { color: var(--amber); }
+
+.ec-val {
+  padding: 7px 8px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ec-val-fcst { color: var(--text-3); }
+.ec-val-prev { color: var(--text-3); }
+
+.ec-row-past { opacity: 0.5; }
+
+/* Empty / unconfigured state */
+.econ-cal-empty {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-}
-.yi-met-label {
-  font-size: 9.5px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
   color: var(--text-3);
   font-family: var(--mono);
-  white-space: nowrap;
 }
-.yi-met-val {
-  font-size: 13px;
-  font-weight: 700;
-  font-family: var(--mono);
-  color: var(--text);
+.econ-cal-empty-icon { font-size: 28px; opacity: 0.4; }
+.econ-cal-empty-msg { font-size: 12px; }
+.econ-cal-key-hint {
+  font-size: 11px;
+  line-height: 1.6;
 }
-
-/* Color cues */
-.yi-up .yi-met-val  { color: var(--green); }
-.yi-dn .yi-met-val  { color: var(--red); }
-.yi-flat .yi-met-val { color: var(--text-2); }
-
-/* Interpretation tags */
-.yi-tag {
-  display: inline-block;
-  font-size: 10px;
-  font-family: var(--mono);
-  color: var(--text-2);
-  padding: 3px 8px;
+.econ-cal-key-hint code {
+  background: var(--bg-hover);
+  padding: 2px 6px;
   border-radius: 3px;
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
-  white-space: nowrap;
+  font-size: 10px;
+  color: var(--blue-lt);
 }
-.yi-tag strong { font-weight: 700; }
-.yi-tag.yi-up  { color: var(--green); border-color: var(--green-border); }
-.yi-tag.yi-dn  { color: var(--red);   border-color: var(--red-border); }
-.yi-tag.yi-flat { color: var(--text-3); }
 
 /* FX section — remove max-width cap */
 #sec-fx .fx-body { max-width: 100%; }
-
-/* === COMPACT TABLE for Yield Data panel ====================== */
-#sec-yields-table .section-hd { margin-bottom: 12px; padding-bottom: 10px; }
-#sec-yields-table .yield-table { font-size: 12px; min-width: 0; }
-#sec-yields-table .yield-table thead th {
-  padding: 8px 10px; font-size: 9px; letter-spacing: 0.5px;
-}
-#sec-yields-table .yield-table .yt-hd-mat { padding-left: 12px; }
-#sec-yields-table .yield-table tbody td { padding: 8px 10px; }
-#sec-yields-table .yt-mat { padding-left: 12px !important; font-size: 13px; }
-#sec-yields-table .yt-latest { font-size: 14px; }
-#sec-yields-table .yt-delta { font-size: 11.5px; }
 
 /* === FUNDING in 50% column — 3-col grid ====================== */
 .dash-cell .funding-grid { grid-template-columns: repeat(3, 1fr); }

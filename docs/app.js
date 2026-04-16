@@ -271,8 +271,7 @@ function renderRateAlerts(alerts) {
 /* === YIELDS GROUPED BAR CHART ===================================
  * renderYieldsChart(data) — STANDALONE, SELF-CONTAINED
  *
- * This function is intentionally independent from the legacy
- * buildYieldChart / renderYieldsSection chain. It reads data
+ * This function is self-contained — reads data
  * directly, creates its own Chart.js instance, and logs every
  * step so failures are immediately visible in the console.
  *
@@ -481,240 +480,141 @@ function renderYieldsChart(data) {
       + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(234,179,8,0.55);border:1px solid #ca8a04"></span>T-7</span>'
       + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40);border:1px solid #64748b"></span>T-14</span>';
   }
-}
 
-
-// === YIELDS TABLE + SPREAD PILL ==================================
-//
-// renderYieldsSection(fred, yieldsHist)
-//   Builds the compact data table + insight cards + spread pill.
-//   Chart is handled separately by renderYieldsChart().
-//   Also persists yields to knownYields for offline fallback.
-
-function renderYieldsSection(fred, yieldsHist) {
-  if (!fred) return;
-
-  // ── Collect T-1 / T-7 / T-14 for each maturity ──────────────
-  var t1=[], t7=[], t14=[], t1Dates=[], t7Dates=[], t14Dates=[];
-  for (var i=0; i<CURVE_KEYS.length; i++) {
-    var h = yieldsHist && yieldsHist[CURVE_KEYS[i]];
-    // Prefer historical endpoint; fall back to live FRED values
-    var live = fred[CURVE_KEYS[i]];
-    t1.push(  h && h.t1  != null ? h.t1  : (live && live.current != null ? live.current : null));
-    t7.push(  h && h.t7  != null ? h.t7  : null);
-    t14.push( h && h.t14 != null ? h.t14 : null);
-    t1Dates.push(  h && h.t1Date  ? h.t1Date  : (live ? live.date  : ''));
-    t7Dates.push(  h && h.t7Date  ? h.t7Date  : '');
-    t14Dates.push( h && h.t14Date ? h.t14Date : '');
+  // ── 9. Spread pill (1M–6M) ────────────────────────────────────
+  var pill = document.getElementById('yield-spread-pill');
+  if (pill && t1[0] != null && t1[2] != null) {
+    var sp = Math.round((t1[2] - t1[0]) * 100);
+    var shape = sp < 0 ? 'inverted' : sp < 15 ? 'flat' : 'positive';
+    pill.textContent = '1M–6M: ' + sgn(sp) + sp + ' bps';
+    pill.className = 'spread-pill spread-' + shape;
   }
 
-  // Persist for offline/weekend fallback.
-  // Rule: only write a field to knownYields if we actually have a value.
-  // Never overwrite a good cached t7/t14 with null — that destroys the fallback.
-  var anyLive = t1.some(function(v){ return v!=null; });
-  if (anyLive) {
+  // ── 10. Persist yields for offline/weekend fallback ────────────
+  try {
     if (!knownYields) knownYields = {};
-    for (var j=0; j<CURVE_KEYS.length; j++) {
-      var key = CURVE_KEYS[j];
-      if (!knownYields[key]) knownYields[key] = {};
-      // Only update a slot when we have a real value — preserve prior good values
-      if (t1[j]  != null) knownYields[key].t1  = t1[j].toFixed(3);
-      if (t7[j]  != null) knownYields[key].t7  = t7[j].toFixed(3);
-      if (t14[j] != null) knownYields[key].t14 = t14[j].toFixed(3);
-      if (t1Dates[j])     knownYields[key].date = t1Dates[j];
+    for (var p = 0; p < keys.length; p++) {
+      if (!knownYields[keys[p]]) knownYields[keys[p]] = {};
+      if (t1[p]  != null) knownYields[keys[p]].t1  = t1[p].toFixed(3);
+      if (t7[p]  != null) knownYields[keys[p]].t7  = t7[p].toFixed(3);
+      if (t14[p] != null) knownYields[keys[p]].t14 = t14[p].toFixed(3);
     }
     saveKnown('yields', knownYields);
-  }
-  // Fill gaps from cache — T-1 always, T-7/T-14 only when yieldsHist returned null
-  for (var k=0; k<CURVE_KEYS.length; k++) {
-    var ky = knownYields && knownYields[CURVE_KEYS[k]];
-    if (t1[k]==null  && ky && ky.t1  != null) t1[k]  = parseFloat(ky.t1)  || null;
-    if (t7[k]==null  && ky && ky.t7  != null) t7[k]  = parseFloat(ky.t7)  || null;
-    if (t14[k]==null && ky && ky.t14 != null) t14[k] = parseFloat(ky.t14) || null;
-  }
-
-  // ── Build column labels (use dates if available) ─────────────
-  var sample = yieldsHist && yieldsHist[CURVE_KEYS[0]];
-  var col1 = 'T-1' + (sample && sample.t1Date  ? '  '+sample.t1Date  : '');
-  var col7 = 'T-7' + (sample && sample.t7Date  ? '  '+sample.t7Date  : '');
-  var col14= 'T-14'+ (sample && sample.t14Date ? '  '+sample.t14Date : '');
-
-  buildYieldTable(t1, t7, t14, col1, col7, col14);
-
-  // ── Spread pill: 1M-6M ───────────────────────────────────────
-  var pill = document.getElementById('yield-spread-pill');
-  var m1 = t1[0], m6 = t1[2];
-  if (pill) {
-    if (m1!=null && m6!=null) {
-      var sp = Math.round((m6-m1)*100);
-      var shape = sp<0 ? 'inverted' : sp<15 ? 'flat' : 'positive';
-      pill.textContent = '1M–6M: '+sgn(sp)+sp+' bps';
-      pill.className = 'spread-pill spread-'+shape;
-    } else {
-      pill.textContent = ''; pill.className = 'spread-pill';
-    }
-  }
-
-  // ── Source label ─────────────────────────────────────────────
-  var src = document.getElementById('yield-source-lbl');
-  if (src && sample && sample.t1Date) src.textContent = 'FRED · '+sample.t1Date;
+  } catch(e) {}
 }
 
-/* === YIELD DATA PANEL ============================================
- * Two-part panel:
- *   1. Compact maturity table (top) — T-1, Δ7d, Δ14d per maturity
- *   2. Insight cards (bottom) — spreads, range, largest move, direction
+
+/* === ECONOMIC CALENDAR ==========================================
+ * Fetches upcoming US economic events from Trading Economics API.
+ * Falls back to empty state if key not configured.
+ * Columns: Time · Event · Imp. · Actual · Forecast · Previous
  * ================================================================ */
 
-function buildYieldTable(t1, t7, t14, col1, col7, col14) {
-  var table = document.getElementById('yield-data-table');
-  if (!table) return;
+var ECON_CALENDAR_KEY = '';   // Set your Trading Economics API key here
+var ECON_CAL_REFRESH_MS = 30 * 60 * 1000;
+var econCalTimer = null;
 
-  var thead = table.querySelector('thead');
-  var tbody = table.querySelector('tbody');
+function fetchEconCalendar() {
+  var body = document.getElementById('econ-cal-body');
+  if (!body) return;
 
-  // Compact 4-column table: Maturity | T-1 | Δ7d | Δ14d
-  thead.innerHTML = '<tr>'
-    + '<th class="yt-hd-mat">Mat.</th>'
-    + '<th class="yt-hd-val yt-hd-latest">T-1</th>'
-    + '<th class="yt-hd-delta">Δ 7d</th>'
-    + '<th class="yt-hd-delta">Δ 14d</th>'
-    + '</tr>';
-
-  tbody.innerHTML = '';
-  for (var i = 0; i < CURVE_KEYS.length; i++) {
-    var v1 = t1[i], v7 = t7[i], v14 = t14[i];
-    var d7  = bps(v1, v7);
-    var d14 = bps(v1, v14);
-    var cls7  = d7  == null ? '' : d7 > 0 ? 'yd-up' : d7 < 0 ? 'yd-dn' : '';
-    var cls14 = d14 == null ? '' : d14 > 0 ? 'yd-up' : d14 < 0 ? 'yd-dn' : '';
-
-    var tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td class="yt-mat">' + CURVE_LABELS[i] + '</td>'
-      + '<td class="yt-val yt-latest">' + (v1 != null ? v1.toFixed(3) + '%' : '—') + '</td>'
-      + '<td class="yt-delta ' + cls7  + '">' + (d7  != null ? sgn(d7)  + d7  + ' bps' : '—') + '</td>'
-      + '<td class="yt-delta ' + cls14 + '">' + (d14 != null ? sgn(d14) + d14 + ' bps' : '—') + '</td>';
-    tbody.appendChild(tr);
+  if (!ECON_CALENDAR_KEY) {
+    renderEconCalendar(null);
+    return;
   }
 
-  // ── Insight cards below table ─────────────────────────────────
-  buildYieldInsights(t1, t7, t14);
+  var today = new Date().toISOString().split('T')[0];
+  var url = 'https://api.tradingeconomics.com/calendar/country/united%20states/'
+    + today + '?c=' + ECON_CALENDAR_KEY + '&f=json';
+
+  fetch(url)
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      cacheData('econcal', data);
+      renderEconCalendar(data);
+    })
+    .catch(function(e) {
+      console.error('[econ-cal] fetch failed:', e.message);
+      var cached = getCachedData('econcal', 3600000);
+      renderEconCalendar(cached);
+    });
 }
 
-function buildYieldInsights(t1, t7, t14) {
-  var el = document.getElementById('yield-insights');
-  if (!el) return;
-  if (!t1[0] && !t1[1] && !t1[2]) { el.innerHTML = ''; return; }
+function renderEconCalendar(events) {
+  var body = document.getElementById('econ-cal-body');
+  if (!body) return;
 
-  var html = '';
-
-  // ── Section A: Curve Spreads ───────────────────────────────────
-  var spreads = [];
-  if (t1[0] != null && t1[1] != null) spreads.push({ label: '1M → 3M', v: Math.round((t1[1] - t1[0]) * 100) });
-  if (t1[1] != null && t1[2] != null) spreads.push({ label: '3M → 6M', v: Math.round((t1[2] - t1[1]) * 100) });
-  if (t1[0] != null && t1[2] != null) spreads.push({ label: '1M → 6M', v: Math.round((t1[2] - t1[0]) * 100) });
-
-  if (spreads.length) {
-    html += '<div class="yi-section"><div class="yi-section-title">Curve Spreads</div><div class="yi-row">';
-    spreads.forEach(function(s) {
-      var cls = s.v > 0 ? 'yi-up' : s.v < 0 ? 'yi-dn' : 'yi-flat';
-      html += '<div class="yi-metric ' + cls + '"><span class="yi-met-label">' + s.label + '</span><span class="yi-met-val">' + sgn(s.v) + s.v + '</span></div>';
-    });
-    html += '</div></div>';
+  // ── Empty / unconfigured state ────────────────────────────────
+  if (!events || !Array.isArray(events) || !events.length) {
+    var msg = !ECON_CALENDAR_KEY
+      ? '<div class="econ-cal-key-hint">Set <code>ECON_CALENDAR_KEY</code> in app.js<br>to enable live economic events</div>'
+      : '<div class="econ-cal-empty-msg">No upcoming US events</div>';
+    body.innerHTML = '<div class="econ-cal-empty">'
+      + '<div class="econ-cal-empty-icon">&#x1F4C5;</div>'
+      + msg + '</div>';
+    return;
   }
 
-  // ── Section B: Extension Pickup ────────────────────────────────
-  var pickups = [];
-  if (t1[0] != null && t1[1] != null) {
-    var p13 = Math.round((t1[1] - t1[0]) * 100);
-    pickups.push({ from: '1M', to: '3M', v: p13 });
-  }
-  if (t1[0] != null && t1[2] != null) {
-    var p16 = Math.round((t1[2] - t1[0]) * 100);
-    pickups.push({ from: '1M', to: '6M', v: p16 });
+  // ── Filter: upcoming, US, medium/high importance ──────────────
+  var now = new Date();
+  var filtered = events.filter(function(e) {
+    if (!e.Date) return false;
+    var importance = e.Importance || 0;
+    return importance >= 2;
+  });
+
+  // Sort by date ascending, limit to 8
+  filtered.sort(function(a, b) { return new Date(a.Date) - new Date(b.Date); });
+  filtered = filtered.slice(0, 8);
+
+  if (!filtered.length) {
+    body.innerHTML = '<div class="econ-cal-empty"><div class="econ-cal-empty-icon">&#x2713;</div>'
+      + '<div class="econ-cal-empty-msg">No high-impact events today</div></div>';
+    return;
   }
 
-  if (pickups.length) {
-    html += '<div class="yi-section"><div class="yi-section-title">Extension Pickup</div><div class="yi-row">';
-    pickups.forEach(function(p) {
-      var cls = p.v > 0 ? 'yi-up' : p.v < 0 ? 'yi-dn' : 'yi-flat';
-      html += '<div class="yi-metric ' + cls + '"><span class="yi-met-label">' + p.from + ' → ' + p.to + '</span><span class="yi-met-val">' + sgn(p.v) + p.v + ' bps</span></div>';
-    });
-    html += '</div></div>';
-  }
+  // ── Render table ──────────────────────────────────────────────
+  var html = '<div class="econ-cal-scroll"><table class="econ-cal-table">'
+    + '<thead><tr>'
+    + '<th class="ec-th-time">Time</th>'
+    + '<th class="ec-th-event">Event</th>'
+    + '<th class="ec-th-imp">Imp.</th>'
+    + '<th class="ec-th-val">Actual</th>'
+    + '<th class="ec-th-val">Fcst</th>'
+    + '<th class="ec-th-val">Prev</th>'
+    + '</tr></thead><tbody>';
 
-  // ── Section C: Quick Stats ─────────────────────────────────────
-  var stats = [];
-  var vals = t1.filter(function(v) { return v != null; });
-  if (vals.length) {
-    stats.push({ label: 'Range', value: Math.min.apply(null, vals).toFixed(2) + '–' + Math.max.apply(null, vals).toFixed(2) + '%' });
-  }
-  var moves7 = [];
-  for (var i = 0; i < 3; i++) {
-    if (t1[i] != null && t7[i] != null) moves7.push({ m: CURVE_LABELS[i], d: Math.round((t1[i] - t7[i]) * 100) });
-  }
-  if (moves7.length) {
-    moves7.sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); });
-    var top = moves7[0];
-    var mvCls = top.d > 0 ? 'yi-up' : top.d < 0 ? 'yi-dn' : 'yi-flat';
-    stats.push({ label: 'Largest 7d', value: top.m + ' ' + sgn(top.d) + top.d + ' bps', cls: mvCls });
-  }
+  filtered.forEach(function(e) {
+    var d = new Date(e.Date);
+    var isPast = d < now;
+    var time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    var impNum = e.Importance || 0;
+    var impCls = impNum >= 3 ? 'ec-imp-high' : 'ec-imp-med';
+    var impDots = impNum >= 3 ? '&#x25CF;&#x25CF;&#x25CF;' : '&#x25CF;&#x25CF;&#x25CB;';
+    var rowCls = isPast ? 'ec-row-past' : '';
 
-  if (stats.length) {
-    html += '<div class="yi-section"><div class="yi-section-title">Quick Stats</div><div class="yi-row">';
-    stats.forEach(function(s) {
-      html += '<div class="yi-metric ' + (s.cls || '') + '"><span class="yi-met-label">' + s.label + '</span><span class="yi-met-val">' + s.value + '</span></div>';
-    });
-    html += '</div></div>';
-  }
+    // Highlight actual vs forecast
+    var actual = e.Actual != null && e.Actual !== '' ? e.Actual : '—';
+    var forecast = e.Forecast != null && e.Forecast !== '' ? e.Forecast : '—';
+    var previous = e.Previous != null && e.Previous !== '' ? e.Previous : '—';
 
-  // ── Section D: Interpretation ──────────────────────────────────
-  var interp = [];
+    html += '<tr class="' + rowCls + '">'
+      + '<td class="ec-time">' + time + '</td>'
+      + '<td class="ec-event" title="' + (e.Event || '') + '">' + (e.Event || e.Category || '—') + '</td>'
+      + '<td class="ec-imp ' + impCls + '">' + impDots + '</td>'
+      + '<td class="ec-val">' + actual + '</td>'
+      + '<td class="ec-val ec-val-fcst">' + forecast + '</td>'
+      + '<td class="ec-val ec-val-prev">' + previous + '</td>'
+      + '</tr>';
+  });
 
-  // Front-end bias
-  var totalBps = 0, cnt = 0;
-  for (var j = 0; j < 3; j++) {
-    if (t1[j] != null && t7[j] != null) { totalBps += Math.round((t1[j] - t7[j]) * 100); cnt++; }
-  }
-  if (cnt) {
-    var avg = totalBps / cnt;
-    interp.push({ label: 'Front-end bias', value: avg > 1 ? 'Rising' : avg < -1 ? 'Easing' : 'Stable', cls: avg > 1 ? 'yi-up' : avg < -1 ? 'yi-dn' : 'yi-flat' });
-  }
+  html += '</tbody></table></div>';
 
-  // Curve shape
-  if (t1[0] != null && t1[2] != null) {
-    var slope = Math.round((t1[2] - t1[0]) * 100);
-    var shape = slope > 2 ? 'Upward' : slope < -2 ? 'Inverted' : 'Flat';
-    interp.push({ label: 'Curve shape', value: shape, cls: slope > 2 ? 'yi-up' : slope < -2 ? 'yi-dn' : 'yi-flat' });
-  }
+  // Source + count
+  var src = document.getElementById('econ-cal-source');
+  if (src) src.textContent = filtered.length + ' events · Trading Economics';
 
-  // Best placement
-  if (pickups.length) {
-    var best = pickups.reduce(function(a, b) { return b.v > a.v ? b : a; });
-    if (best.v > 0) {
-      interp.push({ label: 'Best pickup', value: best.from + ' → ' + best.to + ': +' + best.v + ' bps', cls: 'yi-up' });
-    }
-  }
-
-  // Signal strength
-  if (moves7.length && t1[0] != null && t1[2] != null) {
-    var maxMove = Math.abs(moves7[0].d);
-    var absSlope = Math.abs(Math.round((t1[2] - t1[0]) * 100));
-    var strength = (maxMove >= 5 || absSlope >= 5) ? 'High' : (maxMove >= 2 || absSlope >= 2) ? 'Moderate' : 'Low';
-    var strCls = strength === 'High' ? 'yi-dn' : strength === 'Moderate' ? 'yi-up' : 'yi-flat';
-    interp.push({ label: 'Signal', value: strength, cls: strCls });
-  }
-
-  if (interp.length) {
-    html += '<div class="yi-section yi-interp"><div class="yi-section-title">Interpretation</div><div class="yi-row yi-row-wrap">';
-    interp.forEach(function(item) {
-      html += '<span class="yi-tag ' + item.cls + '">' + item.label + ': <strong>' + item.value + '</strong></span>';
-    });
-    html += '</div></div>';
-  }
-
-  el.innerHTML = html;
+  body.innerHTML = html;
 }
 
 
@@ -1292,9 +1192,6 @@ function renderDashboard(data) {
     renderRateAlerts(rateAlerts);
   } catch(e) { console.error('[rate-alerts] render failed:', e); }
 
-  // Yields table + spread pill (legacy chain — chart now handled above)
-  renderYieldsSection(data.fred, data.yieldsHist || {});
-
   // Section 2: Funding & Liquidity
   renderFunding(data.nyfed, data.fred);
 
@@ -1432,8 +1329,10 @@ if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
 fetchNews();
-refreshTimer = setInterval(fetchData, REFRESH_MS);
-newsTimer    = setInterval(fetchNews, NEWS_REFRESH_MS);
+fetchEconCalendar();
+refreshTimer  = setInterval(fetchData, REFRESH_MS);
+newsTimer     = setInterval(fetchNews, NEWS_REFRESH_MS);
+econCalTimer  = setInterval(fetchEconCalendar, ECON_CAL_REFRESH_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
