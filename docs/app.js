@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════
  *  Treasury Desk — app.js
  *
- *  Focused scope: Yields hero · Funding & Liquidity · FX Converter
- *  Everything else is silent (alerts computed, never displayed).
+ *  Two-column grid: Yields Chart+Table · Funding · FX · Catalyst · News
+ *  Risk pills + rate alerts displayed above dashboard.
  *
  *  Data flow:
  *    fetchData()  → /api/market-data (every 15 min)
@@ -75,8 +75,7 @@ var COMMODITY_LABELS = {
   WTI:'WTI Crude',Brent:'Brent Crude',NatGas:'Henry Hub',HeatOil:'Heating Oil'
 };
 
-var yieldChart          = null;   // Chart.js bar chart instance
-var yieldsChartInstance = null;   // standalone grouped bar (new)
+var yieldsChartInstance = null;   // Chart.js grouped bar instance
 var refreshTimer        = null;
 var tickerTimer         = null;
 var cachedYahoo         = null;
@@ -118,8 +117,6 @@ function bps(cur, prev) { return (cur==null||prev==null) ? null : Math.round((cu
 function sgn(v)         { return (v==null) ? '' : v>=0 ? '+' : ''; }
 function nowET()        { return new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'})); }
 function isOpen()       { var n=nowET(),d=n.getDay(),m=n.getHours()*60+n.getMinutes(); return d>0&&d<6&&m>=570&&m<960; }
-function fmtRate(v,dec) { return (v==null||isNaN(v)) ? '—' : v.toFixed(dec!=null?dec:2)+'%'; }
-function fmtBps(b)      { return b==null ? '—' : (b>=0?'+':'')+b+' bps'; }
 
 
 // === SILENT ALERT COMPUTATION ===================================
@@ -487,16 +484,12 @@ function renderYieldsChart(data) {
 }
 
 
-// === SECTION 1 — TREASURY YIELDS ================================
+// === YIELDS TABLE + SPREAD PILL ==================================
 //
 // renderYieldsSection(fred, yieldsHist)
-//   fred       — current FRED series (for metric cards + spread)
-//   yieldsHist — historical data {DGS1MO:{t1,t7,t14,...}, ...}
-//
-// Builds:
-//   • Grouped bar chart (Chart.js): 3 maturities × {T-1, T-7, T-14}
-//   • Precision data table below chart
-//   • 1M–6M spread pill in section header
+//   Builds the compact data table + insight cards + spread pill.
+//   Chart is handled separately by renderYieldsChart().
+//   Also persists yields to knownYields for offline fallback.
 
 function renderYieldsSection(fred, yieldsHist) {
   if (!fred) return;
@@ -546,7 +539,6 @@ function renderYieldsSection(fred, yieldsHist) {
   var col7 = 'T-7' + (sample && sample.t7Date  ? '  '+sample.t7Date  : '');
   var col14= 'T-14'+ (sample && sample.t14Date ? '  '+sample.t14Date : '');
 
-  buildYieldChart(t1, t7, t14, col1, col7, col14);
   buildYieldTable(t1, t7, t14, col1, col7, col14);
 
   // ── Spread pill: 1M-6M ───────────────────────────────────────
@@ -566,166 +558,9 @@ function renderYieldsSection(fred, yieldsHist) {
   // ── Source label ─────────────────────────────────────────────
   var src = document.getElementById('yield-source-lbl');
   if (src && sample && sample.t1Date) src.textContent = 'FRED · '+sample.t1Date;
-
-  // Mark section loaded — hides skeleton, reveals chart
-  var yieldSec = document.getElementById('sec-yields');
-  if (yieldSec) yieldSec.setAttribute('data-state', 'loaded');
 }
 
-// === SHORT-TERM TREASURY YIELDS — Grouped Bar Chart =============
-//
-// Maturity comparison: 3 x-axis groups (1M · 3M · 6M)
-// 3 bars per group: T-1 (blue, boldest) · T-7 (red) · T-14 (green)
-// Hover tooltips: rate + bps delta vs T-1 + direction indicator
-
-// Series color palette — institutional, not neon
-var YLD_T1   = '#3b82f6';   // T-1  — blue (boldest)
-var YLD_T7   = '#64748b';   // T-7  — slate
-var YLD_T14  = '#94a3b8';   // T-14 — light slate
-
-function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
-  var canvas = document.getElementById('yield-bar-canvas');
-  if (!canvas) return;
-
-  // Safe plugin reference — ChartDataLabels CDN may fail to load
-  var hasDataLabels = false;
-  try { hasDataLabels = typeof ChartDataLabels !== 'undefined'; } catch(e) {}
-
-  var datasets = [
-    {
-      // T-1 (latest) — boldest blue bar
-      label: lbl1,
-      data: t1,
-      borderColor: YLD_T1,
-      backgroundColor: 'rgba(59,130,246,0.65)',
-      borderWidth: 1.5,
-      borderRadius: 4,
-      datalabels: hasDataLabels ? {
-        display: true,
-        anchor: 'end', align: 'top', offset: 4,
-        color: '#e2e8f0',
-        font: { size: 13, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
-        formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
-      } : { display: false }
-    },
-    {
-      // T-7 — secondary: slate bar
-      label: lbl7,
-      data: t7,
-      borderColor: YLD_T7,
-      backgroundColor: 'rgba(100,116,139,0.50)',
-      borderWidth: 1.5,
-      borderRadius: 4,
-      datalabels: { display: false }
-    },
-    {
-      // T-14 — background reference: light slate bar
-      label: lbl14,
-      data: t14,
-      borderColor: YLD_T14,
-      backgroundColor: 'rgba(148,163,184,0.40)',
-      borderWidth: 1.5,
-      borderRadius: 4,
-      datalabels: { display: false }
-    }
-  ];
-
-  var opts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: { padding: { top: 40, bottom: 8, left: 8, right: 8 } },
-    plugins: {
-      legend: { display: false },
-      datalabels: {},
-      tooltip: {
-        mode: 'index',           // show all 3 series on hover
-        intersect: false,
-        backgroundColor: 'rgba(10,14,22,0.97)',
-        titleColor: '#f1f5f9',
-        titleFont: { size: 13, weight: '700' },
-        bodyColor: '#94a3b8',
-        bodyFont: { size: 12 },
-        borderColor: 'rgba(45,63,82,0.9)',
-        borderWidth: 1,
-        padding: 14,
-        cornerRadius: 6,
-        displayColors: true,
-        callbacks: {
-          title: function(items) {
-            return items[0].label + ' US Treasury';
-          },
-          label: function(ctx) {
-            var v = ctx.parsed.y;
-            if (v == null) return '  ' + ctx.dataset.label + ':  N/A';
-            // Show rate + bps delta vs T-1 for T-7 and T-14
-            var t1val = ctx.chart.data.datasets[0].data[ctx.dataIndex];
-            var line  = '  ' + ctx.dataset.label + ':  ' + v.toFixed(3) + '%';
-            if (ctx.datasetIndex > 0 && t1val != null) {
-              var chg = Math.round((t1val - v) * 100);
-              line += '   ' + sgn(chg) + chg + ' bps vs T-1';
-            }
-            return line;
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        grid:  { display: false },
-        border:{ display: false },
-        ticks: { color: '#94a3b8', font: { size: 14, weight: '700' }, padding: 10 }
-      },
-      y: {
-        grid:  { color: 'rgba(30,41,59,0.55)', drawBorder: false },
-        border:{ display: false },
-        ticks: {
-          color: '#64748b', font: { size: 11 }, padding: 10,
-          callback: function(v) { return v.toFixed(2) + '%'; }
-        }
-      }
-    }
-  };
-
-  // Destroy old instance if it exists (handles type migration from bar → line)
-  if (yieldChart) {
-    try { yieldChart.destroy(); } catch(e) {}
-    yieldChart = null;
-  }
-
-  // Build plugins array safely — ChartDataLabels CDN may fail
-  var chartPlugins = [];
-  try { if (typeof ChartDataLabels !== 'undefined') chartPlugins.push(ChartDataLabels); } catch(e) {}
-
-  // Remove datalabels plugin config if plugin isn't loaded (avoids Chart.js warnings)
-  if (!chartPlugins.length) { opts.plugins.datalabels = false; }
-
-  try {
-    if (typeof Chart === 'undefined') throw new Error('Chart.js not loaded');
-    yieldChart = new Chart(
-      canvas.getContext('2d'),
-      { type:'bar', plugins: chartPlugins, data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
-    );
-    console.log('[yields] Chart rendered OK — type:bar, plugins:', chartPlugins.length);
-  } catch(e) {
-    console.error('[yields] Chart init failed:', e);
-    var shell = canvas.parentElement;
-    if (shell) shell.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:center;height:100%;'
-      + 'color:var(--text-3,#64748b);font-size:13px;font-family:monospace;padding:20px;text-align:center;">'
-      + 'Chart unavailable: ' + e.message + '<br><small>Data table below</small></div>';
-  }
-
-  // Update legend swatches — colors must match dataset borderColor exactly
-  var leg = document.getElementById('chart-legend');
-  if (leg) {
-    leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(59,130,246,0.65)"></span>'+(lbl1||'T-1')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(100,116,139,0.50)"></span>'+(lbl7||'T-7')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40)"></span>'+(lbl14||'T-14')+'</span>';
-  }
-}
-
-/* === YIELD DATA PANEL UPGRADE ===================================
+/* === YIELD DATA PANEL ============================================
  * Two-part panel:
  *   1. Compact maturity table (top) — T-1, Δ7d, Δ14d per maturity
  *   2. Insight cards (bottom) — spreads, range, largest move, direction
@@ -1208,8 +1043,6 @@ function computeFx() {
 // === NEWS & INTELLIGENCE — WSJ only =============================
 // Filters /api/news response to WSJ sources only.
 // Falls back to localStorage cache (2 hr) on fetch failure.
-
-var NEWS_REFRESH_MS_STORED = NEWS_REFRESH_MS; // keep ref
 
 function formatTime(dateStr) {
   try {
