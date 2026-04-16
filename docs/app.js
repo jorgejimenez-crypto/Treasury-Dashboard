@@ -182,6 +182,94 @@ function renderAlerts(alerts) {
 }
 
 
+// === RISK SUMMARY PILLS ==========================================
+// Compact color-coded pills in top bar: VIX · DXY · IG OAS
+// Thresholds from THRESHOLDS config; green/yellow/red severity.
+
+function renderRiskPills(data) {
+  var el = document.getElementById('risk-pills');
+  if (!el) return;
+  var y = data.yahoo || {}, f = data.fred || {};
+  var pills = [];
+
+  // VIX
+  var vix = y.VIX;
+  if (vix && vix.current != null) {
+    var v = vix.current;
+    var cls = v > THRESHOLDS.vixHigh ? 'risk-pill-red' : v > 20 ? 'risk-pill-yellow' : 'risk-pill-green';
+    pills.push('<span class="risk-pill '+cls+'"><span class="risk-pill-label">VIX</span>'+v.toFixed(1)+'</span>');
+  }
+
+  // DXY
+  var dxy = y.DXY;
+  if (dxy && dxy.current != null) {
+    var d = dxy.current;
+    var cls2 = (d < THRESHOLDS.dxyLow || d > THRESHOLDS.dxyHigh) ? 'risk-pill-yellow' : 'risk-pill-green';
+    var dp = pct(d, dxy.prior);
+    var dpStr = dp != null ? ' ' + (dp >= 0 ? '+' : '') + dp.toFixed(2) + '%' : '';
+    pills.push('<span class="risk-pill '+cls2+'"><span class="risk-pill-label">DXY</span>'+d.toFixed(2)+dpStr+'</span>');
+  }
+
+  // IG OAS
+  var ig = f.BAMLC0A0CM;
+  if (ig && ig.current != null) {
+    var oas = Math.round(ig.current * 100);
+    var cls3 = oas > THRESHOLDS.igOasWide ? 'risk-pill-red' : oas > 120 ? 'risk-pill-yellow' : 'risk-pill-green';
+    pills.push('<span class="risk-pill '+cls3+'"><span class="risk-pill-label">IG OAS</span>'+oas+' bps</span>');
+  }
+
+  // 10Y yield
+  var y10 = f.DGS10;
+  if (y10 && y10.current != null) {
+    var cls4 = y10.current > THRESHOLDS.yield10YHigh ? 'risk-pill-red' : y10.current > 4.5 ? 'risk-pill-yellow' : 'risk-pill-green';
+    pills.push('<span class="risk-pill '+cls4+'"><span class="risk-pill-label">10Y</span>'+y10.current.toFixed(2)+'%</span>');
+  }
+
+  el.innerHTML = pills.join('');
+}
+
+
+// === RATE MOVEMENT ALERTS ========================================
+// Triggers when short-term yields move >5 bps vs T-7.
+// Professional, actionable messaging for treasury managers.
+
+function computeRateAlerts(data) {
+  var alerts = [];
+  var f = data.fred || {};
+  var hist = data.yieldsHist || {};
+
+  CURVE_KEYS.forEach(function(key, i) {
+    var h = hist[key];
+    var live = f[key];
+    var t1 = h && h.t1 != null ? h.t1 : (live && live.current != null ? live.current : null);
+    var t7 = h && h.t7 != null ? h.t7 : null;
+    if (t1 != null && t7 != null) {
+      var chg = Math.round((t1 - t7) * 100);
+      if (Math.abs(chg) > 5) {
+        var dir = chg > 0 ? '↑' : '↓';
+        var impact = chg > 0 ? 'funding costs rising' : 'funding costs easing';
+        var lvl = Math.abs(chg) > 10 ? 'rate-alert-red' : '';
+        alerts.push({
+          cls: lvl,
+          msg: CURVE_LABELS[i]+' UST '+dir+Math.abs(chg)+' bps vs T-7 ('+t1.toFixed(3)+'%) — '+impact
+        });
+      }
+    }
+  });
+
+  return alerts;
+}
+
+function renderRateAlerts(alerts) {
+  var el = document.getElementById('rate-alerts');
+  if (!el) return;
+  if (!alerts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = alerts.map(function(a) {
+    return '<div class="rate-alert-item '+a.cls+'"><span class="rate-alert-pip"></span>'+a.msg+'</div>';
+  }).join('');
+}
+
+
 // === SECTION 1 — TREASURY YIELDS ================================
 //
 // renderYieldsSection(fred, yieldsHist)
@@ -267,13 +355,11 @@ function renderYieldsSection(fred, yieldsHist) {
   if (yieldSec) yieldSec.setAttribute('data-state', 'loaded');
 }
 
-// === SHORT-TERM TREASURY YIELDS — Line Chart ====================
+// === SHORT-TERM TREASURY YIELDS — Grouped Bar Chart =============
 //
-// Maturity comparison chart: 3 x-axis points (1M · 3M · 6M)
-// 3 series: T-1 (solid blue) · T-7 (dashed red) · T-14 (dotted green)
-//
-// Not a time-series — this is a snapshot of the yield curve shape
-// across maturities at three different points in time.
+// Maturity comparison: 3 x-axis groups (1M · 3M · 6M)
+// 3 bars per group: T-1 (blue, boldest) · T-7 (red) · T-14 (green)
+// Hover tooltips: rate + bps delta vs T-1 + direction indicator
 
 // Series color palette (dark-theme readable, not neon)
 var YLD_BLUE  = '#60a5fa';   // T-1  — blue
@@ -286,59 +372,39 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
 
   var datasets = [
     {
-      // T-1 (latest) — most prominent: solid blue, filled area, large points
+      // T-1 (latest) — most prominent: solid blue bar
       label: lbl1,
       data: t1,
       borderColor: YLD_BLUE,
-      backgroundColor: 'rgba(96,165,250,0.07)',
-      borderWidth: 2.5,
-      fill: true,
-      tension: 0,
-      pointRadius: 7,
-      pointHoverRadius: 9,
-      pointBackgroundColor: YLD_BLUE,
-      pointBorderColor: 'var(--bg-inset, #0b0f17)',
-      pointBorderWidth: 2,
+      backgroundColor: 'rgba(96,165,250,0.55)',
+      borderWidth: 1.5,
+      borderRadius: 4,
       datalabels: {
         display: true,
-        anchor: 'end', align: 'top', offset: 6,
+        anchor: 'end', align: 'top', offset: 4,
         color: '#e2e8f0',
-        font: { size: 12, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
+        font: { size: 13, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
         formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
       }
     },
     {
-      // T-7 — secondary: dashed red, medium points
+      // T-7 — secondary: red bar, slightly lighter
       label: lbl7,
       data: t7,
-      borderColor: 'rgba(248,113,113,0.85)',
-      backgroundColor: 'transparent',
+      borderColor: YLD_RED,
+      backgroundColor: 'rgba(248,113,113,0.40)',
       borderWidth: 1.5,
-      borderDash: [6, 4],
-      fill: false,
-      tension: 0,
-      pointRadius: 5,
-      pointHoverRadius: 7,
-      pointBackgroundColor: YLD_RED,
-      pointBorderColor: 'var(--bg-inset, #0b0f17)',
-      pointBorderWidth: 1.5,
+      borderRadius: 4,
       datalabels: { display: false }
     },
     {
-      // T-14 — background reference: dotted green, small points
+      // T-14 — background reference: green bar, lightest
       label: lbl14,
       data: t14,
-      borderColor: 'rgba(52,211,153,0.70)',
-      backgroundColor: 'transparent',
+      borderColor: YLD_GREEN,
+      backgroundColor: 'rgba(52,211,153,0.35)',
       borderWidth: 1.5,
-      borderDash: [2, 5],
-      fill: false,
-      tension: 0,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      pointBackgroundColor: YLD_GREEN,
-      pointBorderColor: 'var(--bg-inset, #0b0f17)',
-      pointBorderWidth: 1,
+      borderRadius: 4,
       datalabels: { display: false }
     }
   ];
@@ -408,7 +474,7 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   try {
     yieldChart = new Chart(
       canvas.getContext('2d'),
-      { type:'line', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
+      { type:'bar', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
     );
   } catch(e) {
     // Chart.js or ChartDataLabels unavailable (CDN timeout, etc.)
@@ -425,9 +491,9 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch leg-solid" style="background:'+YLD_BLUE+'"></span>'+(lbl1||'T-1')+'</span>' +
-      '<span class="leg-item"><span class="leg-dashed" style="border-color:'+YLD_RED+'"></span>'+(lbl7||'T-7')+'</span>' +
-      '<span class="leg-item"><span class="leg-dotted" style="border-color:'+YLD_GREEN+'"></span>'+(lbl14||'T-14')+'</span>';
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(96,165,250,0.55)"></span>'+(lbl1||'T-1')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(248,113,113,0.40)"></span>'+(lbl7||'T-7')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(52,211,153,0.35)"></span>'+(lbl14||'T-14')+'</span>';
   }
 }
 
@@ -828,7 +894,7 @@ function renderNews(items) {
     return;
   }
 
-  var shown = wsj.slice(0, 10);
+  var shown = wsj.slice(0, 5);
   if (counter) counter.textContent = wsj.length;
   if (updLbl && shown[0] && shown[0].date) updLbl.textContent = formatTime(shown[0].date);
 
@@ -1035,7 +1101,14 @@ function renderDashboard(data) {
   cachedFred  = data.fred;
   cacheData('market', data);
 
-  // Section 1: Treasury Yields
+  // Risk summary pills (VIX · DXY · IG OAS)
+  renderRiskPills(data);
+
+  // Rate movement alerts (>5 bps vs T-7)
+  var rateAlerts = computeRateAlerts(data);
+  renderRateAlerts(rateAlerts);
+
+  // Section 1: Treasury Yields (full-width hero)
   renderYieldsSection(data.fred, data.yieldsHist || {});
 
   // Section 2: Funding & Liquidity
@@ -1053,7 +1126,6 @@ function renderDashboard(data) {
   // News — show cached immediately; live fetch runs on separate timer
   var cachedNews = getCachedData('news', 7200000);
   if (cachedNews) renderNews(cachedNews);
-
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';

@@ -241,6 +241,55 @@ body {
 .alert-green  .alert-pip { background:var(--green); }
 
 
+/* === RISK SUMMARY PILLS ==================================== */
+
+.risk-pills {
+  max-width: var(--max-w); margin: 0 auto;
+  padding: 8px 32px 0;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.risk-pills:empty { display: none; }
+.risk-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  white-space: nowrap;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--text-2);
+  transition: border-color 0.15s;
+}
+.risk-pill-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-3); font-weight: 600;
+}
+.risk-pill-green  { background:var(--green-bg);  color:var(--green);  border-color:var(--green-border); }
+.risk-pill-yellow { background:var(--amber-bg);  color:var(--amber);  border-color:var(--amber-border); }
+.risk-pill-red    { background:var(--red-bg);     color:var(--red);    border-color:var(--red-border); }
+
+
+/* === RATE MOVEMENT ALERTS ================================== */
+
+.rate-alerts {
+  max-width: var(--max-w); margin: 0 auto;
+  padding: 6px 32px 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.rate-alerts:empty { display: none; }
+.rate-alert-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: var(--radius-sm);
+  font-size: 11.5px; font-weight: 500; font-family: var(--mono);
+  background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber);
+}
+.rate-alert-item.rate-alert-red {
+  background: var(--red-bg); border-color: var(--red-border); color: var(--red);
+}
+.rate-alert-pip {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--amber);
+}
+.rate-alert-red .rate-alert-pip { background: var(--red); }
+
+
 /* === LOADING / SETUP ======================================= */
 
 .loading-screen {
@@ -432,59 +481,7 @@ body {
 /* Alternating rows */
 .yield-table tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
 
-/* ── Compact Treasury Yields — in 50%-width left column ──────
-   Chart reduced to ~50% height; table tightened ~50%.
-   T-7 and T-14 columns get solid left-border delineation.
-   Applied via #sec-yields specificity — no extra class needed.
-──────────────────────────────────────────────────────────── */
-
-/* Compact chart height (~50% of 340px hero) */
-#sec-yields .chart-shell {
-  height: 185px;
-  padding: 10px 10px 6px;
-  margin-bottom: 10px;
-}
-
-/* Tighter section header */
-#sec-yields .section-hd {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-}
-
-/* Compact legend spacing */
-#sec-yields .chart-legend {
-  margin-bottom: 12px;
-  gap: 12px;
-}
-
-/* Compact table — ~50% of original density */
-#sec-yields .yield-table {
-  font-size: 10.5px;
-  min-width: 0;          /* remove 520px min — fluid in column */
-}
-#sec-yields .yield-table thead th {
-  padding: 5px 8px;
-  font-size: 8.5px;
-  letter-spacing: 0.4px;
-}
-#sec-yields .yield-table .yt-hd-mat { padding-left: 12px; }
-#sec-yields .yield-table tbody td   { padding: 5px 8px; }
-#sec-yields .yt-mat   { padding-left: 12px !important; font-size: 11px; }
-#sec-yields .yt-latest { font-size: 11.5px; }
-
-/* Solid left-border column dividers for T-7 and T-14 columns.
-   The original chart uses dashed/dotted lines for T-7/T-14;
-   the table columns now get matching solid delineation. */
-#sec-yields .yt-hd-t7,
-#sec-yields .yield-table tbody td:nth-child(3) {
-  border-left: 1px solid var(--border-md);
-}
-#sec-yields .yt-hd-t14,
-#sec-yields .yield-table tbody td:nth-child(4) {
-  border-left: 1px solid var(--border-md);
-}
-
-/* FX section in right column: remove max-width cap so it fills column */
+/* FX section — remove max-width cap for full-width layout */
 #sec-fx .fx-body { max-width: 100%; }
 
 
@@ -722,128 +719,13 @@ body {
 .fx-trend-flat { color:var(--text-3); }
 
 
-/* === ROW-PAIR LAYOUT ==========================================
-   Two 50/50 rows on desktop, stacking below 900px:
-     Row 1: Live Catalyst + News & Intelligence
-     Row 2: Short-Term Treasury Yields + FX Converter
-   Grid auto-stretches both panels in each row to equal height.
-   Inside each panel, content flexes so the body fills vertically. */
-
-.row-pair {
-  --row-panel-pad-y: 24px;
-  --row-panel-pad-x: 26px;
-  --row-panel-min-h: 440px;     /* floor — grid stretches up from here */
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: stretch;
-}
-
-/* Uniform panel shell — same padding/radius/border for both panels */
-.row-pair > .row-panel {
-  display: flex;
-  flex-direction: column;
-  padding: var(--row-panel-pad-y) var(--row-panel-pad-x);
-  min-height: var(--row-panel-min-h);
-  min-width: 0;                 /* allow children to shrink inside grid cell */
-}
-
-/* Uniform section-header sizing — slightly larger than 3-col variant */
-.row-pair .section-hd {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  gap: 10px;
-}
-.row-pair .section-title { font-size: 17px; letter-spacing: -0.3px; }
-.row-pair .section-desc  { font-size: 10px; letter-spacing: 0.7px; }
-.row-pair .data-source   { font-size: 10px; }
-
-/* ── Live Catalyst: iframe wrapper fills remaining panel height ─── */
-.row-pair #sec-catalyst .catalyst-frame-wrap {
-  flex: 1 1 auto;
-  padding-top: 0;               /* drop 16:9 — flex sets height instead */
-  min-height: 260px;
-}
-
-/* ── News & Intelligence: feed scrolls inside the stretched panel ── */
-.row-pair #sec-news .news-feed {
-  flex: 1 1 auto;
-  max-height: none;             /* override 360px cap — let it fill */
-  min-height: 260px;
-}
-
-/* ── Treasury Yields: chart fixed, table stretches to fill bottom ── */
-.row-pair #sec-yields .chart-shell {
-  height: 220px;
-  flex: 0 0 220px;
-  margin-bottom: 12px;
-  padding: 10px 10px 6px;
-}
-.row-pair #sec-yields .chart-legend {
-  margin-bottom: 12px;
-  gap: 14px;
-}
-.row-pair #sec-yields .leg-item { font-size: 11px; }
-.row-pair #sec-yields .yield-table-shell {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.row-pair #sec-yields .yield-table {
-  flex: 1 1 auto;
-  height: 100%;                 /* so tbody rows distribute evenly */
-  min-width: 0;
-  font-size: 11.5px;
-}
-.row-pair #sec-yields .yield-table thead th {
-  padding: 7px 10px;
-  font-size: 9px;
-}
-.row-pair #sec-yields .yield-table .yt-hd-mat { padding-left: 14px; }
-.row-pair #sec-yields .yield-table tbody { height: 100%; }
-.row-pair #sec-yields .yield-table tbody td { padding: 7px 10px; }
-.row-pair #sec-yields .yt-mat    { padding-left: 14px !important; font-size: 12px; }
-.row-pair #sec-yields .yt-latest { font-size: 12.5px; }
-/* Column dividers for T-7 and T-14 — match the chart's dashed/dotted lines */
-.row-pair #sec-yields .yt-hd-t7,
-.row-pair #sec-yields .yield-table tbody td:nth-child(3),
-.row-pair #sec-yields .yt-hd-t14,
-.row-pair #sec-yields .yield-table tbody td:nth-child(4) {
-  border-left: 1px solid var(--border-md);
-}
-
-/* ── FX Converter: body flexes; result panel absorbs any remainder ── */
-.row-pair #sec-fx .fx-body {
-  flex: 1 1 auto;
-  max-width: none;              /* override 720px cap */
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.row-pair #sec-fx .fx-result-panel {
-  flex: 1 1 auto;
-  min-height: 96px;
-  padding: 16px 20px;
-}
-.row-pair #sec-fx .fx-result-main { font-size: 28px; }
-
-/* ── Breakpoints ─────────────────────────────────────────────────── */
-/* Stack to single column below 900px for tablet / mobile */
-@media (max-width: 900px) {
-  .row-pair {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .row-pair > .row-panel { min-height: 0; }
-  /* Restore 16:9 aspect for Live Catalyst when stacked (column is full-width) */
-  .row-pair #sec-catalyst .catalyst-frame-wrap {
-    flex: 0 0 auto;
-    padding-top: 56.25%;
-  }
-  .row-pair #sec-news .news-feed { max-height: 320px; }
-  .row-pair #sec-yields .chart-shell { flex: 0 0 190px; height: 190px; }
-}
+/* Compact News section — cap total height */
+#sec-news .news-feed { max-height: 300px; }
+#sec-news .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
+#sec-news .news-item { padding: 7px 2px 7px 0; }
+#sec-news .news-title { font-size: 11.5px; margin-bottom: 2px; }
+#sec-news .news-meta  { font-size: 9.5px; }
+#sec-news .news-tag   { font-size: 8px; margin-bottom: 3px; }
 
 
 /* === LIVE CATALYST ========================================= */
@@ -890,6 +772,10 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
 }
+/* Compact Live Catalyst — cap total section to ~300px */
+#sec-catalyst { max-height: 320px; overflow: hidden; }
+#sec-catalyst .section-hd { margin-bottom: 14px; padding-bottom: 10px; }
+#sec-catalyst .catalyst-frame-wrap { padding-top: 0; height: 210px; }
 .catalyst-frame-wrap iframe {
   position: absolute;
   inset: 0;
@@ -928,7 +814,7 @@ body {
 .news-count-badge:empty { display: none; }
 
 .news-feed {
-  max-height: 360px;
+  max-height: 340px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -1196,8 +1082,6 @@ body {
   .header-inner { padding: 12px 20px; flex-wrap: wrap; }
   .header-status { order: 3; flex-basis: 100%; }
   .chart-shell  { height: 280px; }
-  /* Restore compact yields chart to standard height on single-column mobile */
-  #sec-yields .chart-shell { height: 230px; }
   #app-footer   { padding: 14px 20px 24px; }
 }
 

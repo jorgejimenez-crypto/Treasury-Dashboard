@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260416">
+  <link rel="stylesheet" href="style.css?v=20260416b">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -46,6 +46,8 @@
 </div>
 
 <div id="alert-bar" role="status" aria-live="polite"></div>
+<div id="risk-pills" class="risk-pills" aria-label="Risk summary"></div>
+<div id="rate-alerts" class="rate-alerts" role="status" aria-live="polite"></div>
 
 <div id="setup-banner" class="setup-banner" style="display:none">
   Worker URL not configured — edit <code>WORKER_URL</code> in <code>app.js</code>.
@@ -59,154 +61,45 @@
 </div>
 
 <!-- ====================== MAIN DASHBOARD ======================
-     Layout:
-       Row 1: Live Catalyst · News & Intelligence  (50/50)
-       Row 2: Short-Term Treasury Yields · FX Converter  (50/50)
-       Row 3: Funding & Liquidity  (full-width)
+     Stacked layout (yields-first, content-dense):
+       1. Treasury Yields — full-width hero
+       2. Funding & Liquidity
+       3. FX Converter
+       4. Live Catalyst (compact ~300px)
+       5. News & Intelligence (compact ~350px, 5 headlines)
 ============================================================== -->
 <main id="dashboard">
 
-  <!-- ────────── ROW 1 — Live Catalyst + News ────────── -->
-  <div class="row-pair" id="row-1">
+  <!-- === TREASURY YIELDS HERO === -->
+  <section class="desk-section" id="sec-yields" data-state="loading">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">Short-Term Treasury Yields</h2>
+        <span class="section-desc">1M &middot; 3M &middot; 6M &nbsp;&middot;&nbsp; T-1 / T-7 / T-14</span>
+      </div>
+      <div class="section-hd-right">
+        <span class="spread-pill" id="yield-spread-pill"></span>
+        <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
+      </div>
+    </div>
+    <div class="chart-shell">
+      <canvas id="yield-bar-canvas"></canvas>
+      <div class="skel-bars" aria-hidden="true">
+        <span class="skel-bar" style="--h:55%"></span>
+        <span class="skel-bar" style="--h:72%"></span>
+        <span class="skel-bar" style="--h:84%"></span>
+      </div>
+    </div>
+    <div class="chart-legend" id="chart-legend"></div>
+    <div class="yield-table-shell">
+      <table class="yield-table" id="yield-data-table">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
-    <!-- Live Catalyst -->
-    <section class="desk-section row-panel" id="sec-catalyst">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Live Catalyst</h2>
-          <span class="section-desc">Bloomberg Television</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="live-indicator" id="live-dot">
-            <span class="live-pip"></span>LIVE
-          </span>
-          <a class="catalyst-ext-link"
-             href="https://www.youtube.com/@BloombergTelevision/live"
-             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
-        </div>
-      </div>
-      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
-        <div class="catalyst-loading">Loading stream&hellip;</div>
-      </div>
-    </section>
-
-    <!-- News & Intelligence — WSJ only -->
-    <section class="desk-section row-panel" id="sec-news">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">News &amp; Intelligence</h2>
-          <span class="section-desc">Wall Street Journal</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="news-count-badge" id="news-count"></span>
-          <span class="data-source" id="news-updated-lbl"></span>
-        </div>
-      </div>
-      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
-        <div class="news-empty">Loading news&hellip;</div>
-      </div>
-    </section>
-
-  </div><!-- /row-1 -->
-
-  <!-- ────────── ROW 2 — Treasury Yields + FX Converter ────────── -->
-  <div class="row-pair" id="row-2">
-
-    <!-- Short-Term Treasury Yields -->
-    <section class="desk-section row-panel" id="sec-yields" data-state="loading">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">Short-Term Treasury Yields</h2>
-          <span class="section-desc">1M &middot; 3M &middot; 6M &nbsp;&middot;&nbsp; T-1 / T-7 / T-14</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="spread-pill" id="yield-spread-pill"></span>
-          <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
-        </div>
-      </div>
-      <div class="chart-shell">
-        <canvas id="yield-bar-canvas"></canvas>
-        <div class="skel-bars" aria-hidden="true">
-          <span class="skel-bar" style="--h:55%"></span>
-          <span class="skel-bar" style="--h:72%"></span>
-          <span class="skel-bar" style="--h:84%"></span>
-        </div>
-      </div>
-      <div class="chart-legend" id="chart-legend"></div>
-      <div class="yield-table-shell">
-        <table class="yield-table" id="yield-data-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- FX Converter -->
-    <section class="desk-section row-panel" id="sec-fx">
-      <div class="section-hd">
-        <div class="section-hd-left">
-          <h2 class="section-title">FX Converter</h2>
-          <span class="section-desc">16 currencies &middot; Live cross-rates</span>
-        </div>
-        <div class="section-hd-right">
-          <span id="fx-rate-trend" class="fx-trend"></span>
-          <span class="data-source">Yahoo &middot; 15-min</span>
-        </div>
-      </div>
-      <div class="fx-body">
-        <div class="fx-preset-row" id="fx-row-1">
-          <button class="fx-preset" data-amount="250000">250K</button>
-          <button class="fx-preset" data-amount="500000">500K</button>
-          <button class="fx-preset" data-amount="750000">750K</button>
-          <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
-        </div>
-        <div class="fx-preset-row" id="fx-row-2">
-          <button class="fx-preset" data-amount="5000000">5M</button>
-          <button class="fx-preset" data-amount="10000000">10M</button>
-          <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
-        </div>
-        <div class="fx-inputs">
-          <div class="fx-amount-wrap">
-            <label class="fx-label">Amount</label>
-            <div class="fx-amount-inner">
-              <input type="number" id="fx-amount" class="fx-amount"
-                     value="1000000" step="250000" autocomplete="off">
-              <span id="fx-base-badge" class="fx-base-badge">USD</span>
-            </div>
-          </div>
-          <div class="fx-ccy-col">
-            <label class="fx-label">From</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-base" class="fx-ccy-input"
-                     value="USD" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-base-list" class="fx-dropdown"></div>
-            </div>
-          </div>
-          <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
-          <div class="fx-ccy-col">
-            <label class="fx-label">To</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-quote" class="fx-ccy-input"
-                     value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-quote-list" class="fx-dropdown"></div>
-            </div>
-          </div>
-        </div>
-        <div class="fx-result-panel">
-          <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
-          <div class="fx-result-rates">
-            <span class="fx-rate-fwd" id="fx-rate-line"></span>
-            <span class="fx-rate-rev" id="fx-reverse-rate"></span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </div><!-- /row-2 -->
-
-  <!-- ====================== FUNDING & LIQUIDITY ======================
-       5 cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
-  ====================================================================== -->
+  <!-- === FUNDING & LIQUIDITY === -->
   <section class="desk-section" id="sec-funding">
     <div class="section-hd">
       <div class="section-hd-left">
@@ -219,6 +112,105 @@
       </div>
     </div>
     <div class="funding-grid" id="funding-grid"></div>
+  </section>
+
+  <!-- === FX CONVERTER === -->
+  <section class="desk-section" id="sec-fx">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">FX Converter</h2>
+        <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+      </div>
+      <div class="section-hd-right">
+        <span id="fx-rate-trend" class="fx-trend"></span>
+        <span class="data-source">Yahoo Finance &middot; 15-min</span>
+      </div>
+    </div>
+    <div class="fx-body">
+      <div class="fx-preset-row" id="fx-row-1">
+        <button class="fx-preset" data-amount="250000">250K</button>
+        <button class="fx-preset" data-amount="500000">500K</button>
+        <button class="fx-preset" data-amount="750000">750K</button>
+        <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
+      </div>
+      <div class="fx-preset-row" id="fx-row-2">
+        <button class="fx-preset" data-amount="5000000">5M</button>
+        <button class="fx-preset" data-amount="10000000">10M</button>
+        <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
+      </div>
+      <div class="fx-inputs">
+        <div class="fx-amount-wrap">
+          <label class="fx-label">Amount</label>
+          <div class="fx-amount-inner">
+            <input type="number" id="fx-amount" class="fx-amount"
+                   value="1000000" step="250000" autocomplete="off">
+            <span id="fx-base-badge" class="fx-base-badge">USD</span>
+          </div>
+        </div>
+        <div class="fx-ccy-col">
+          <label class="fx-label">From</label>
+          <div class="fx-ccy-wrap">
+            <input type="text" id="fx-base" class="fx-ccy-input"
+                   value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-base-list" class="fx-dropdown"></div>
+          </div>
+        </div>
+        <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
+        <div class="fx-ccy-col">
+          <label class="fx-label">To</label>
+          <div class="fx-ccy-wrap">
+            <input type="text" id="fx-quote" class="fx-ccy-input"
+                   value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-quote-list" class="fx-dropdown"></div>
+          </div>
+        </div>
+      </div>
+      <div class="fx-result-panel">
+        <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
+        <div class="fx-result-rates">
+          <span class="fx-rate-fwd" id="fx-rate-line"></span>
+          <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- === LIVE CATALYST (compact) === -->
+  <section class="desk-section" id="sec-catalyst">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">Live Catalyst</h2>
+        <span class="section-desc">Bloomberg Television</span>
+      </div>
+      <div class="section-hd-right">
+        <span class="live-indicator" id="live-dot">
+          <span class="live-pip"></span>LIVE
+        </span>
+        <a class="catalyst-ext-link"
+           href="https://www.youtube.com/@BloombergTelevision/live"
+           target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
+      </div>
+    </div>
+    <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
+      <div class="catalyst-loading">Loading stream&hellip;</div>
+    </div>
+  </section>
+
+  <!-- === NEWS & INTELLIGENCE (compact, 5 headlines) === -->
+  <section class="desk-section" id="sec-news">
+    <div class="section-hd">
+      <div class="section-hd-left">
+        <h2 class="section-title">News &amp; Intelligence</h2>
+        <span class="section-desc">Wall Street Journal</span>
+      </div>
+      <div class="section-hd-right">
+        <span class="news-count-badge" id="news-count"></span>
+        <span class="data-source" id="news-updated-lbl"></span>
+      </div>
+    </div>
+    <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
+      <div class="news-empty">Loading news&hellip;</div>
+    </div>
   </section>
 
 </main>
