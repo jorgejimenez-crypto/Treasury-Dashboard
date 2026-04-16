@@ -981,6 +981,137 @@ body {
 }
 
 
+/* === LOADING STATES / SKELETONS ============================
+   data-state: "loading" → skeleton visible, content transparent
+   data-state: "loaded"  → skeleton hidden, content visible
+   data-state: "error"   → error card shown, skeleton hidden    */
+
+/* ── Shimmer keyframe (shared by all skeletons) ──────────── */
+@keyframes skel-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Yield chart skeleton bars ───────────────────────────── */
+.skel-bars {
+  position: absolute;
+  inset: 18px 12% 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14%;
+  padding: 0 6%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease-out;
+}
+.skel-bar {
+  flex: 1;
+  height: var(--h, 60%);
+  background: linear-gradient(
+    90deg,
+    rgba(96,165,250,0.06) 25%,
+    rgba(96,165,250,0.18) 50%,
+    rgba(96,165,250,0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+  border-radius: 4px 4px 0 0;
+}
+.skel-bar:nth-child(2) { animation-delay: 0.15s; }
+.skel-bar:nth-child(3) { animation-delay: 0.3s; }
+
+/* Show skeleton when section is loading */
+[data-state="loading"] .skel-bars  { opacity: 1; }
+/* Hide canvas while loading (prevents an empty white rect) */
+[data-state="loading"] .chart-shell canvas { opacity: 0; }
+[data-state="loaded"]  .chart-shell canvas { opacity: 1; transition: opacity 0.3s ease-in; }
+
+/* Yield table body: subtle pulse while loading */
+[data-state="loading"] .yield-table tbody::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    transparent 0%, transparent 28%,
+    rgba(96,165,250,0.04) 30%, transparent 34%,
+    transparent 56%,
+    rgba(96,165,250,0.04) 58%, transparent 62%,
+    transparent 84%,
+    rgba(96,165,250,0.04) 86%, transparent 90%);
+  animation: skel-shimmer 2s ease-in-out infinite;
+  background-size: 100% 200%;
+  pointer-events: none;
+}
+[data-state="loading"] .yield-table-shell { position: relative; }
+
+/* ── FX result loading state ─────────────────────────────── */
+.fx-result-main.fx-loading {
+  color: var(--text-3) !important;
+  font-size: 15px !important;
+  font-family: var(--mono);
+  letter-spacing: 0.4px;
+}
+
+/* ── Catalyst loading overlay ────────────────────────────── */
+.catalyst-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.92);
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  pointer-events: none;
+  transition: opacity 0.45s ease-out;
+  z-index: 2;
+}
+.catalyst-spinner {
+  width: 30px; height: 30px;
+  border: 2px solid var(--border-md);
+  border-top-color: var(--blue-lt);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+[data-state="loaded"] .catalyst-overlay { opacity: 0; }
+[data-state="error"]  .catalyst-overlay { display: none; }
+
+/* ── Catalyst error fallback ─────────────────────────────── */
+.catalyst-error {
+  display: none;
+  position: absolute; inset: 0;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  background: var(--bg-inset);
+  z-index: 2;
+}
+[data-state="error"] .catalyst-error { display: flex; }
+.catalyst-err-title {
+  font-size: 12px;
+  color: var(--text-2);
+  font-family: var(--mono);
+}
+.catalyst-err-link {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--blue-bg);
+  color: var(--blue-lt);
+  border: 1px solid var(--blue-border);
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.catalyst-err-link:hover {
+  background: var(--bg-hover);
+  border-color: var(--blue-lt);
+}
+
+
 /* === FOOTER ================================================ */
 
 #app-footer {

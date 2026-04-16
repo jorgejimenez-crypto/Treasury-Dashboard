@@ -261,6 +261,10 @@ function renderYieldsSection(fred, yieldsHist) {
   // ── Source label ─────────────────────────────────────────────
   var src = document.getElementById('yield-source-lbl');
   if (src && sample && sample.t1Date) src.textContent = 'FRED · '+sample.t1Date;
+
+  // Mark section loaded — hides skeleton, reveals chart
+  var yieldSec = document.getElementById('sec-yields');
+  if (yieldSec) yieldSec.setAttribute('data-state', 'loaded');
 }
 
 // === SHORT-TERM TREASURY YIELDS — Line Chart ====================
@@ -743,6 +747,13 @@ function computeFx() {
     if(trendEl){ trendEl.textContent=''; trendEl.className='fx-trend'; }
   }
 
+  // Show loading state until first market data arrives
+  if (!cachedYahoo) {
+    resEl.className = 'fx-result-main fx-loading';
+    return clear('Loading rates\u2026');
+  }
+  resEl.className = 'fx-result-main';
+
   if (isNaN(amount)||amount<=0) return clear('—');
   if (base===quote) {
     // Same currency: just echo with the currency code
@@ -885,7 +896,9 @@ function initLiveStream() {
   var wrap = document.getElementById('catalyst-frame-wrap');
   if (!wrap) return;
   liveStreamLoaded = true;
+  wrap.setAttribute('data-state', 'loading');
 
+  // Build iframe
   var iframe = document.createElement('iframe');
   iframe.src = 'https://www.youtube.com/embed/live_stream'
     + '?channel=UCIALMKvObZNtJ6AmdCLP7Lg'
@@ -894,8 +907,37 @@ function initLiveStream() {
   iframe.loading        = 'lazy';
   iframe.allow          = 'autoplay; encrypted-media; picture-in-picture';
   iframe.allowFullscreen = true;
+
+  // Loading overlay (spinner + text — hidden by CSS when data-state changes)
+  var overlay = document.createElement('div');
+  overlay.className = 'catalyst-overlay';
+  overlay.innerHTML = '<div class="catalyst-spinner"></div>'
+    + '<div>Loading Bloomberg TV&hellip;</div>';
+
+  // Error fallback (hidden by default — shown via [data-state="error"])
+  var errCard = document.createElement('div');
+  errCard.className = 'catalyst-error';
+  errCard.innerHTML = '<div class="catalyst-err-title">Stream unavailable</div>'
+    + '<a class="catalyst-err-link" target="_blank" rel="noopener"'
+    + ' href="https://www.youtube.com/@BloombergTelevision/live">'
+    + 'Open on YouTube &#x2197;</a>';
+
+  // Timeout: if iframe hasn't loaded in 10s, show error state
+  var loadTimer = setTimeout(function() {
+    if (wrap.getAttribute('data-state') === 'loading') {
+      wrap.setAttribute('data-state', 'error');
+    }
+  }, 10000);
+
+  iframe.onload = function() {
+    clearTimeout(loadTimer);
+    wrap.setAttribute('data-state', 'loaded');
+  };
+
   wrap.innerHTML = '';
   wrap.appendChild(iframe);
+  wrap.appendChild(overlay);
+  wrap.appendChild(errCard);
 
   // Live-dot: green during market hours, dim otherwise
   var pip = document.getElementById('live-dot');
