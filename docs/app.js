@@ -770,61 +770,116 @@ function buildYieldTable(t1, t7, t14, col1, col7, col14) {
 function buildYieldInsights(t1, t7, t14) {
   var el = document.getElementById('yield-insights');
   if (!el) return;
+  if (!t1[0] && !t1[1] && !t1[2]) { el.innerHTML = ''; return; }
 
-  var vals = t1.filter(function(v) { return v != null; });
-  if (!vals.length) { el.innerHTML = ''; return; }
+  var html = '';
 
-  var cards = [];
+  // ── Section A: Curve Spreads ───────────────────────────────────
+  var spreads = [];
+  if (t1[0] != null && t1[1] != null) spreads.push({ label: '1M → 3M', v: Math.round((t1[1] - t1[0]) * 100) });
+  if (t1[1] != null && t1[2] != null) spreads.push({ label: '3M → 6M', v: Math.round((t1[2] - t1[1]) * 100) });
+  if (t1[0] != null && t1[2] != null) spreads.push({ label: '1M → 6M', v: Math.round((t1[2] - t1[0]) * 100) });
 
-  // 1. Short-end range
-  var lo = Math.min.apply(null, vals);
-  var hi = Math.max.apply(null, vals);
-  cards.push({ label: 'Short-End Range', value: lo.toFixed(2) + '% – ' + hi.toFixed(2) + '%', cls: '' });
-
-  // 2. Curve slope 1M→6M
-  if (t1[0] != null && t1[2] != null) {
-    var slope = Math.round((t1[2] - t1[0]) * 100);
-    var slopeCls = slope > 0 ? 'yi-up' : slope < 0 ? 'yi-dn' : 'yi-flat';
-    var slopeWord = slope > 2 ? 'Steepening' : slope < -2 ? 'Inverting' : 'Flat';
-    cards.push({ label: '1M → 6M Slope', value: sgn(slope) + slope + ' bps', sub: slopeWord, cls: slopeCls });
+  if (spreads.length) {
+    html += '<div class="yi-section"><div class="yi-section-title">Curve Spreads</div><div class="yi-row">';
+    spreads.forEach(function(s) {
+      var cls = s.v > 0 ? 'yi-up' : s.v < 0 ? 'yi-dn' : 'yi-flat';
+      html += '<div class="yi-metric ' + cls + '"><span class="yi-met-label">' + s.label + '</span><span class="yi-met-val">' + sgn(s.v) + s.v + '</span></div>';
+    });
+    html += '</div></div>';
   }
 
-  // 3. Largest 7-day move
+  // ── Section B: Extension Pickup ────────────────────────────────
+  var pickups = [];
+  if (t1[0] != null && t1[1] != null) {
+    var p13 = Math.round((t1[1] - t1[0]) * 100);
+    pickups.push({ from: '1M', to: '3M', v: p13 });
+  }
+  if (t1[0] != null && t1[2] != null) {
+    var p16 = Math.round((t1[2] - t1[0]) * 100);
+    pickups.push({ from: '1M', to: '6M', v: p16 });
+  }
+
+  if (pickups.length) {
+    html += '<div class="yi-section"><div class="yi-section-title">Extension Pickup</div><div class="yi-row">';
+    pickups.forEach(function(p) {
+      var cls = p.v > 0 ? 'yi-up' : p.v < 0 ? 'yi-dn' : 'yi-flat';
+      html += '<div class="yi-metric ' + cls + '"><span class="yi-met-label">' + p.from + ' → ' + p.to + '</span><span class="yi-met-val">' + sgn(p.v) + p.v + ' bps</span></div>';
+    });
+    html += '</div></div>';
+  }
+
+  // ── Section C: Quick Stats ─────────────────────────────────────
+  var stats = [];
+  var vals = t1.filter(function(v) { return v != null; });
+  if (vals.length) {
+    stats.push({ label: 'Range', value: Math.min.apply(null, vals).toFixed(2) + '–' + Math.max.apply(null, vals).toFixed(2) + '%' });
+  }
   var moves7 = [];
-  for (var i = 0; i < CURVE_KEYS.length; i++) {
-    if (t1[i] != null && t7[i] != null) {
-      moves7.push({ mat: CURVE_LABELS[i], d: Math.round((t1[i] - t7[i]) * 100) });
-    }
+  for (var i = 0; i < 3; i++) {
+    if (t1[i] != null && t7[i] != null) moves7.push({ m: CURVE_LABELS[i], d: Math.round((t1[i] - t7[i]) * 100) });
   }
   if (moves7.length) {
     moves7.sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); });
     var top = moves7[0];
     var mvCls = top.d > 0 ? 'yi-up' : top.d < 0 ? 'yi-dn' : 'yi-flat';
-    cards.push({ label: 'Largest 7d Move', value: top.mat + ' ' + sgn(top.d) + top.d + ' bps', cls: mvCls });
+    stats.push({ label: 'Largest 7d', value: top.m + ' ' + sgn(top.d) + top.d + ' bps', cls: mvCls });
   }
 
-  // 4. Front-end direction
-  var totalBps = 0, count = 0;
-  for (var j = 0; j < CURVE_KEYS.length; j++) {
-    if (t1[j] != null && t7[j] != null) {
-      totalBps += Math.round((t1[j] - t7[j]) * 100);
-      count++;
+  if (stats.length) {
+    html += '<div class="yi-section"><div class="yi-section-title">Quick Stats</div><div class="yi-row">';
+    stats.forEach(function(s) {
+      html += '<div class="yi-metric ' + (s.cls || '') + '"><span class="yi-met-label">' + s.label + '</span><span class="yi-met-val">' + s.value + '</span></div>';
+    });
+    html += '</div></div>';
+  }
+
+  // ── Section D: Interpretation ──────────────────────────────────
+  var interp = [];
+
+  // Front-end bias
+  var totalBps = 0, cnt = 0;
+  for (var j = 0; j < 3; j++) {
+    if (t1[j] != null && t7[j] != null) { totalBps += Math.round((t1[j] - t7[j]) * 100); cnt++; }
+  }
+  if (cnt) {
+    var avg = totalBps / cnt;
+    interp.push({ label: 'Front-end bias', value: avg > 1 ? 'Rising' : avg < -1 ? 'Easing' : 'Stable', cls: avg > 1 ? 'yi-up' : avg < -1 ? 'yi-dn' : 'yi-flat' });
+  }
+
+  // Curve shape
+  if (t1[0] != null && t1[2] != null) {
+    var slope = Math.round((t1[2] - t1[0]) * 100);
+    var shape = slope > 2 ? 'Upward' : slope < -2 ? 'Inverted' : 'Flat';
+    interp.push({ label: 'Curve shape', value: shape, cls: slope > 2 ? 'yi-up' : slope < -2 ? 'yi-dn' : 'yi-flat' });
+  }
+
+  // Best placement
+  if (pickups.length) {
+    var best = pickups.reduce(function(a, b) { return b.v > a.v ? b : a; });
+    if (best.v > 0) {
+      interp.push({ label: 'Best pickup', value: best.from + ' → ' + best.to + ': +' + best.v + ' bps', cls: 'yi-up' });
     }
   }
-  if (count) {
-    var avg = totalBps / count;
-    var dirWord = avg > 1 ? 'Rising' : avg < -1 ? 'Easing' : 'Stable';
-    var dirCls  = avg > 1 ? 'yi-up' : avg < -1 ? 'yi-dn' : 'yi-flat';
-    cards.push({ label: 'Front-End Bias', value: dirWord, cls: dirCls });
+
+  // Signal strength
+  if (moves7.length && t1[0] != null && t1[2] != null) {
+    var maxMove = Math.abs(moves7[0].d);
+    var absSlope = Math.abs(Math.round((t1[2] - t1[0]) * 100));
+    var strength = (maxMove >= 5 || absSlope >= 5) ? 'High' : (maxMove >= 2 || absSlope >= 2) ? 'Moderate' : 'Low';
+    var strCls = strength === 'High' ? 'yi-dn' : strength === 'Moderate' ? 'yi-up' : 'yi-flat';
+    interp.push({ label: 'Signal', value: strength, cls: strCls });
   }
 
-  el.innerHTML = cards.map(function(c) {
-    return '<div class="yi-card ' + c.cls + '">'
-      + '<div class="yi-label">' + c.label + '</div>'
-      + '<div class="yi-value">' + c.value + '</div>'
-      + (c.sub ? '<div class="yi-sub">' + c.sub + '</div>' : '')
-      + '</div>';
-  }).join('');
+  if (interp.length) {
+    html += '<div class="yi-section yi-interp"><div class="yi-section-title">Interpretation</div><div class="yi-row yi-row-wrap">';
+    interp.forEach(function(item) {
+      html += '<span class="yi-tag ' + item.cls + '">' + item.label + ': <strong>' + item.value + '</strong></span>';
+    });
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html;
 }
 
 
