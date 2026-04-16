@@ -361,48 +361,52 @@ function renderYieldsSection(fred, yieldsHist) {
 // 3 bars per group: T-1 (blue, boldest) · T-7 (red) · T-14 (green)
 // Hover tooltips: rate + bps delta vs T-1 + direction indicator
 
-// Series color palette (dark-theme readable, not neon)
-var YLD_BLUE  = '#60a5fa';   // T-1  — blue
-var YLD_RED   = '#f87171';   // T-7  — red
-var YLD_GREEN = '#34d399';   // T-14 — green
+// Series color palette — institutional, not neon
+var YLD_T1   = '#3b82f6';   // T-1  — blue (boldest)
+var YLD_T7   = '#64748b';   // T-7  — slate
+var YLD_T14  = '#94a3b8';   // T-14 — light slate
 
 function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
   var canvas = document.getElementById('yield-bar-canvas');
   if (!canvas) return;
 
+  // Safe plugin reference — ChartDataLabels CDN may fail to load
+  var hasDataLabels = false;
+  try { hasDataLabels = typeof ChartDataLabels !== 'undefined'; } catch(e) {}
+
   var datasets = [
     {
-      // T-1 (latest) — most prominent: solid blue bar
+      // T-1 (latest) — boldest blue bar
       label: lbl1,
       data: t1,
-      borderColor: YLD_BLUE,
-      backgroundColor: 'rgba(96,165,250,0.55)',
+      borderColor: YLD_T1,
+      backgroundColor: 'rgba(59,130,246,0.65)',
       borderWidth: 1.5,
       borderRadius: 4,
-      datalabels: {
+      datalabels: hasDataLabels ? {
         display: true,
         anchor: 'end', align: 'top', offset: 4,
         color: '#e2e8f0',
         font: { size: 13, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
         formatter: function(v) { return v!=null ? v.toFixed(2)+'%' : ''; }
-      }
+      } : { display: false }
     },
     {
-      // T-7 — secondary: red bar, slightly lighter
+      // T-7 — secondary: slate bar
       label: lbl7,
       data: t7,
-      borderColor: YLD_RED,
-      backgroundColor: 'rgba(248,113,113,0.40)',
+      borderColor: YLD_T7,
+      backgroundColor: 'rgba(100,116,139,0.50)',
       borderWidth: 1.5,
       borderRadius: 4,
       datalabels: { display: false }
     },
     {
-      // T-14 — background reference: green bar, lightest
+      // T-14 — background reference: light slate bar
       label: lbl14,
       data: t14,
-      borderColor: YLD_GREEN,
-      backgroundColor: 'rgba(52,211,153,0.35)',
+      borderColor: YLD_T14,
+      backgroundColor: 'rgba(148,163,184,0.40)',
       borderWidth: 1.5,
       borderRadius: 4,
       datalabels: { display: false }
@@ -471,29 +475,36 @@ function buildYieldChart(t1, t7, t14, lbl1, lbl7, lbl14) {
     yieldChart = null;
   }
 
+  // Build plugins array safely — ChartDataLabels CDN may fail
+  var chartPlugins = [];
+  try { if (typeof ChartDataLabels !== 'undefined') chartPlugins.push(ChartDataLabels); } catch(e) {}
+
+  // Remove datalabels plugin config if plugin isn't loaded (avoids Chart.js warnings)
+  if (!chartPlugins.length) { opts.plugins.datalabels = false; }
+
   try {
+    if (typeof Chart === 'undefined') throw new Error('Chart.js not loaded');
     yieldChart = new Chart(
       canvas.getContext('2d'),
-      { type:'bar', plugins:[ChartDataLabels], data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
+      { type:'bar', plugins: chartPlugins, data:{ labels:CURVE_LABELS, datasets:datasets }, options:opts }
     );
+    console.log('[yields] Chart rendered OK — type:bar, plugins:', chartPlugins.length);
   } catch(e) {
-    // Chart.js or ChartDataLabels unavailable (CDN timeout, etc.)
-    // Show message inside the chart shell so the data table still renders below
     console.error('[yields] Chart init failed:', e);
     var shell = canvas.parentElement;
     if (shell) shell.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:center;height:100%;'
-      + 'color:var(--text-3,#64748b);font-size:12px;font-family:monospace;">'
-      + 'Chart unavailable — see data table below</div>';
+      + 'color:var(--text-3,#64748b);font-size:13px;font-family:monospace;padding:20px;text-align:center;">'
+      + 'Chart unavailable: ' + e.message + '<br><small>Data table below</small></div>';
   }
 
   // Update legend swatches — colors must match dataset borderColor exactly
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(96,165,250,0.55)"></span>'+(lbl1||'T-1')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(248,113,113,0.40)"></span>'+(lbl7||'T-7')+'</span>' +
-      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(52,211,153,0.35)"></span>'+(lbl14||'T-14')+'</span>';
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(59,130,246,0.65)"></span>'+(lbl1||'T-1')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(100,116,139,0.50)"></span>'+(lbl7||'T-7')+'</span>' +
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40)"></span>'+(lbl14||'T-14')+'</span>';
   }
 }
 
@@ -1101,12 +1112,14 @@ function renderDashboard(data) {
   cachedFred  = data.fred;
   cacheData('market', data);
 
-  // Risk summary pills (VIX · DXY · IG OAS)
-  renderRiskPills(data);
+  // Risk summary pills (VIX · DXY · IG OAS) — guarded so failure can't block yields
+  try { renderRiskPills(data); } catch(e) { console.error('[risk-pills] render failed:', e); }
 
-  // Rate movement alerts (>5 bps vs T-7)
-  var rateAlerts = computeRateAlerts(data);
-  renderRateAlerts(rateAlerts);
+  // Rate movement alerts (>5 bps vs T-7) — guarded
+  try {
+    var rateAlerts = computeRateAlerts(data);
+    renderRateAlerts(rateAlerts);
+  } catch(e) { console.error('[rate-alerts] render failed:', e); }
 
   // Section 1: Treasury Yields (full-width hero)
   renderYieldsSection(data.fred, data.yieldsHist || {});
