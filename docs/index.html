@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260416c">
+  <link rel="stylesheet" href="style.css?v=20260416d">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -71,7 +71,7 @@
 <main id="dashboard">
 
   <!-- === TREASURY YIELDS HERO === -->
-  <section class="desk-section" id="sec-yields" data-state="loading">
+  <section class="desk-section" id="sec-yields">
     <div class="section-hd">
       <div class="section-hd-left">
         <h2 class="section-title">Short-Term Treasury Yields</h2>
@@ -82,13 +82,9 @@
         <span class="data-source" id="yield-source-lbl">FRED &middot; Daily</span>
       </div>
     </div>
-    <div class="chart-shell">
-      <canvas id="yield-bar-canvas"></canvas>
-      <div class="skel-bars" aria-hidden="true">
-        <span class="skel-bar" style="--h:55%"></span>
-        <span class="skel-bar" style="--h:72%"></span>
-        <span class="skel-bar" style="--h:84%"></span>
-      </div>
+    <!-- === GROUPED BAR CHART — standalone canvas, no skeleton dependency === -->
+    <div id="yields-chart-wrap" class="yields-chart-wrap">
+      <canvas id="yieldsChart"></canvas>
     </div>
     <div class="chart-legend" id="chart-legend"></div>
     <div class="yield-table-shell">
@@ -251,6 +247,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260416c"></script>
+<script src="app.js?v=20260416d"></script>
 </body>
 </html>

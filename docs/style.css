@@ -388,7 +388,24 @@ body {
 .spread-flat     { background:var(--amber-bg);  color:var(--amber); border:1px solid var(--amber-border); }
 .spread-inverted { background:var(--red-bg);    color:var(--red);   border:1px solid var(--red-border);   }
 
-/* Chart shell — hero height, dark backing */
+/* === YIELDS GROUPED BAR CHART — standalone wrapper === */
+.yields-chart-wrap {
+  position: relative;
+  height: 340px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 14px 10px;
+  margin-bottom: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.yields-chart-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Legacy chart-shell kept for any other usage */
 .chart-shell {
   position: relative;
   height: 340px;

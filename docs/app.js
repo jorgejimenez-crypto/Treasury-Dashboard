@@ -75,7 +75,8 @@ var COMMODITY_LABELS = {
   WTI:'WTI Crude',Brent:'Brent Crude',NatGas:'Henry Hub',HeatOil:'Heating Oil'
 };
 
-var yieldChart          = null;   // Chart.js line chart instance
+var yieldChart          = null;   // Chart.js bar chart instance
+var yieldsChartInstance = null;   // standalone grouped bar (new)
 var refreshTimer        = null;
 var tickerTimer         = null;
 var cachedYahoo         = null;
@@ -267,6 +268,187 @@ function renderRateAlerts(alerts) {
   el.innerHTML = alerts.map(function(a) {
     return '<div class="rate-alert-item '+a.cls+'"><span class="rate-alert-pip"></span>'+a.msg+'</div>';
   }).join('');
+}
+
+
+/* === YIELDS GROUPED BAR CHART ===================================
+ * renderYieldsChart(data) — STANDALONE, SELF-CONTAINED
+ *
+ * This function is intentionally independent from the legacy
+ * buildYieldChart / renderYieldsSection chain. It reads data
+ * directly, creates its own Chart.js instance, and logs every
+ * step so failures are immediately visible in the console.
+ *
+ * Canvas: #yieldsChart (in index.html)
+ * Type: grouped bar (3 groups × 3 bars)
+ * Colors: T-1 #3b82f6, T-7 #64748b, T-14 #94a3b8
+ * ================================================================ */
+
+function renderYieldsChart(data) {
+  console.log('[yieldsChart] renderYieldsChart called');
+
+  // ── 1. Get canvas ──────────────────────────────────────────────
+  var canvas = document.getElementById('yieldsChart');
+  if (!canvas) { console.error('[yieldsChart] canvas #yieldsChart not found in DOM'); return; }
+
+  // ── 2. Check Chart.js availability ─────────────────────────────
+  if (typeof Chart === 'undefined') { console.error('[yieldsChart] Chart.js not loaded'); return; }
+
+  // ── 3. Extract yield data from API response ────────────────────
+  var fred = data.fred || {};
+  var hist = data.yieldsHist || {};
+  var keys   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
+  var labels = ['1M', '3M', '6M'];
+
+  var t1 = [], t7 = [], t14 = [];
+  for (var i = 0; i < keys.length; i++) {
+    var h    = hist[keys[i]] || {};
+    var live = fred[keys[i]] || {};
+
+    var v1  = h.t1  != null ? h.t1  : (live.current != null ? live.current : null);
+    var v7  = h.t7  != null ? h.t7  : null;
+    var v14 = h.t14 != null ? h.t14 : null;
+
+    t1.push(v1);
+    t7.push(v7);
+    t14.push(v14);
+  }
+
+  console.log('[yieldsChart] data extracted — T-1:', t1, ' T-7:', t7, ' T-14:', t14);
+
+  // Bail if we have zero data points (all null)
+  var hasAny = t1.concat(t7, t14).some(function(v) { return v != null; });
+  if (!hasAny) { console.warn('[yieldsChart] all values null — skipping chart'); return; }
+
+  // ── 4. Destroy previous instance if exists ─────────────────────
+  if (yieldsChartInstance) {
+    try { yieldsChartInstance.destroy(); } catch(e) {}
+    yieldsChartInstance = null;
+  }
+
+  // ── 5. Build datasets ─────────────────────────────────────────
+  // Safe datalabels plugin detection
+  var hasDL = false;
+  try { hasDL = typeof ChartDataLabels !== 'undefined'; } catch(e) {}
+
+  var datasets = [
+    {
+      label: 'T-1 (Latest)',
+      data: t1,
+      backgroundColor: 'rgba(59,130,246,0.70)',
+      borderColor: '#3b82f6',
+      borderWidth: 1.5,
+      borderRadius: 6,
+      datalabels: hasDL ? {
+        display: true, anchor: 'end', align: 'top', offset: 4,
+        color: '#e2e8f0',
+        font: { size: 13, weight: '700', family: "'Cascadia Code','Consolas',monospace" },
+        formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
+      } : { display: false }
+    },
+    {
+      label: 'T-7',
+      data: t7,
+      backgroundColor: 'rgba(100,116,139,0.55)',
+      borderColor: '#64748b',
+      borderWidth: 1.5,
+      borderRadius: 6,
+      datalabels: { display: false }
+    },
+    {
+      label: 'T-14',
+      data: t14,
+      backgroundColor: 'rgba(148,163,184,0.45)',
+      borderColor: '#94a3b8',
+      borderWidth: 1.5,
+      borderRadius: 6,
+      datalabels: { display: false }
+    }
+  ];
+
+  // ── 6. Chart options ──────────────────────────────────────────
+  var opts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 36, bottom: 6, left: 6, right: 6 } },
+    plugins: {
+      legend: { display: false },
+      datalabels: hasDL ? {} : false,
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        backgroundColor: 'rgba(10,14,22,0.97)',
+        titleColor: '#f1f5f9',
+        titleFont: { size: 13, weight: '700' },
+        bodyColor: '#94a3b8',
+        bodyFont: { size: 12 },
+        borderColor: 'rgba(45,63,82,0.9)',
+        borderWidth: 1,
+        padding: 14,
+        cornerRadius: 6,
+        displayColors: true,
+        callbacks: {
+          title: function(items) { return items[0].label + ' US Treasury'; },
+          label: function(ctx) {
+            var v = ctx.parsed.y;
+            if (v == null) return '  ' + ctx.dataset.label + ': N/A';
+            var t1val = ctx.chart.data.datasets[0].data[ctx.dataIndex];
+            var line = '  ' + ctx.dataset.label + ': ' + v.toFixed(3) + '%';
+            if (ctx.datasetIndex > 0 && t1val != null) {
+              var delta = Math.round((t1val - v) * 100);
+              line += '  (' + (delta >= 0 ? '+' : '') + delta + ' bps)';
+            }
+            return line;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { color: '#94a3b8', font: { size: 14, weight: '700' }, padding: 10 }
+      },
+      y: {
+        grid: { color: 'rgba(30,41,59,0.55)' },
+        border: { display: false },
+        ticks: {
+          color: '#64748b', font: { size: 11 }, padding: 10,
+          callback: function(v) { return v.toFixed(2) + '%'; }
+        }
+      }
+    }
+  };
+
+  // ── 7. Create chart ───────────────────────────────────────────
+  var plugins = [];
+  if (hasDL) plugins.push(ChartDataLabels);
+
+  try {
+    yieldsChartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      plugins: plugins,
+      data: { labels: labels, datasets: datasets },
+      options: opts
+    });
+    console.log('[yieldsChart] Chart.js bar chart rendered successfully');
+  } catch(e) {
+    console.error('[yieldsChart] Chart init FAILED:', e);
+    var wrap = document.getElementById('yields-chart-wrap');
+    if (wrap) wrap.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;'
+      + 'color:#94a3b8;font-size:13px;font-family:monospace;padding:20px;text-align:center;">'
+      + 'Chart error: ' + e.message + '</div>';
+  }
+
+  // ── 8. Update legend swatches ─────────────────────────────────
+  var leg = document.getElementById('chart-legend');
+  if (leg) {
+    leg.innerHTML =
+      '<span class="leg-item"><span class="leg-swatch" style="background:rgba(59,130,246,0.70)"></span>T-1 (Latest)</span>'
+      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(100,116,139,0.55)"></span>T-7</span>'
+      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.45)"></span>T-14</span>';
+  }
 }
 
 
@@ -1112,7 +1294,10 @@ function renderDashboard(data) {
   cachedFred  = data.fred;
   cacheData('market', data);
 
-  // Risk summary pills (VIX · DXY · IG OAS) — guarded so failure can't block yields
+  // === #1 PRIORITY: Grouped Bar Chart (standalone, fail-safe) ===
+  try { renderYieldsChart(data); } catch(e) { console.error('[yieldsChart] CRITICAL:', e); }
+
+  // Risk summary pills (VIX · DXY · IG OAS) — guarded
   try { renderRiskPills(data); } catch(e) { console.error('[risk-pills] render failed:', e); }
 
   // Rate movement alerts (>5 bps vs T-7) — guarded
@@ -1121,7 +1306,7 @@ function renderDashboard(data) {
     renderRateAlerts(rateAlerts);
   } catch(e) { console.error('[rate-alerts] render failed:', e); }
 
-  // Section 1: Treasury Yields (full-width hero)
+  // Yields table + spread pill (legacy chain — chart now handled above)
   renderYieldsSection(data.fred, data.yieldsHist || {});
 
   // Section 2: Funding & Liquidity
