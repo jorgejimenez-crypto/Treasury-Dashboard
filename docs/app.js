@@ -505,49 +505,44 @@ function renderYieldsChart(data) {
 
 
 /* === ECONOMIC CALENDAR ==========================================
- * Fetches upcoming US economic events from Trading Economics API.
- * Falls back to empty state if key not configured.
- * Columns: Time · Event · Imp. · Actual · Forecast · Previous
+ * Fetches upcoming US economic events via the Cloudflare Worker proxy
+ * at /api/calendar. The worker calls Trading Economics API server-side
+ * (key stored as Wrangler secret TRADING_ECONOMICS_KEY).
+ *
+ * If no TE key is configured on the worker, it returns
+ * { events: [], te_key_set: false } and we show a fallback state.
  * ================================================================ */
 
-var ECON_CALENDAR_KEY = '';   // Set your Trading Economics API key here
-var ECON_CAL_REFRESH_MS = 30 * 60 * 1000;
+var ECON_CAL_REFRESH_MS = 10 * 60 * 1000;  // 10 min (worker caches 10 min)
 var econCalTimer = null;
 
 function fetchEconCalendar() {
-  var body = document.getElementById('econ-cal-body');
-  if (!body) return;
+  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
 
-  if (!ECON_CALENDAR_KEY) {
-    renderEconCalendar(null);
-    return;
-  }
-
-  var today = new Date().toISOString().split('T')[0];
-  var url = 'https://api.tradingeconomics.com/calendar/country/united%20states/'
-    + today + '?c=' + ECON_CALENDAR_KEY + '&f=json';
-
-  fetch(url)
+  fetch(WORKER_URL + '/api/calendar')
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(data) {
-      cacheData('econcal', data);
-      renderEconCalendar(data);
+      var events = data.events || [];
+      var keySet = data.te_key_set;
+      cacheData('econcal', { events: events, te_key_set: keySet });
+      renderEconCalendar(events, keySet);
     })
     .catch(function(e) {
       console.error('[econ-cal] fetch failed:', e.message);
       var cached = getCachedData('econcal', 3600000);
-      renderEconCalendar(cached);
+      if (cached) renderEconCalendar(cached.events || [], cached.te_key_set);
+      else renderEconCalendar([], false);
     });
 }
 
-function renderEconCalendar(events) {
+function renderEconCalendar(events, teKeySet) {
   var body = document.getElementById('econ-cal-body');
   if (!body) return;
 
   // ── Empty / unconfigured state ────────────────────────────────
   if (!events || !Array.isArray(events) || !events.length) {
-    var msg = !ECON_CALENDAR_KEY
-      ? '<div class="econ-cal-key-hint">Set <code>ECON_CALENDAR_KEY</code> in app.js<br>to enable live economic events</div>'
+    var msg = !teKeySet
+      ? '<div class="econ-cal-key-hint">Run <code>npx wrangler secret put TRADING_ECONOMICS_KEY</code><br>in /proxy to enable live events</div>'
       : '<div class="econ-cal-empty-msg">No upcoming US events</div>';
     body.innerHTML = '<div class="econ-cal-empty">'
       + '<div class="econ-cal-empty-icon">&#x1F4C5;</div>'

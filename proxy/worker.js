@@ -177,10 +177,12 @@ export default {
       if (url.pathname === '/api/market-data') return await handleMarketData(env);
       if (url.pathname === '/api/ticker')      return await handleTicker();
       if (url.pathname === '/api/news')        return await handleNews(env);
+      if (url.pathname === '/api/calendar')    return await handleCalendar(env);
       if (url.pathname === '/') return jsonResp({
         status: 'ok',
-        endpoints: ['/api/market-data', '/api/ticker', '/api/news'],
+        endpoints: ['/api/market-data', '/api/ticker', '/api/news', '/api/calendar'],
         fred_key_set: !!(env.FRED_API_KEY),
+        te_key_set: !!(env.TRADING_ECONOMICS_KEY),
       });
       return new Response('Not found', { status: 404, headers: CORS });
     } catch (err) {
@@ -425,6 +427,113 @@ async function handleNews(env) {
 
   return new Response(payload, { status: 200, headers: respHeaders });
 }
+
+// ============================================
+// /api/calendar — Trading Economics Economic Calendar
+//
+// Proxies the Trading Economics calendar API server-side so:
+//   1. API key stays secret (not in client JS)
+//   2. No CORS issues (TE API doesn't allow browser origins)
+//
+// Secret: TRADING_ECONOMICS_KEY (set via `npx wrangler secret put TRADING_ECONOMICS_KEY`)
+//
+// Returns: { events: [...], count: N, te_key_set: bool }
+// If no key: returns { events: [], count: 0, te_key_set: false }
+// ============================================
+
+var CALENDAR_CACHE_TTL = 600;  // 10 minutes
+var CALENDAR_CACHE_KEY = 'https://treasury-econcal-v1.cache/api/calendar';
+
+async function handleCalendar(env) {
+  var teKey = env.TRADING_ECONOMICS_KEY || '';
+
+  // No key — return clean empty response (frontend shows fallback state)
+  if (!teKey) {
+    return jsonResp({ events: [], count: 0, te_key_set: false });
+  }
+
+  // ── Check Cloudflare edge cache ────────────────────────────────
+  var cache = caches.default;
+  try {
+    var cacheReq = new Request(CALENDAR_CACHE_KEY);
+    var hit = await cache.match(cacheReq);
+    if (hit) {
+      var body = await hit.text();
+      var headers = Object.assign({}, CORS, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=' + CALENDAR_CACHE_TTL,
+        'X-Cache': 'HIT',
+      });
+      return new Response(body, { status: 200, headers: headers });
+    }
+  } catch (e) { /* cache API unavailable — fall through */ }
+
+  // ── Fetch from Trading Economics ───────────────────────────────
+  try {
+    var today = new Date().toISOString().split('T')[0];
+    // Get 3 days of events (today + next 2 days) for a useful forward view
+    var endDate = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+    var teUrl = 'https://api.tradingeconomics.com/calendar/country/united%20states/'
+      + today + '/' + endDate + '?c=' + teKey + '&f=json';
+
+    console.log('[calendar] fetching TE API: ' + today + ' to ' + endDate);
+    var resp = await fetch(teUrl, {
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!resp.ok) {
+      console.error('[calendar] TE API HTTP ' + resp.status);
+      return jsonResp({ events: [], count: 0, te_key_set: true, error: 'te_http_' + resp.status });
+    }
+
+    var raw = await resp.json();
+    if (!Array.isArray(raw)) {
+      console.error('[calendar] TE API unexpected response shape');
+      return jsonResp({ events: [], count: 0, te_key_set: true, error: 'bad_shape' });
+    }
+
+    // Filter to medium/high importance (2 = medium, 3 = high)
+    var filtered = raw.filter(function(e) {
+      return (e.Importance || 0) >= 2;
+    });
+
+    // Sort by date ascending
+    filtered.sort(function(a, b) {
+      return new Date(a.Date || 0) - new Date(b.Date || 0);
+    });
+
+    console.log('[calendar] TE returned ' + raw.length + ' raw → ' + filtered.length + ' filtered (importance ≥ 2)');
+
+    var payload = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      events: filtered,
+      count: filtered.length,
+      te_key_set: true,
+    });
+
+    var respHeaders = Object.assign({}, CORS, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=' + CALENDAR_CACHE_TTL,
+      'X-Cache': 'MISS',
+    });
+
+    // Store in edge cache
+    try {
+      var cacheableResp = new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + CALENDAR_CACHE_TTL },
+      });
+      await cache.put(new Request(CALENDAR_CACHE_KEY), cacheableResp);
+    } catch (e) { /* cache write failed — non-fatal */ }
+
+    return new Response(payload, { status: 200, headers: respHeaders });
+
+  } catch (e) {
+    console.error('[calendar] exception: ' + e.message);
+    return jsonResp({ events: [], count: 0, te_key_set: true, error: e.message }, 500);
+  }
+}
+
 
 // ============================================
 // YAHOO FINANCE  (original -- untouched)
