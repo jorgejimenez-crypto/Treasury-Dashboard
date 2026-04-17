@@ -748,6 +748,34 @@ function initFxConverter() {
     });
   }
 
+  // === Quick Treasury Pair Buttons ===
+  var qpBtns = document.querySelectorAll('.fx-qp');
+  qpBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      baseIn.value  = btn.getAttribute('data-base');
+      quoteIn.value = btn.getAttribute('data-quote');
+      qpBtns.forEach(function(b) { b.classList.remove('fx-qp-active'); });
+      btn.classList.add('fx-qp-active');
+      computeFx();
+    });
+  });
+
+  // === Copy Button ===
+  var copyBtn = document.getElementById('fx-copy-btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function() {
+      var resEl = document.getElementById('fx-result');
+      if (!resEl || !resEl.textContent) return;
+      var text = resEl.textContent.replace(/[^\d.,\-]/g, '');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function() { copyBtn.innerHTML = '&#x2398; Copy'; }, 1500);
+        });
+      }
+    });
+  }
+
   computeFx();
 }
 
@@ -854,15 +882,31 @@ function computeFx() {
   if (fwdEl) fwdEl.textContent = '1 '+base+' = '+cross.toFixed(dec)+' '+quote;
   if (revEl) revEl.textContent = '1 '+quote+' = '+(1/cross).toFixed(decR)+' '+base;
 
-  // Trend vs prior close
-  if (trendEl) {
-    var bP=getToUSDPrior(base), qP=getToUSDPrior(quote);
-    if (bP&&qP) {
-      var priorCross = bP/qP;
-      var chg = ((cross-priorCross)/priorCross)*100;
-      trendEl.textContent = (chg>=0?'+':'')+chg.toFixed(2)+'% vs prev';
-      trendEl.className = 'fx-trend fx-trend-'+(chg>0?'up':chg<0?'dn':'flat');
-    } else { trendEl.textContent=''; trendEl.className='fx-trend'; }
+  // Trend vs prior close — pips + % change
+  var changeEl = document.getElementById('fx-result-change');
+  if (trendEl || changeEl) {
+    var bP = getToUSDPrior(base), qP = getToUSDPrior(quote);
+    if (bP && qP) {
+      var priorCross = bP / qP;
+      var chg = ((cross - priorCross) / priorCross) * 100;
+      var pipMultiplier = (quote === 'JPY' || base === 'JPY') ? 100 : 10000;
+      var pips = Math.round((cross - priorCross) * pipMultiplier);
+      var dir = chg > 0 ? 'up' : chg < 0 ? 'dn' : 'flat';
+      var arrow = chg > 0 ? '&#x25B2;' : chg < 0 ? '&#x25BC;' : '';
+
+      if (trendEl) {
+        trendEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+        trendEl.className = 'fx-trend fx-trend-' + dir;
+      }
+      if (changeEl) {
+        changeEl.innerHTML = '<span class="fx-chg-arrow fx-chg-' + dir + '">' + arrow + '</span>'
+          + '<span class="fx-chg-pct fx-chg-' + dir + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span>'
+          + '<span class="fx-chg-pips">' + (pips >= 0 ? '+' : '') + pips + ' pips vs yesterday</span>';
+      }
+    } else {
+      if (trendEl) { trendEl.textContent = ''; trendEl.className = 'fx-trend'; }
+      if (changeEl) changeEl.innerHTML = '';
+    }
   }
 }
 

@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260417e">
+  <link rel="stylesheet" href="style.css?v=20260417f">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -119,6 +119,7 @@
       <div class="funding-grid" id="funding-grid"></div>
     </section>
 
+    <!-- === FX CONVERTER – TREASURY MODE === -->
     <section class="desk-section dash-cell" id="sec-fx">
       <div class="section-hd">
         <div class="section-hd-left">
@@ -131,6 +132,18 @@
         </div>
       </div>
       <div class="fx-body">
+        <!-- Quick Treasury Pair Buttons -->
+        <div class="fx-quick-pairs" id="fx-quick-pairs">
+          <button class="fx-qp" data-base="USD" data-quote="EUR">USD/EUR</button>
+          <button class="fx-qp" data-base="USD" data-quote="GBP">USD/GBP</button>
+          <button class="fx-qp" data-base="USD" data-quote="JPY">USD/JPY</button>
+          <button class="fx-qp" data-base="EUR" data-quote="GBP">EUR/GBP</button>
+          <button class="fx-qp" data-base="USD" data-quote="CNH">USD/CNY</button>
+          <button class="fx-qp" data-base="GBP" data-quote="USD">GBP/USD</button>
+          <button class="fx-qp" data-base="USD" data-quote="CHF">USD/CHF</button>
+          <button class="fx-qp" data-base="EUR" data-quote="USD">EUR/USD</button>
+        </div>
+        <!-- Amount Presets -->
         <div class="fx-preset-row" id="fx-row-1">
           <button class="fx-preset" data-amount="250000">250K</button>
           <button class="fx-preset" data-amount="500000">500K</button>
@@ -140,8 +153,11 @@
         <div class="fx-preset-row" id="fx-row-2">
           <button class="fx-preset" data-amount="5000000">5M</button>
           <button class="fx-preset" data-amount="10000000">10M</button>
+          <button class="fx-preset" data-amount="25000000">25M</button>
+          <button class="fx-preset" data-amount="50000000">50M</button>
           <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
         </div>
+        <!-- Currency Inputs -->
         <div class="fx-inputs">
           <div class="fx-amount-wrap">
             <label class="fx-label">Amount</label>
@@ -169,8 +185,13 @@
             </div>
           </div>
         </div>
+        <!-- Result Panel -->
         <div class="fx-result-panel">
-          <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
+          <div class="fx-result-top">
+            <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
+            <button class="fx-copy-btn" id="fx-copy-btn" title="Copy amount">&#x2398; Copy</button>
+          </div>
+          <div class="fx-result-change" id="fx-result-change"></div>
           <div class="fx-result-rates">
             <span class="fx-rate-fwd" id="fx-rate-line"></span>
             <span class="fx-rate-rev" id="fx-reverse-rate"></span>
@@ -257,6 +278,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260417e"></script>
+<script src="app.js?v=20260417f"></script>
 </body>
 </html>
