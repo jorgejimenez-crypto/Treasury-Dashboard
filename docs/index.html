@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Desk</title>
-  <link rel="stylesheet" href="style.css?v=20260417d">
+  <link rel="stylesheet" href="style.css?v=20260417e">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -48,7 +48,6 @@
 <div id="alert-bar" role="status" aria-live="polite"></div>
 <div id="risk-pills" class="risk-pills" aria-label="Risk summary"></div>
 <div id="rate-alerts" class="rate-alerts" role="status" aria-live="polite"></div>
-<div id="econ-snapshot-bar" class="econ-snapshot-bar" role="status" aria-live="polite" style="display:none"></div>
 
 <div id="setup-banner" class="setup-banner" style="display:none">
   Worker URL not configured — edit <code>WORKER_URL</code> in <code>app.js</code>.
@@ -87,19 +86,19 @@
       <div class="chart-legend" id="chart-legend"></div>
     </section>
 
-    <!-- === ECONOMIC CALENDAR === -->
+    <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
     <section class="desk-section dash-cell" id="sec-econ-calendar">
       <div class="section-hd">
         <div class="section-hd-left">
           <h2 class="section-title">Economic Calendar</h2>
-          <span class="section-desc">US &middot; Medium / High Importance</span>
+          <span class="section-desc">US &middot; High Importance &middot; Live</span>
         </div>
         <div class="section-hd-right">
-          <span class="data-source" id="econ-cal-source">Trading Economics</span>
+          <span class="data-source">TradingView</span>
         </div>
       </div>
-      <div class="econ-cal-body" id="econ-cal-body">
-        <div class="econ-cal-empty">Loading&hellip;</div>
+      <div class="tv-cal-body" id="tv-cal-body">
+        <!-- TradingView widget injected by JS on init -->
       </div>
     </section>
   </div>
@@ -258,6 +257,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260417d"></script>
+<script src="app.js?v=20260417e"></script>
 </body>
 </html>

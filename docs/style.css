@@ -339,7 +339,7 @@ body {
 }
 /* Content areas fill remaining height after section-hd */
 .dash-cell .yields-chart-wrap,
-.dash-cell .econ-cal-body,
+.dash-cell .tv-cal-body,
 .dash-cell .funding-grid,
 .dash-cell .fx-body,
 .dash-cell .catalyst-frame-wrap,
@@ -453,155 +453,23 @@ body {
   border-radius: 3px; flex-shrink: 0;
 }
 
-/* === ECONOMIC CALENDAR ========================================= */
+/* === ECONOMIC CALENDAR — TradingView Widget ==================== */
 
-.econ-cal-body {
+.tv-cal-body {
   flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  min-height: 400px;
+  position: relative;
 }
-.econ-cal-scroll {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-md) transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.econ-cal-scroll::-webkit-scrollbar       { width: 4px; }
-.econ-cal-scroll::-webkit-scrollbar-track { background: transparent; }
-.econ-cal-scroll::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 2px; }
-
-/* Table */
-.econ-cal-table {
+.tv-cal-body .tradingview-widget-container {
+  height: 100%;
   width: 100%;
-  border-collapse: collapse;
-  font-family: var(--mono);
-  font-size: 11px;
 }
-.econ-cal-table thead th {
-  position: sticky; top: 0; z-index: 1;
-  background: var(--bg-inset);
-  padding: 7px 8px;
-  font-size: 8.5px;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+.tv-cal-body .tradingview-widget-container__widget {
+  height: 100%;
+  width: 100%;
 }
-.ec-th-time  { width: 58px; }
-.ec-th-ctry  { width: 32px; }
-.ec-th-event { }
-.ec-th-imp   { width: 38px; text-align: center !important; }
-.ec-th-val   { width: 48px; text-align: right !important; }
-
-.econ-cal-table tbody tr {
-  transition: background 0.12s;
-  border-bottom: 1px solid var(--border);
-}
-.econ-cal-table tbody tr:last-child { border-bottom: none; }
-.econ-cal-table tbody tr:hover { background: var(--bg-hover); }
-.econ-cal-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.012); }
-
-.ec-time {
-  padding: 7px 6px;
-  font-size: 10px;
-  color: var(--text-3);
-  white-space: nowrap;
-}
-.ec-ctry {
-  padding: 7px 4px;
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.ec-event {
-  padding: 7px 4px;
-  color: var(--text);
-  font-weight: 500;
-  font-size: 10.5px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ec-imp {
-  padding: 7px 4px;
-  text-align: center;
-  font-size: 8px;
-  letter-spacing: 1px;
-}
-.ec-imp-high { color: var(--red); }
-.ec-imp-med  { color: var(--amber); }
-
-.ec-val {
-  padding: 7px 8px;
-  text-align: right;
-  font-size: 11px;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-.ec-val-fcst { color: var(--text-3); }
-.ec-val-prev { color: var(--text-3); }
-
-.ec-row-past { opacity: 0.5; }
-
-/* Empty / unconfigured state */
-.econ-cal-empty {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--text-3);
-  font-family: var(--mono);
-}
-.econ-cal-empty-icon { font-size: 28px; opacity: 0.4; }
-.econ-cal-empty-msg { font-size: 12px; }
-.econ-cal-key-hint {
-  font-size: 11px;
-  line-height: 1.6;
-}
-.econ-cal-key-hint code {
-  background: var(--bg-hover);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  color: var(--blue-lt);
-}
-
-/* === SNAPSHOT ALERT BAR — "just released" econ data ============ */
-.econ-snapshot-bar {
-  max-width: var(--max-w); margin: 0 auto;
-  padding: 4px 32px;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.snap-alert {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-radius: var(--radius-sm);
-  font-size: 11px; font-family: var(--mono);
-  background: var(--blue-bg); border: 1px solid var(--blue-border); color: var(--blue-lt);
-}
-.snap-alert.snap-beat { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
-.snap-alert.snap-miss { background: var(--red-bg);   border-color: var(--red-border);   color: var(--red); }
-.snap-badge {
-  font-size: 8px; font-weight: 800; letter-spacing: 0.8px;
-  padding: 2px 6px; border-radius: 3px;
-  background: rgba(255,255,255,0.08); white-space: nowrap;
-}
-.snap-event { font-weight: 600; }
-.snap-actual { font-weight: 700; font-size: 12px; }
-.snap-vs { font-size: 10px; color: var(--text-3); }
+/* Hide TradingView branding link at bottom */
+.tv-cal-body .tradingview-widget-copyright { display: none !important; }
 
 /* FX section — remove max-width cap */
 #sec-fx .fx-body { max-width: 100%; }

@@ -504,165 +504,44 @@ function renderYieldsChart(data) {
 }
 
 
-/* === ECONOMIC CALENDAR ==========================================
- * Fetches upcoming US economic events via the Cloudflare Worker proxy
- * at /api/calendar. The worker calls Trading Economics API server-side
- * (key stored as Wrangler secret TRADING_ECONOMICS_KEY).
- *
- * If no TE key is configured on the worker, it returns
- * { events: [], te_key_set: false } and we show a fallback state.
+/* === ECONOMIC CALENDAR — TradingView Embed Widget ================
+ * Injects the TradingView Economic Calendar widget into #tv-cal-body.
+ * No API key required — free embed, auto-updating, dark theme.
+ * Script injected once; guarded against duplicate injection.
  * ================================================================ */
 
-var ECON_CAL_REFRESH_MS = 10 * 60 * 1000;  // 10 min (worker caches 10 min)
-var econCalTimer = null;
+function initEconCalendarWidget() {
+  var container = document.getElementById('tv-cal-body');
+  if (!container) return;
+  // Guard: inject only once
+  if (container.querySelector('script')) return;
 
-function fetchEconCalendar() {
-  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
+  var wrapper = document.createElement('div');
+  wrapper.className = 'tradingview-widget-container';
+  wrapper.style.height = '100%';
 
-  fetch(WORKER_URL + '/api/calendar')
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(data) {
-      var events = data.events || [];
-      var keySet = data.te_key_set;
-      cacheData('econcal', { events: events, te_key_set: keySet });
-      renderEconCalendar(events, keySet);
-    })
-    .catch(function(e) {
-      console.error('[econ-cal] fetch failed:', e.message);
-      var cached = getCachedData('econcal', 3600000);
-      if (cached) renderEconCalendar(cached.events || [], cached.te_key_set);
-      else renderEconCalendar([], false);
-    });
-}
+  var target = document.createElement('div');
+  target.className = 'tradingview-widget-container__widget';
+  wrapper.appendChild(target);
 
-function renderEconCalendar(events, teKeySet) {
-  var body = document.getElementById('econ-cal-body');
-  if (!body) return;
-
-  // ── Empty / unconfigured state ────────────────────────────────
-  if (!events || !Array.isArray(events) || !events.length) {
-    var msg = !teKeySet
-      ? '<div class="econ-cal-key-hint">Run <code>npx wrangler secret put TRADING_ECONOMICS_KEY</code><br>in /proxy to enable live events</div>'
-      : '<div class="econ-cal-empty-msg">No upcoming US events</div>';
-    body.innerHTML = '<div class="econ-cal-empty">'
-      + '<div class="econ-cal-empty-icon">&#x1F4C5;</div>'
-      + msg + '</div>';
-    return;
-  }
-
-  // ── Filter: upcoming, US, medium/high importance ──────────────
-  var now = new Date();
-  var filtered = events.filter(function(e) {
-    if (!e.Date) return false;
-    var importance = e.Importance || 0;
-    return importance >= 2;
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-events.js';
+  script.async = true;
+  script.textContent = JSON.stringify({
+    "colorTheme": "dark",
+    "isTransparent": true,
+    "width": "100%",
+    "height": "100%",
+    "locale": "en",
+    "importanceFilter": "0,1",
+    "countryFilter": "us"
   });
+  wrapper.appendChild(script);
 
-  // Sort by date ascending, limit to 8
-  filtered.sort(function(a, b) { return new Date(a.Date) - new Date(b.Date); });
-  filtered = filtered.slice(0, 8);
-
-  if (!filtered.length) {
-    body.innerHTML = '<div class="econ-cal-empty"><div class="econ-cal-empty-icon">&#x2713;</div>'
-      + '<div class="econ-cal-empty-msg">No high-impact events today</div></div>';
-    return;
-  }
-
-  // ── Render table ──────────────────────────────────────────────
-  var html = '<div class="econ-cal-scroll"><table class="econ-cal-table">'
-    + '<thead><tr>'
-    + '<th class="ec-th-time">Time</th>'
-    + '<th class="ec-th-ctry">Ctry</th>'
-    + '<th class="ec-th-event">Event</th>'
-    + '<th class="ec-th-imp">Imp.</th>'
-    + '<th class="ec-th-val">Actual</th>'
-    + '<th class="ec-th-val">Fcst</th>'
-    + '<th class="ec-th-val">Prev</th>'
-    + '</tr></thead><tbody>';
-
-  filtered.forEach(function(e) {
-    var d = new Date(e.Date);
-    var isPast = d < now;
-    var time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    var impNum = e.Importance || 0;
-    var impCls = impNum >= 3 ? 'ec-imp-high' : 'ec-imp-med';
-    var impDots = impNum >= 3 ? '&#x25CF;&#x25CF;&#x25CF;' : '&#x25CF;&#x25CF;&#x25CB;';
-    var rowCls = isPast ? 'ec-row-past' : '';
-
-    var actual   = e.Actual   != null && e.Actual   !== '' ? e.Actual   : '—';
-    var forecast = e.Forecast != null && e.Forecast !== '' ? e.Forecast : '—';
-    var previous = e.Previous != null && e.Previous !== '' ? e.Previous : '—';
-    var country  = (e.Country || 'US').replace('United States', 'US');
-
-    html += '<tr class="' + rowCls + '">'
-      + '<td class="ec-time">' + time + '</td>'
-      + '<td class="ec-ctry">' + country + '</td>'
-      + '<td class="ec-event" title="' + (e.Event || '') + '">' + (e.Event || e.Category || '—') + '</td>'
-      + '<td class="ec-imp ' + impCls + '">' + impDots + '</td>'
-      + '<td class="ec-val">' + actual + '</td>'
-      + '<td class="ec-val ec-val-fcst">' + forecast + '</td>'
-      + '<td class="ec-val ec-val-prev">' + previous + '</td>'
-      + '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-
-  // Source + count
-  var src = document.getElementById('econ-cal-source');
-  if (src) src.textContent = filtered.length + ' events · Trading Economics';
-
-  body.innerHTML = html;
-}
-
-
-/* === CALENDAR SNAPSHOT — Real-time "just released" alerts ========
- * Polls /api/calendar-snapshot every 2 min for recently released
- * US economic data. Renders as alert items in #econ-snapshot-bar,
- * NOT as a table. This is signal, not data.
- * ================================================================ */
-
-var SNAPSHOT_POLL_MS = 2 * 60 * 1000;  // 2 min
-var snapshotTimer = null;
-
-function fetchCalendarSnapshot() {
-  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
-  fetch(WORKER_URL + '/api/calendar-snapshot')
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(data) {
-      if (data.releases && data.releases.length) renderSnapshotAlerts(data.releases);
-      else clearSnapshotAlerts();
-    })
-    .catch(function() { /* silent — snapshot is optional signal */ });
-}
-
-function renderSnapshotAlerts(releases) {
-  var bar = document.getElementById('econ-snapshot-bar');
-  if (!bar) return;
-  if (!releases.length) { clearSnapshotAlerts(); return; }
-
-  bar.style.display = 'block';
-  bar.innerHTML = releases.map(function(e) {
-    var event = e.Event || e.Category || 'Economic Release';
-    var actual = e.Actual != null ? e.Actual : '—';
-    var forecast = e.Forecast != null ? e.Forecast : '—';
-    var beat = e.Actual != null && e.Forecast != null && e.Actual !== '' && e.Forecast !== '';
-    var beatCls = '';
-    if (beat) {
-      var diff = parseFloat(e.Actual) - parseFloat(e.Forecast);
-      if (!isNaN(diff)) beatCls = diff > 0 ? 'snap-beat' : diff < 0 ? 'snap-miss' : '';
-    }
-    return '<div class="snap-alert ' + beatCls + '">'
-      + '<span class="snap-badge">JUST RELEASED</span>'
-      + '<span class="snap-event">' + event + '</span>'
-      + '<span class="snap-actual">' + actual + '</span>'
-      + (forecast !== '—' ? '<span class="snap-vs">vs ' + forecast + ' fcst</span>' : '')
-      + '</div>';
-  }).join('');
-}
-
-function clearSnapshotAlerts() {
-  var bar = document.getElementById('econ-snapshot-bar');
-  if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+  container.innerHTML = '';
+  container.appendChild(wrapper);
+  console.log('[econ-cal] TradingView widget injected');
 }
 
 
@@ -1377,12 +1256,9 @@ if (cached) { try { renderDashboard(cached); } catch(e) {} }
 
 fetchData();
 fetchNews();
-fetchEconCalendar();
-fetchCalendarSnapshot();
-refreshTimer  = setInterval(fetchData, REFRESH_MS);
-newsTimer     = setInterval(fetchNews, NEWS_REFRESH_MS);
-econCalTimer  = setInterval(fetchEconCalendar, ECON_CAL_REFRESH_MS);
-snapshotTimer = setInterval(fetchCalendarSnapshot, SNAPSHOT_POLL_MS);
+initEconCalendarWidget();
+refreshTimer = setInterval(fetchData, REFRESH_MS);
+newsTimer    = setInterval(fetchNews, NEWS_REFRESH_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
