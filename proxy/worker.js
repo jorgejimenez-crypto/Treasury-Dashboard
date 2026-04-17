@@ -177,10 +177,11 @@ export default {
       if (url.pathname === '/api/market-data') return await handleMarketData(env);
       if (url.pathname === '/api/ticker')      return await handleTicker();
       if (url.pathname === '/api/news')        return await handleNews(env);
-      if (url.pathname === '/api/calendar')    return await handleCalendar(env);
+      if (url.pathname === '/api/calendar')          return await handleCalendar(env);
+      if (url.pathname === '/api/calendar-snapshot') return await handleCalendarSnapshot(env);
       if (url.pathname === '/') return jsonResp({
         status: 'ok',
-        endpoints: ['/api/market-data', '/api/ticker', '/api/news', '/api/calendar'],
+        endpoints: ['/api/market-data', '/api/ticker', '/api/news', '/api/calendar', '/api/calendar-snapshot'],
         fred_key_set: !!(env.FRED_API_KEY),
         te_key_set: !!(env.TRADING_ECONOMICS_KEY),
       });
@@ -531,6 +532,88 @@ async function handleCalendar(env) {
   } catch (e) {
     console.error('[calendar] exception: ' + e.message);
     return jsonResp({ events: [], count: 0, te_key_set: true, error: e.message }, 500);
+  }
+}
+
+
+// ============================================
+// /api/calendar-snapshot — Recently released economic data
+//
+// Uses TE /calendar/updates endpoint for "just released" events.
+// Short cache (2 min) since this is real-time signal data.
+// Frontend uses this ONLY for alert-banner items, not a table.
+// ============================================
+
+var SNAPSHOT_CACHE_TTL = 120;  // 2 minutes
+var SNAPSHOT_CACHE_KEY = 'https://treasury-econcal-snap-v1.cache/api/calendar-snapshot';
+
+async function handleCalendarSnapshot(env) {
+  var teKey = env.TRADING_ECONOMICS_KEY || '';
+  if (!teKey) {
+    return jsonResp({ releases: [], count: 0, te_key_set: false });
+  }
+
+  // ── Check edge cache ──────────────────────────────────────────
+  var cache = caches.default;
+  try {
+    var hit = await cache.match(new Request(SNAPSHOT_CACHE_KEY));
+    if (hit) {
+      var body = await hit.text();
+      return new Response(body, { status: 200, headers: Object.assign({}, CORS, {
+        'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + SNAPSHOT_CACHE_TTL, 'X-Cache': 'HIT',
+      })});
+    }
+  } catch (e) {}
+
+  // ── Fetch recent updates from TE ──────────────────────────────
+  try {
+    var teUrl = 'https://api.tradingeconomics.com/calendar/updates?c=' + teKey + '&f=json';
+    var resp = await fetch(teUrl, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) {
+      return jsonResp({ releases: [], count: 0, te_key_set: true, error: 'te_http_' + resp.status });
+    }
+
+    var raw = await resp.json();
+    if (!Array.isArray(raw)) raw = [];
+
+    // Filter: US only, importance >= 2, has Actual value, released within last 60 min
+    var cutoff = Date.now() - 60 * 60 * 1000;
+    var releases = raw.filter(function(e) {
+      if (!e.Country || e.Country !== 'United States') return false;
+      if ((e.Importance || 0) < 2) return false;
+      if (e.Actual == null || e.Actual === '') return false;
+      var d = new Date(e.Date || 0);
+      return !isNaN(d.getTime()) && d.getTime() >= cutoff;
+    });
+
+    releases.sort(function(a, b) { return new Date(b.Date) - new Date(a.Date); });
+    releases = releases.slice(0, 5);
+
+    console.log('[snapshot] TE updates: ' + raw.length + ' raw → ' + releases.length + ' US releases (last 60 min)');
+
+    var payload = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      releases: releases,
+      count: releases.length,
+      te_key_set: true,
+    });
+
+    var headers = Object.assign({}, CORS, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=' + SNAPSHOT_CACHE_TTL,
+      'X-Cache': 'MISS',
+    });
+
+    try {
+      await cache.put(new Request(SNAPSHOT_CACHE_KEY), new Response(payload, {
+        status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + SNAPSHOT_CACHE_TTL },
+      }));
+    } catch (e) {}
+
+    return new Response(payload, { status: 200, headers: headers });
+  } catch (e) {
+    console.error('[snapshot] exception: ' + e.message);
+    return jsonResp({ releases: [], count: 0, te_key_set: true, error: e.message }, 500);
   }
 }
 

@@ -572,6 +572,7 @@ function renderEconCalendar(events, teKeySet) {
   var html = '<div class="econ-cal-scroll"><table class="econ-cal-table">'
     + '<thead><tr>'
     + '<th class="ec-th-time">Time</th>'
+    + '<th class="ec-th-ctry">Ctry</th>'
     + '<th class="ec-th-event">Event</th>'
     + '<th class="ec-th-imp">Imp.</th>'
     + '<th class="ec-th-val">Actual</th>'
@@ -588,13 +589,14 @@ function renderEconCalendar(events, teKeySet) {
     var impDots = impNum >= 3 ? '&#x25CF;&#x25CF;&#x25CF;' : '&#x25CF;&#x25CF;&#x25CB;';
     var rowCls = isPast ? 'ec-row-past' : '';
 
-    // Highlight actual vs forecast
-    var actual = e.Actual != null && e.Actual !== '' ? e.Actual : '—';
+    var actual   = e.Actual   != null && e.Actual   !== '' ? e.Actual   : '—';
     var forecast = e.Forecast != null && e.Forecast !== '' ? e.Forecast : '—';
     var previous = e.Previous != null && e.Previous !== '' ? e.Previous : '—';
+    var country  = (e.Country || 'US').replace('United States', 'US');
 
     html += '<tr class="' + rowCls + '">'
       + '<td class="ec-time">' + time + '</td>'
+      + '<td class="ec-ctry">' + country + '</td>'
       + '<td class="ec-event" title="' + (e.Event || '') + '">' + (e.Event || e.Category || '—') + '</td>'
       + '<td class="ec-imp ' + impCls + '">' + impDots + '</td>'
       + '<td class="ec-val">' + actual + '</td>'
@@ -610,6 +612,57 @@ function renderEconCalendar(events, teKeySet) {
   if (src) src.textContent = filtered.length + ' events · Trading Economics';
 
   body.innerHTML = html;
+}
+
+
+/* === CALENDAR SNAPSHOT — Real-time "just released" alerts ========
+ * Polls /api/calendar-snapshot every 2 min for recently released
+ * US economic data. Renders as alert items in #econ-snapshot-bar,
+ * NOT as a table. This is signal, not data.
+ * ================================================================ */
+
+var SNAPSHOT_POLL_MS = 2 * 60 * 1000;  // 2 min
+var snapshotTimer = null;
+
+function fetchCalendarSnapshot() {
+  if (WORKER_URL.indexOf('YOUR_') !== -1) return;
+  fetch(WORKER_URL + '/api/calendar-snapshot')
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      if (data.releases && data.releases.length) renderSnapshotAlerts(data.releases);
+      else clearSnapshotAlerts();
+    })
+    .catch(function() { /* silent — snapshot is optional signal */ });
+}
+
+function renderSnapshotAlerts(releases) {
+  var bar = document.getElementById('econ-snapshot-bar');
+  if (!bar) return;
+  if (!releases.length) { clearSnapshotAlerts(); return; }
+
+  bar.style.display = 'block';
+  bar.innerHTML = releases.map(function(e) {
+    var event = e.Event || e.Category || 'Economic Release';
+    var actual = e.Actual != null ? e.Actual : '—';
+    var forecast = e.Forecast != null ? e.Forecast : '—';
+    var beat = e.Actual != null && e.Forecast != null && e.Actual !== '' && e.Forecast !== '';
+    var beatCls = '';
+    if (beat) {
+      var diff = parseFloat(e.Actual) - parseFloat(e.Forecast);
+      if (!isNaN(diff)) beatCls = diff > 0 ? 'snap-beat' : diff < 0 ? 'snap-miss' : '';
+    }
+    return '<div class="snap-alert ' + beatCls + '">'
+      + '<span class="snap-badge">JUST RELEASED</span>'
+      + '<span class="snap-event">' + event + '</span>'
+      + '<span class="snap-actual">' + actual + '</span>'
+      + (forecast !== '—' ? '<span class="snap-vs">vs ' + forecast + ' fcst</span>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function clearSnapshotAlerts() {
+  var bar = document.getElementById('econ-snapshot-bar');
+  if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
 }
 
 
@@ -1325,9 +1378,11 @@ if (cached) { try { renderDashboard(cached); } catch(e) {} }
 fetchData();
 fetchNews();
 fetchEconCalendar();
+fetchCalendarSnapshot();
 refreshTimer  = setInterval(fetchData, REFRESH_MS);
 newsTimer     = setInterval(fetchNews, NEWS_REFRESH_MS);
 econCalTimer  = setInterval(fetchEconCalendar, ECON_CAL_REFRESH_MS);
+snapshotTimer = setInterval(fetchCalendarSnapshot, SNAPSHOT_POLL_MS);
 tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
