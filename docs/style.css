@@ -157,24 +157,35 @@ body {
   flex-shrink: 0;
 }
 .brand-mark {
-  font-size: 22px;
+  font-size: 24px;
   color: var(--blue);
   line-height: 1;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 .brand-text h1 {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
   line-height: 1.1;
 }
 .brand-sub {
   font-size: 10px;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 1.1px;
+  letter-spacing: 1px;
   font-weight: 500;
+}
+.brand-beta {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--blue-lt);
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
 }
 
 /* Status cluster */
