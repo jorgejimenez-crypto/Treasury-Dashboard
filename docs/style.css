@@ -352,7 +352,7 @@ body {
 .dash-cell .yields-chart-wrap,
 .dash-cell .tv-cal-body,
 .dash-cell .funding-grid,
-.dash-cell .fx-body,
+.dash-cell .fx-split,
 .dash-cell .catalyst-frame-wrap,
 .dash-cell .news-feed {
   flex: 1 1 auto;
@@ -482,8 +482,6 @@ body {
 /* Hide TradingView branding link at bottom */
 .tv-cal-body .tradingview-widget-copyright { display: none !important; }
 
-/* FX section — remove max-width cap */
-#sec-fx .fx-body { max-width: 100%; }
 
 /* === FUNDING in 50% column — 3-col grid ====================== */
 .dash-cell .funding-grid { grid-template-columns: repeat(3, 1fr); }
@@ -575,7 +573,107 @@ body {
 .fund-date  { font-size: 10px; color: var(--text-3); font-family: var(--mono); margin-top: 4px; }
 
 
-/* === SECTION 3 — FX CONVERTER – TREASURY MODE ============= */
+/* === SECTION 3 — FX CONVERTER – SPLIT LAYOUT =============== */
+
+/* Two-column split: Cross Rates (left) + Converter (right) */
+.fx-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+}
+@media (max-width: 960px) {
+  .fx-split { grid-template-columns: 1fr; }
+}
+
+/* Panel sub-titles */
+.fx-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.fx-panel-sub {
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: 0.4px;
+}
+
+/* === CROSS RATES TABLE === */
+.fx-cross-panel { display: flex; flex-direction: column; }
+.fx-cross-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.fx-cross-table thead th {
+  padding: 5px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.fx-cross-table thead th:nth-child(2),
+.fx-cross-table thead th:nth-child(3) { text-align: right; }
+.fx-cross-table tbody tr {
+  border-bottom: 1px solid rgba(30,45,64,0.4);
+  transition: background 0.1s;
+}
+.fx-cross-table tbody tr:hover { background: var(--bg-hover); }
+.fx-cross-table tbody tr:last-child { border-bottom: none; }
+
+.xr-ccy {
+  padding: 7px 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.xr-code {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 12px;
+}
+.xr-name {
+  font-size: 9px;
+  color: var(--text-3);
+  font-weight: 400;
+}
+.xr-rate {
+  padding: 7px 6px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+}
+.xr-chg {
+  padding: 7px 6px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.xr-up   { color: var(--green); }
+.xr-dn   { color: var(--red); }
+.xr-flat { color: var(--text-3); }
+.xr-arrow { font-size: 8px; margin-right: 2px; }
+.xr-pips {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+/* === CONVERTER PANEL (right side) === */
+.fx-conv-panel { display: flex; flex-direction: column; }
 
 /* Quick Treasury Pair Buttons */
 .fx-quick-pairs {
@@ -603,8 +701,8 @@ body {
 .fx-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-width: 720px;
+  gap: 8px;
+  max-width: none;
 }
 
 /* Preset rows */
@@ -734,8 +832,8 @@ body {
   gap: 12px;
 }
 .fx-result-main {
-  font-size: 28px; font-weight: 700; font-family: var(--mono);
-  color: var(--text); letter-spacing: -0.8px; line-height: 1;
+  font-size: 22px; font-weight: 700; font-family: var(--mono);
+  color: var(--text); letter-spacing: -0.5px; line-height: 1;
 }
 .fx-result-main.fx-flash { animation: fx-flash 0.4s ease-out; }
 @keyframes fx-flash { 0%{color:var(--blue-lt);} 100%{color:var(--text);} }

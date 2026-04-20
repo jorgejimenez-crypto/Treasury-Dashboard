@@ -701,6 +701,57 @@ function getToUSDPrior(ccy) {
   return FX_INVERTED[ccy] ? 1/d.prior : d.prior;
 }
 
+/* === LIVE CROSS RATES TABLE ====================================
+ * Renders EUR, GBP, JPY, AUD, CAD, CHF rates vs USD with daily change.
+ * Uses cachedYahoo data. Called from renderDashboard + tickerRefresh.
+ * ================================================================ */
+
+var CROSS_RATE_CCYS = ['EUR','GBP','JPY','AUD','CAD','CHF'];
+
+function renderCrossRates() {
+  var tbody = document.querySelector('#fx-cross-table tbody');
+  if (!tbody || !cachedYahoo) return;
+
+  var html = '';
+  CROSS_RATE_CCYS.forEach(function(ccy) {
+    var key = FX_YAHOO_MAP[ccy];
+    if (!key) return;
+    var d = cachedYahoo[key];
+    if (!d || d.current == null) return;
+
+    // Rate vs USD — show the natural market convention
+    var rate = d.current;
+    var prior = d.prior;
+    var isInv = FX_INVERTED[ccy];
+    // Display rate: for inverted pairs (USDJPY) show as-is; for direct (EURUSD) show as-is
+    var displayRate = rate;
+    var dec = (ccy === 'JPY') ? 2 : 4;
+
+    // Change calculation
+    var chgPct = null, pips = null, dir = 'flat';
+    if (prior != null && prior !== 0) {
+      chgPct = ((rate - prior) / prior) * 100;
+      var pipMult = (ccy === 'JPY') ? 100 : 10000;
+      pips = Math.round((rate - prior) * pipMult);
+      // For inverted pairs, positive pips = USD strengthening (show red for ccy)
+      // For direct pairs, positive pips = USD weakening (show green for ccy)
+      dir = chgPct > 0.005 ? 'up' : chgPct < -0.005 ? 'dn' : 'flat';
+    }
+
+    var arrow = dir === 'up' ? '&#x25B2;' : dir === 'dn' ? '&#x25BC;' : '';
+    var chgStr = chgPct != null ? (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%' : '—';
+    var pipStr = pips != null ? (pips >= 0 ? '+' : '') + pips + 'p' : '';
+
+    html += '<tr>'
+      + '<td class="xr-ccy"><span class="xr-code">' + ccy + '</span><span class="xr-name">' + (FX_NAMES[ccy] || '') + '</span></td>'
+      + '<td class="xr-rate">' + displayRate.toFixed(dec) + '</td>'
+      + '<td class="xr-chg xr-' + dir + '"><span class="xr-arrow">' + arrow + '</span>' + chgStr + '<span class="xr-pips">' + pipStr + '</span></td>'
+      + '</tr>';
+  });
+
+  tbody.innerHTML = html;
+}
+
 function initFxConverter() {
   var baseIn  = document.getElementById('fx-base');
   var quoteIn = document.getElementById('fx-quote');
@@ -1166,7 +1217,8 @@ function renderDashboard(data) {
   // Section 2: Funding & Liquidity
   renderFunding(data.nyfed, data.fred);
 
-  // Section 3: FX Converter
+  // Section 3: FX — Cross Rates + Converter
+  renderCrossRates();
   initFxConverter();
 
   // Market ticker (top strip)
@@ -1226,9 +1278,9 @@ function tickerRefresh() {
     .then(function(data){
       cachedYahoo   = Object.assign(cachedYahoo||{}, data.yahoo);
       tickerBackoff = isOpen() ? TICKER_REFRESH_MS : TICKER_REFRESH_SLOW;
-      // Update top ticker strip with fresh Yahoo prices
+      // Update top ticker strip + cross rates with fresh Yahoo prices
       renderTicker(cachedYahoo, cachedFred);
-      // Recompute FX if converter is visible
+      renderCrossRates();
       if (fxConverterReady) computeFx();
     })
     .catch(function(){ tickerBackoff = Math.min(tickerBackoff*1.5, 60000); })

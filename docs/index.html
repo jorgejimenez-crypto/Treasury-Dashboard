@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260420">
+  <link rel="stylesheet" href="style.css?v=20260420b">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -119,82 +119,95 @@
       <div class="funding-grid" id="funding-grid"></div>
     </section>
 
-    <!-- === FX CONVERTER – TREASURY MODE === -->
+    <!-- === FX CONVERTER – SPLIT LAYOUT === -->
     <section class="desk-section dash-cell" id="sec-fx">
       <div class="section-hd">
         <div class="section-hd-left">
-          <h2 class="section-title">FX Converter</h2>
-          <span class="section-desc">16 currencies &middot; Live cross-rates</span>
+          <h2 class="section-title">Foreign Exchange</h2>
+          <span class="section-desc">Live rates &middot; Converter &middot; 16 currencies</span>
         </div>
         <div class="section-hd-right">
           <span id="fx-rate-trend" class="fx-trend"></span>
           <span class="data-source">Yahoo &middot; 15-min</span>
         </div>
       </div>
-      <div class="fx-body">
-        <!-- Quick Treasury Pair Buttons -->
-        <div class="fx-quick-pairs" id="fx-quick-pairs">
-          <button class="fx-qp" data-base="USD" data-quote="EUR">USD/EUR</button>
-          <button class="fx-qp" data-base="USD" data-quote="GBP">USD/GBP</button>
-          <button class="fx-qp" data-base="USD" data-quote="JPY">USD/JPY</button>
-          <button class="fx-qp" data-base="EUR" data-quote="GBP">EUR/GBP</button>
-          <button class="fx-qp" data-base="USD" data-quote="CNH">USD/CNY</button>
-          <button class="fx-qp" data-base="GBP" data-quote="USD">GBP/USD</button>
-          <button class="fx-qp" data-base="USD" data-quote="CHF">USD/CHF</button>
-          <button class="fx-qp" data-base="EUR" data-quote="USD">EUR/USD</button>
+      <div class="fx-split">
+        <!-- LEFT: Live Cross Rates vs USD -->
+        <div class="fx-cross-panel">
+          <div class="fx-panel-title">Live Cross Rates <span class="fx-panel-sub">vs USD</span></div>
+          <table class="fx-cross-table" id="fx-cross-table">
+            <thead><tr>
+              <th>Ccy</th><th>Rate</th><th>Chg</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
-        <!-- Amount Presets -->
-        <div class="fx-preset-row" id="fx-row-1">
-          <button class="fx-preset" data-amount="250000">250K</button>
-          <button class="fx-preset" data-amount="500000">500K</button>
-          <button class="fx-preset" data-amount="750000">750K</button>
-          <button class="fx-preset fx-preset-active" data-amount="1000000">1M</button>
-        </div>
-        <div class="fx-preset-row" id="fx-row-2">
-          <button class="fx-preset" data-amount="5000000">5M</button>
-          <button class="fx-preset" data-amount="10000000">10M</button>
-          <button class="fx-preset" data-amount="25000000">25M</button>
-          <button class="fx-preset" data-amount="50000000">50M</button>
-          <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
-        </div>
-        <!-- Currency Inputs -->
-        <div class="fx-inputs">
-          <div class="fx-amount-wrap">
-            <label class="fx-label">Amount</label>
-            <div class="fx-amount-inner">
-              <input type="number" id="fx-amount" class="fx-amount"
-                     value="1000000" step="250000" autocomplete="off">
-              <span id="fx-base-badge" class="fx-base-badge">USD</span>
+        <!-- RIGHT: FX Converter -->
+        <div class="fx-conv-panel">
+          <div class="fx-panel-title">Converter</div>
+          <div class="fx-body">
+            <!-- Quick Pairs -->
+            <div class="fx-quick-pairs" id="fx-quick-pairs">
+              <button class="fx-qp" data-base="USD" data-quote="EUR">USD/EUR</button>
+              <button class="fx-qp" data-base="USD" data-quote="GBP">USD/GBP</button>
+              <button class="fx-qp" data-base="USD" data-quote="JPY">USD/JPY</button>
+              <button class="fx-qp" data-base="USD" data-quote="CHF">USD/CHF</button>
+              <button class="fx-qp" data-base="EUR" data-quote="USD">EUR/USD</button>
+              <button class="fx-qp" data-base="GBP" data-quote="USD">GBP/USD</button>
             </div>
-          </div>
-          <div class="fx-ccy-col">
-            <label class="fx-label">From</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-base" class="fx-ccy-input"
-                     value="USD" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-base-list" class="fx-dropdown"></div>
+            <!-- Presets -->
+            <div class="fx-preset-row" id="fx-row-1">
+              <button class="fx-preset" data-amount="250000">250K</button>
+              <button class="fx-preset" data-amount="500000">500K</button>
+              <button class="fx-preset" data-amount="1000000">1M</button>
+              <button class="fx-preset fx-preset-active" data-amount="5000000">5M</button>
             </div>
-          </div>
-          <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
-          <div class="fx-ccy-col">
-            <label class="fx-label">To</label>
-            <div class="fx-ccy-wrap">
-              <input type="text" id="fx-quote" class="fx-ccy-input"
-                     value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
-              <div id="fx-quote-list" class="fx-dropdown"></div>
+            <div class="fx-preset-row" id="fx-row-2">
+              <button class="fx-preset" data-amount="10000000">10M</button>
+              <button class="fx-preset" data-amount="25000000">25M</button>
+              <button class="fx-preset" data-amount="50000000">50M</button>
+              <button class="fx-preset fx-preset-custom" id="fx-custom-btn">Custom&thinsp;&#x270E;</button>
             </div>
-          </div>
-        </div>
-        <!-- Result Panel -->
-        <div class="fx-result-panel">
-          <div class="fx-result-top">
-            <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
-            <button class="fx-copy-btn" id="fx-copy-btn" title="Copy amount">&#x2398; Copy</button>
-          </div>
-          <div class="fx-result-change" id="fx-result-change"></div>
-          <div class="fx-result-rates">
-            <span class="fx-rate-fwd" id="fx-rate-line"></span>
-            <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+            <!-- Inputs -->
+            <div class="fx-inputs">
+              <div class="fx-amount-wrap">
+                <label class="fx-label">Amount</label>
+                <div class="fx-amount-inner">
+                  <input type="number" id="fx-amount" class="fx-amount"
+                         value="5000000" step="1000000" autocomplete="off">
+                  <span id="fx-base-badge" class="fx-base-badge">USD</span>
+                </div>
+              </div>
+              <div class="fx-ccy-col">
+                <label class="fx-label">From</label>
+                <div class="fx-ccy-wrap">
+                  <input type="text" id="fx-base" class="fx-ccy-input"
+                         value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+                  <div id="fx-base-list" class="fx-dropdown"></div>
+                </div>
+              </div>
+              <button id="fx-swap" class="fx-swap" title="Swap currencies">&#x21c4;</button>
+              <div class="fx-ccy-col">
+                <label class="fx-label">To</label>
+                <div class="fx-ccy-wrap">
+                  <input type="text" id="fx-quote" class="fx-ccy-input"
+                         value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+                  <div id="fx-quote-list" class="fx-dropdown"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Result -->
+            <div class="fx-result-panel">
+              <div class="fx-result-top">
+                <div class="fx-result-main" id="fx-result">Loading rates&hellip;</div>
+                <button class="fx-copy-btn" id="fx-copy-btn" title="Copy amount">&#x2398; Copy</button>
+              </div>
+              <div class="fx-result-change" id="fx-result-change"></div>
+              <div class="fx-result-rates">
+                <span class="fx-rate-fwd" id="fx-rate-line"></span>
+                <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -278,6 +291,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260417f"></script>
+<script src="app.js?v=20260420b"></script>
 </body>
 </html>
