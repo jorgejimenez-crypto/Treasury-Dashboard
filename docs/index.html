@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260420c">
+  <link rel="stylesheet" href="style.css?v=20260421">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -33,6 +33,7 @@
       <button id="btn-refresh"   class="action-btn" title="Refresh (R)">&#x21bb;</button>
       <button id="btn-notes"     class="action-btn" title="Notes (J)">&#x270E;</button>
       <button id="btn-shortcuts" class="action-btn" title="Shortcuts (?)">?</button>
+      <button id="btn-about"     class="action-btn action-btn-about" title="About">&#x2139;</button>
     </div>
   </div>
 </header>
@@ -289,8 +290,47 @@
   </div>
 </div>
 
+<!-- === ABOUT MODAL === -->
+<div id="about-modal" class="modal-bg" style="display:none">
+  <div class="modal-card about-card">
+    <div class="about-hd">
+      <span class="about-icon">&#x25C8;</span>
+      <div>
+        <h3>Treasury Management</h3>
+        <span class="about-version">v0.9 Beta</span>
+      </div>
+      <button id="about-close" class="modal-close-x">&#x2715;</button>
+    </div>
+    <p class="about-desc">
+      Real-time treasury intelligence dashboard for corporate funding desks.
+      Monitors short-term yields, overnight rates, FX cross-rates, and
+      macro catalysts in a single institutional-grade view.
+    </p>
+    <div class="about-section-title">Key Features</div>
+    <ul class="about-features">
+      <li>Grouped bar chart: 1M/3M/6M yields vs T-7 and T-14</li>
+      <li>Live funding rates: SOFR, EFFR, T-Bill benchmarks</li>
+      <li>FX converter with cross-rates, pips, and quick treasury pairs</li>
+      <li>TradingView economic calendar (US, high importance)</li>
+      <li>Risk pills: VIX, DXY, IG OAS, 10Y yield at a glance</li>
+      <li>Bloomberg TV live stream + WSJ news feed</li>
+      <li>Rate movement alerts when yields shift &gt;5 bps vs T-7</li>
+    </ul>
+    <div class="about-section-title">Technology</div>
+    <p class="about-tech">
+      Vanilla JS &middot; Chart.js &middot; Cloudflare Workers &middot;
+      FRED API &middot; NY Fed API &middot; Yahoo Finance &middot; GitHub Pages
+    </p>
+    <div class="about-footer">
+      <span class="about-updated">Last updated: April 2026</span>
+      <a class="about-gh-link" href="https://github.com/jorgejimenez-crypto/Treasury-Dashboard"
+         target="_blank" rel="noopener">View on GitHub &#x2197;</a>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260420b"></script>
+<script src="app.js?v=20260421"></script>
 </body>
 </html>
