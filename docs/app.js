@@ -547,9 +547,8 @@ function initEconCalendarWidget() {
 
 // === SECTION 2 — FUNDING & LIQUIDITY ============================
 //
-// 5 cards: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
-// OBFR removed. EFFR at position 3 (policy-rate reference).
-// Graceful fallback to knownFunding for weekend / outage resilience.
+// Treasury decision panel: signal strip + SOFR-EFFR anchor + cards + takeaway.
+// Ordered by treasury relevance: SOFR · EFFR · 1M Bill · 3M Bill · SOFR 30D.
 
 function renderFunding(nyfed, fred) {
   var grid = document.getElementById('funding-grid');
@@ -559,10 +558,8 @@ function renderFunding(nyfed, fred) {
   // Pull live values, fall back to persisted
   var effrLive = nyfed && nyfed.effr && nyfed.effr.rate != null;
   var sofrLive = nyfed && nyfed.sofr && nyfed.sofr.rate != null;
-
-  var effr  = effrLive ? nyfed.effr  : knownFunding.effr;
-  var sofr  = sofrLive ? nyfed.sofr  : knownFunding.sofr;
-
+  var effr = effrLive ? nyfed.effr : knownFunding.effr;
+  var sofr = sofrLive ? nyfed.sofr : knownFunding.sofr;
   if (effrLive) knownFunding.effr = nyfed.effr;
   if (sofrLive) knownFunding.sofr = nyfed.sofr;
   if (effrLive || sofrLive) saveKnown('funding', knownFunding);
@@ -571,67 +568,122 @@ function renderFunding(nyfed, fred) {
   var tsy1m  = fred && fred.DGS1MO;
   var tsy3m  = fred && fred.DGS3MO;
 
-  // SOFR–EFFR spread for header
-  var spread = document.getElementById('funding-spread');
-  if (spread && sofr && effr && sofr.rate!=null && effr.rate!=null) {
-    var sp = Math.round((sofr.rate - effr.rate)*100);
-    spread.textContent = 'SOFR–EFFR: '+sgn(sp)+sp+' bps';
-  } else if (spread) {
-    spread.textContent = '';
+  // ── Compute SOFR–EFFR spread (the anchor metric) ──────────────
+  var sofrRate = sofr && sofr.rate != null ? sofr.rate : null;
+  var effrRate = effr && effr.rate != null ? effr.rate : null;
+  var spreadBps = (sofrRate != null && effrRate != null) ? Math.round((sofrRate - effrRate) * 100) : null;
+
+  // ── 1. Signal strip: interpret data into treasury language ─────
+  //
+  // Funding Conditions: based on SOFR–EFFR spread magnitude
+  //   |spread| <= 3 bps  → Stable
+  //   |spread| <= 8 bps  → Slightly Tight
+  //   |spread| <= 15 bps → Tight
+  //   |spread| > 15 bps  → Stressed
+  //
+  // Liquidity Tone: based on bill levels vs EFFR
+  //   bills near/above EFFR → Draining (bills are expensive, cash scarce)
+  //   bills moderately below → Neutral
+  //   bills well below       → Ample
+  //
+  // Policy Alignment: SOFR vs SOFR 30D average
+  //   difference <= 2 bps → Normal
+  //   difference <= 5 bps → Elevated
+  //   difference > 5 bps  → Diverging
+
+  var sigEl = document.getElementById('fund-signals');
+  if (sigEl) {
+    var signals = [];
+
+    // Funding Conditions
+    if (spreadBps != null) {
+      var absSp = Math.abs(spreadBps);
+      var fcWord, fcCls;
+      if (absSp <= 3)       { fcWord = 'Stable';        fcCls = 'fs-green'; }
+      else if (absSp <= 8)  { fcWord = 'Slightly Tight'; fcCls = 'fs-amber'; }
+      else if (absSp <= 15) { fcWord = 'Tight';          fcCls = 'fs-amber'; }
+      else                  { fcWord = 'Stressed';        fcCls = 'fs-red'; }
+      signals.push('<span class="fs-item"><span class="fs-label">Funding</span><span class="fs-val ' + fcCls + '">' + fcWord + '</span></span>');
+    }
+
+    // Liquidity Tone
+    if (effrRate != null && tsy1m && tsy1m.current != null) {
+      var billVsEffr = Math.round((tsy1m.current - effrRate) * 100);
+      var ltWord, ltCls;
+      if (billVsEffr >= 3)       { ltWord = 'Draining';  ltCls = 'fs-amber'; }
+      else if (billVsEffr >= -5) { ltWord = 'Neutral';   ltCls = 'fs-green'; }
+      else                       { ltWord = 'Ample';     ltCls = 'fs-green'; }
+      signals.push('<span class="fs-item"><span class="fs-label">Liquidity</span><span class="fs-val ' + ltCls + '">' + ltWord + '</span></span>');
+    }
+
+    // Policy Alignment
+    if (sofrRate != null && sofr30 && sofr30.current != null) {
+      var paDiff = Math.abs(Math.round((sofrRate - sofr30.current) * 100));
+      var paWord, paCls;
+      if (paDiff <= 2)      { paWord = 'Normal';    paCls = 'fs-green'; }
+      else if (paDiff <= 5) { paWord = 'Elevated';  paCls = 'fs-amber'; }
+      else                  { paWord = 'Diverging'; paCls = 'fs-red'; }
+      signals.push('<span class="fs-item"><span class="fs-label">Policy</span><span class="fs-val ' + paCls + '">' + paWord + '</span></span>');
+    }
+
+    sigEl.innerHTML = signals.length ? signals.join('') : '';
   }
 
-  // Card definitions — ordered: SOFR · SOFR 30D · EFFR · TSY 1M · TSY 3M
+  // ── 2. SOFR–EFFR anchor metric (promoted) ─────────────────────
+  //
+  // Classification:
+  //   |spread| <= 3 bps  → Normal
+  //   |spread| <= 10 bps → Elevated
+  //   |spread| > 10 bps  → Stress Watch
+  var anchorEl = document.getElementById('fund-anchor');
+  if (anchorEl) {
+    if (spreadBps != null) {
+      var absSp2 = Math.abs(spreadBps);
+      var anchorWord, anchorCls;
+      if (absSp2 <= 3)       { anchorWord = 'Normal';       anchorCls = 'fa-green'; }
+      else if (absSp2 <= 10) { anchorWord = 'Elevated';     anchorCls = 'fa-amber'; }
+      else                   { anchorWord = 'Stress Watch';  anchorCls = 'fa-red'; }
+      anchorEl.innerHTML =
+        '<span class="fa-spread">' + sgn(spreadBps) + spreadBps + ' bps</span>'
+        + '<span class="fa-label">SOFR–EFFR Spread</span>'
+        + '<span class="fa-status ' + anchorCls + '">' + anchorWord + '</span>';
+    } else {
+      anchorEl.innerHTML = '';
+    }
+  }
+
+  // ── 3. Rate cards — reordered by treasury relevance ───────────
+  // SOFR (funding baseline) · EFFR (policy anchor) · 1M bill · 3M bill · SOFR 30D
   var cards = [
-    {
-      label: 'SOFR',
-      sub:   'Secured Overnight',
-      value: sofr  && sofr.rate  != null ? sofr.rate.toFixed(2)+'%'  : null,
-      extra: sofr  && sofr.volume ? '$'+sofr.volume.toFixed(0)+'B vol' : '',
-      date:  sofr  && sofr.date  ? sofr.date  : '',
-      stale: !sofrLive && !!sofr,
-      ok:    sofrLive
-    },
-    {
-      label: 'SOFR 30D',
-      sub:   '30-Day Average',
-      value: sofr30 && sofr30.current != null ? sofr30.current.toFixed(2)+'%' : null,
-      date:  sofr30 && sofr30.date  ? sofr30.date  : '',
-      stale: false,
-      ok:    sofr30 && sofr30.current != null
-    },
-    {
-      label: 'EFFR',
-      sub:   'Effective Fed Funds',
-      value: effr  && effr.rate  != null ? effr.rate.toFixed(2)+'%'  : null,
-      date:  effr  && effr.date  ? effr.date  : '',
-      stale: !effrLive && !!effr,
-      ok:    effrLive
-    },
-    {
-      label: 'TSY 1M',
-      sub:   '1-Month T-Bill',
+    { label:'SOFR', micro:'Overnight funding baseline',
+      value: sofrRate != null ? sofrRate.toFixed(2)+'%' : null,
+      extra: sofr && sofr.volume ? '$'+sofr.volume.toFixed(0)+'B vol' : '',
+      date: sofr && sofr.date ? sofr.date : '',
+      stale: !sofrLive && !!sofr, ok: sofrLive },
+    { label:'EFFR', micro:'Policy anchor',
+      value: effrRate != null ? effrRate.toFixed(2)+'%' : null,
+      date: effr && effr.date ? effr.date : '',
+      stale: !effrLive && !!effr, ok: effrLive },
+    { label:'1M Bill', micro:'Cash benchmark',
       value: tsy1m && tsy1m.current != null ? tsy1m.current.toFixed(2)+'%' : null,
       delta: tsy1m ? bps(tsy1m.current, tsy1m.prior) : null,
-      date:  tsy1m && tsy1m.date ? tsy1m.date : '',
-      stale: false,
-      ok:    tsy1m && tsy1m.current != null
-    },
-    {
-      label: 'TSY 3M',
-      sub:   '3-Month T-Bill',
+      date: tsy1m && tsy1m.date ? tsy1m.date : '', stale: false,
+      ok: tsy1m && tsy1m.current != null },
+    { label:'3M Bill', micro:'Cash benchmark',
       value: tsy3m && tsy3m.current != null ? tsy3m.current.toFixed(2)+'%' : null,
       delta: tsy3m ? bps(tsy3m.current, tsy3m.prior) : null,
-      date:  tsy3m && tsy3m.date ? tsy3m.date : '',
-      stale: false,
-      ok:    tsy3m && tsy3m.current != null
-    }
+      date: tsy3m && tsy3m.date ? tsy3m.date : '', stale: false,
+      ok: tsy3m && tsy3m.current != null },
+    { label:'SOFR 30D', micro:'Smoothed average',
+      value: sofr30 && sofr30.current != null ? sofr30.current.toFixed(2)+'%' : null,
+      date: sofr30 && sofr30.date ? sofr30.date : '', stale: false,
+      ok: sofr30 && sofr30.current != null }
   ];
 
   cards.forEach(function(c) {
     var el = document.createElement('div');
     el.className = 'fund-card' + (c.stale ? ' fund-card-stale' : '');
 
-    // Status indicator
     var dot = document.createElement('span');
     dot.className = 'fund-dot ' + (c.stale ? 'fund-dot-warn' : c.ok ? 'fund-dot-ok' : 'fund-dot-na');
 
@@ -640,9 +692,10 @@ function renderFunding(nyfed, fred) {
     lbl.appendChild(dot);
     lbl.appendChild(document.createTextNode(c.label));
 
-    var sub = document.createElement('div');
-    sub.className = 'fund-sub';
-    sub.textContent = c.sub;
+    // Micro-context
+    var micro = document.createElement('div');
+    micro.className = 'fund-micro';
+    micro.textContent = c.micro;
 
     var val = document.createElement('div');
     val.className = 'fund-value' + (!c.value ? ' fund-na' : '');
@@ -654,29 +707,45 @@ function renderFunding(nyfed, fred) {
       val.appendChild(badge);
     }
 
-    el.appendChild(lbl); el.appendChild(sub); el.appendChild(val);
+    el.appendChild(lbl); el.appendChild(micro); el.appendChild(val);
 
-    // Delta for T-bill cards
-    if (c.delta != null) {
+    // Delta — only show if non-zero and available
+    if (c.delta != null && c.delta !== 0) {
       var d = document.createElement('div');
-      d.className = 'fund-delta ' + (c.delta>0 ? 'fd-up' : c.delta<0 ? 'fd-dn' : '');
-      d.textContent = sgn(c.delta)+c.delta+' bps vs prev';
+      d.className = 'fund-delta ' + (c.delta > 0 ? 'fd-up' : 'fd-dn');
+      d.textContent = sgn(c.delta) + c.delta + ' bps';
       el.appendChild(d);
     }
-    // Extra (SOFR volume)
     if (c.extra) {
       var ex = document.createElement('div');
       ex.className = 'fund-extra'; ex.textContent = c.extra;
       el.appendChild(ex);
     }
-    if (c.date) {
-      var dt = document.createElement('div');
-      dt.className = 'fund-date'; dt.textContent = c.date;
-      el.appendChild(dt);
-    }
 
     grid.appendChild(el);
   });
+
+  // ── 5. Auto-generated takeaway ────────────────────────────────
+  var takeEl = document.getElementById('fund-takeaway');
+  if (takeEl) {
+    var lines = [];
+    if (spreadBps != null) {
+      var absSp3 = Math.abs(spreadBps);
+      if (absSp3 <= 3) lines.push('Front-end funding remains orderly and closely aligned with policy.');
+      else if (absSp3 <= 8) lines.push('Mild funding pressure visible — SOFR–EFFR spread modestly wider than normal.');
+      else if (absSp3 <= 15) lines.push('Funding conditions tightening — spread indicates elevated repo demand.');
+      else lines.push('Acute funding stress — SOFR–EFFR spread at elevated levels.');
+    }
+    if (tsy1m && tsy1m.current != null && tsy3m && tsy3m.current != null) {
+      var billSpread = Math.round((tsy3m.current - tsy1m.current) * 100);
+      if (Math.abs(billSpread) <= 2) lines.push('Bills flat across the short end.');
+      else if (billSpread > 2) lines.push('Bills steepening — 3M offers ' + billSpread + ' bps over 1M.');
+      else lines.push('Bills inverted — 1M yields ' + Math.abs(billSpread) + ' bps above 3M.');
+    }
+    takeEl.innerHTML = lines.length
+      ? '<span class="ft-text">' + lines.join(' ') + '</span>'
+      : '';
+  }
 }
 
 

@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260421b">
+  <link rel="stylesheet" href="style.css?v=20260421e">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -110,14 +110,17 @@
       <div class="section-hd">
         <div class="section-hd-left">
           <h2 class="section-title">Funding &amp; Liquidity</h2>
-          <span class="section-desc">Overnight rates &middot; benchmarks</span>
-        </div>
-        <div class="section-hd-right">
-          <span class="sofr-effr-spread" id="funding-spread"></span>
-          <span class="data-source">NY Fed &middot; FRED</span>
+          <span class="section-desc">NY Fed &middot; FRED &middot; Daily</span>
         </div>
       </div>
+      <!-- Signal strip: funding conditions at a glance -->
+      <div class="fund-signals" id="fund-signals"></div>
+      <!-- SOFR–EFFR promoted anchor metric -->
+      <div class="fund-anchor" id="fund-anchor"></div>
+      <!-- Rate cards -->
       <div class="funding-grid" id="funding-grid"></div>
+      <!-- Auto-generated takeaway -->
+      <div class="fund-takeaway" id="fund-takeaway"></div>
     </section>
 
     <!-- === FOREIGN EXCHANGE — UNIFIED PANEL === -->
@@ -290,6 +293,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260421d"></script>
+<script src="app.js?v=20260421e"></script>
 </body>
 </html>

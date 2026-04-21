@@ -487,11 +487,71 @@ body {
 /* === FUNDING in 50% column — 3-col grid ====================== */
 .dash-cell .funding-grid { grid-template-columns: repeat(3, 1fr); }
 .dash-cell .fund-value { font-size: 22px; }
-.dash-cell .fund-sub { margin-bottom: 8px; }
 
 
 /* === SECTION 2 — FUNDING & LIQUIDITY ====================== */
 
+/* Signal strip — 3 compact signals below title */
+.fund-signals {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.fund-signals:empty { display: none; }
+.fs-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px;
+}
+.fs-label {
+  color: var(--text-3); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px; font-size: 9px;
+}
+.fs-val { font-weight: 700; }
+.fs-green { color: var(--green); }
+.fs-amber { color: var(--amber); }
+.fs-red   { color: var(--red); }
+
+/* SOFR–EFFR anchor metric — promoted to primary signal */
+.fund-anchor {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; margin-bottom: 10px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.fund-anchor:empty { display: none; }
+.fa-spread {
+  font-size: 18px; font-weight: 700; font-family: var(--mono);
+  color: var(--text); letter-spacing: -0.3px;
+}
+.fa-label {
+  font-size: 10px; color: var(--text-3); font-family: var(--mono);
+  font-weight: 500;
+}
+.fa-status {
+  font-size: 10px; font-weight: 700; font-family: var(--mono);
+  padding: 2px 8px; border-radius: 3px; margin-left: auto;
+}
+.fa-green { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); }
+.fa-amber { color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-border); }
+.fa-red   { color: var(--red);   background: var(--red-bg);   border: 1px solid var(--red-border); }
+
+/* Micro-context descriptors on cards */
+.fund-micro {
+  font-size: 9px; color: var(--text-3); font-family: var(--mono);
+  margin-bottom: 6px; letter-spacing: 0.2px;
+}
+
+/* Auto-generated takeaway */
+.fund-takeaway {
+  margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.fund-takeaway:empty { display: none; }
+.ft-text {
+  font-size: 11px; color: var(--text-2); line-height: 1.5;
+  font-style: italic;
+}
+
+/* Legacy spread (no longer in header — keep for compat) */
 .sofr-effr-spread {
   font-size: 11px; font-weight: 600;
   font-family: var(--mono); color: var(--text-2);
