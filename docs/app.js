@@ -714,37 +714,44 @@ function renderCrossRates() {
 
   var html = '';
   CROSS_RATE_CCYS.forEach(function(ccy) {
-    var key = FX_YAHOO_MAP[ccy];
-    if (!key) return;
-    var d = cachedYahoo[key];
-    if (!d || d.current == null) return;
+    // Use getToUSD/getToUSDPrior — same inversion logic as the converter.
+    // This normalizes ALL rates to "USD per 1 unit of foreign currency."
+    var usdVal   = getToUSD(ccy);
+    var usdPrior = getToUSDPrior(ccy);
+    if (usdVal == null) return;
 
-    // Rate vs USD — show the natural market convention
-    var rate = d.current;
-    var prior = d.prior;
-    var isInv = FX_INVERTED[ccy];
-    // Display rate: for inverted pairs (USDJPY) show as-is; for direct (EURUSD) show as-is
-    var displayRate = rate;
-    var dec = (ccy === 'JPY') ? 2 : 4;
+    // Decimals: 4 for most, 6 for JPY (value is ~0.006)
+    var dec = (usdVal < 0.01) ? 6 : 4;
 
-    // Change calculation
-    var chgPct = null, pips = null, dir = 'flat';
-    if (prior != null && prior !== 0) {
-      chgPct = ((rate - prior) / prior) * 100;
-      var pipMult = (ccy === 'JPY') ? 100 : 10000;
-      pips = Math.round((rate - prior) * pipMult);
-      // For inverted pairs, positive pips = USD strengthening (show red for ccy)
-      // For direct pairs, positive pips = USD weakening (show green for ccy)
+    // Change: computed on USD-per-foreign value.
+    // Positive = foreign currency strengthened vs USD = green.
+    var chgPct = null, dir = 'flat';
+    if (usdPrior != null && usdPrior !== 0) {
+      chgPct = ((usdVal - usdPrior) / usdPrior) * 100;
       dir = chgPct > 0.005 ? 'up' : chgPct < -0.005 ? 'dn' : 'flat';
+    }
+
+    // Pips: on the raw market rate (market convention), sign-flipped
+    // for inverted pairs so positive pips = ccy strengthened.
+    var pipStr = '';
+    var key = FX_YAHOO_MAP[ccy];
+    var d = cachedYahoo[key];
+    if (d && d.current != null && d.prior != null) {
+      var pipMult = (ccy === 'JPY') ? 100 : 10000;
+      var rawPips = Math.round((d.current - d.prior) * pipMult);
+      var pips = FX_INVERTED[ccy] ? -rawPips : rawPips; // flip so positive = ccy stronger
+      pipStr = (pips >= 0 ? '+' : '') + pips + 'p';
     }
 
     var arrow = dir === 'up' ? '&#x25B2;' : dir === 'dn' ? '&#x25BC;' : '';
     var chgStr = chgPct != null ? (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%' : '—';
-    var pipStr = pips != null ? (pips >= 0 ? '+' : '') + pips + 'p' : '';
+
+    // Sanity guard: skip obviously wrong values
+    if (isNaN(usdVal) || usdVal <= 0 || usdVal > 100000) return;
 
     html += '<tr>'
       + '<td class="xr-ccy"><span class="xr-code">' + ccy + '</span><span class="xr-name">' + (FX_NAMES[ccy] || '') + '</span></td>'
-      + '<td class="xr-rate">' + displayRate.toFixed(dec) + '</td>'
+      + '<td class="xr-rate">' + usdVal.toFixed(dec) + '</td>'
       + '<td class="xr-chg xr-' + dir + '"><span class="xr-arrow">' + arrow + '</span>' + chgStr + '<span class="xr-pips">' + pipStr + '</span></td>'
       + '</tr>';
   });
