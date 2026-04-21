@@ -962,9 +962,10 @@ function computeFx() {
 }
 
 
-// === NEWS & INTELLIGENCE — WSJ only =============================
-// Filters /api/news response to WSJ sources only.
-// Falls back to localStorage cache (2 hr) on fetch failure.
+// === NEWS & INTELLIGENCE ========================================
+// Shows all financial news from /api/news (WSJ, CNBC, Yahoo, ECB, etc.)
+// WSJ prioritized when available; falls back to other sources when not.
+// localStorage cache (2 hr) on fetch failure.
 
 function formatTime(dateStr) {
   try {
@@ -984,19 +985,19 @@ function renderNews(items) {
   var updLbl  = document.getElementById('news-updated-lbl');
   if (!feed) return;
 
-  // Filter to WSJ sources only
-  var wsj = (items || []).filter(function(item) {
-    return item.source && item.source.indexOf('WSJ') === 0;
+  // Show all items — WSJ sources sort first, then by date
+  var all = (items || []).filter(function(item) {
+    return item && item.title && item.title.trim();
   });
 
-  if (!wsj.length) {
-    feed.innerHTML = '<div class="news-empty">No WSJ articles available.</div>';
+  if (!all.length) {
+    feed.innerHTML = '<div class="news-empty">No articles available.</div>';
     if (counter) counter.textContent = '';
     return;
   }
 
-  var shown = wsj.slice(0, 5);
-  if (counter) counter.textContent = wsj.length;
+  var shown = all.slice(0, 8);
+  if (counter) counter.textContent = all.length;
   if (updLbl && shown[0] && shown[0].date) updLbl.textContent = formatTime(shown[0].date);
 
   feed.innerHTML = '';
