@@ -95,10 +95,15 @@ npx wrangler dev   # local worker dev server
 
 ### Cache Busting
 
-When updating `app.js` or `style.css`, bump the version query string in `index.html`:
+**localStorage** is cleared automatically when `APP_VERSION` changes — bump `APP_VERSION` in `app.js` on each deploy:
+```js
+var APP_VERSION = '20260430';  // ← update this on every release
+```
+
+For **browser HTTP cache**, bump the version query string in `index.html`:
 ```html
-<link rel="stylesheet" href="style.css?v=20260421">
-<script src="app.js?v=20260421"></script>
+<link rel="stylesheet" href="style.css?v=20260430">
+<script src="app.js?v=20260430"></script>
 ```
 
 ## Changelog

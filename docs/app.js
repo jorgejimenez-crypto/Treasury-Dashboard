@@ -15,6 +15,18 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
+var APP_VERSION         = '20260430';
+
+// Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
+function checkCacheVersion() {
+  try {
+    if (localStorage.getItem('APP_VERSION') !== APP_VERSION) {
+      localStorage.clear();
+      localStorage.setItem('APP_VERSION', APP_VERSION);
+    }
+  } catch(e) {}
+}
+
 var REFRESH_MS          = 15 * 60 * 1000;
 var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
@@ -1427,6 +1439,7 @@ function initShortcuts() {
 
 // === INIT =======================================================
 
+checkCacheVersion();
 document.getElementById('dashboard').style.display = 'flex';
 document.getElementById('loading').style.display   = 'none';
 updateHeader(null);
