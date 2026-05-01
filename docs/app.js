@@ -15,7 +15,7 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
-var APP_VERSION         = '20260501';
+var APP_VERSION         = '20260501b';
 
 // Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
 function checkCacheVersion() {
@@ -617,7 +617,7 @@ function initEconCalendarWidget() {
 // Treasury decision panel: signal strip + SOFR-EFFR anchor + cards + takeaway.
 // Ordered by treasury relevance: SOFR · EFFR · 1M Bill · 3M Bill · SOFR 30D.
 
-function renderFunding(nyfed, fred) {
+function renderFunding(nyfed, fred, derived) {
   var grid = document.getElementById('funding-grid');
   if (!grid) return;
   grid.innerHTML = '';
@@ -722,7 +722,7 @@ function renderFunding(nyfed, fred) {
   // ── 3. Rate cards — reordered by treasury relevance ───────────
   // SOFR (funding baseline) · EFFR (policy anchor) · 1M bill · 3M bill · SOFR 30D
   var cards = [
-    { label:'SOFR', micro:'Overnight funding baseline',
+    { label:'SOFR', micro:'Overnight funding baseline', isSofr: true,
       value: sofrRate != null ? sofrRate.toFixed(2)+'%' : null,
       extra: sofr && sofr.volume ? '$'+sofr.volume.toFixed(0)+'B vol' : '',
       date: sofr && sofr.date ? sofr.date : '',
@@ -787,6 +787,17 @@ function renderFunding(nyfed, fred) {
       var ex = document.createElement('div');
       ex.className = 'fund-extra'; ex.textContent = c.extra;
       el.appendChild(ex);
+    }
+
+    // SOFR volume liquidity indicator (only on SOFR card)
+    if (c.isSofr && derived && derived.sofr_vol_bn != null) {
+      var flag = derived.sofr_vol_flag || 'normal';
+      var volLabels = { low: 'LOW — watch for pressure', normal: 'Normal', elevated: 'Elevated' };
+      var volEl = document.createElement('div');
+      volEl.className = 'sofr-vol vol-' + flag;
+      volEl.title = 'SOFR daily transaction volume. Sub-$900B signals potential reserve scarcity.';
+      volEl.innerHTML = '$' + derived.sofr_vol_bn + 'B <span class="vol-flag">' + (volLabels[flag] || 'Normal') + '</span>';
+      el.appendChild(volEl);
     }
 
     grid.appendChild(el);
@@ -858,6 +869,51 @@ function renderCorridor(derived) {
     + '</div>'
     + '<span class="cor-label cor-upper">' + c.upper.toFixed(2) + '%</span>';
   el.appendChild(track);
+}
+
+
+/* === BREAKEVEN INFLATION + REAL YIELDS ============================ */
+
+function renderBreakevens(derived) {
+  var el = document.getElementById('breakevens-row');
+  if (!el) return;
+  if (!derived || !derived.real_yields) { el.innerHTML = ''; return; }
+
+  var html = '';
+  ['5Y','10Y'].forEach(function(tenor) {
+    var r = derived.real_yields[tenor];
+    if (!r) return;
+    var realCls = r.real >= 0 ? 'real-pos' : 'real-neg';
+    html += '<div class="be-cell" title="' + tenor + ' breakeven: ' + r.breakeven.toFixed(2)
+      + '% · Nominal: ' + r.nominal.toFixed(2) + '% · Real = nominal − breakeven · Source: FRED T' + tenor.replace('Y','') + 'YIE">'
+      + '<span class="be-tenor">' + tenor + '</span>'
+      + '<span class="be-be">BE ' + r.breakeven.toFixed(2) + '%</span>'
+      + '<span class="be-real ' + realCls + '">Real ' + sgn(r.real) + r.real.toFixed(2) + '%</span>'
+      + '</div>';
+  });
+  el.innerHTML = html;
+}
+
+
+/* === FF FUTURES IMPLIED RATE ====================================== */
+
+function renderFFImplied(derived) {
+  var el = document.getElementById('ff-implied');
+  if (!el) return;
+  if (!derived || derived.implied_ff_rate == null) {
+    el.innerHTML = '<span class="ff-label">Implied FF</span><span class="ff-rate" style="color:var(--text-3)">N/A</span>';
+    return;
+  }
+
+  var sig = derived.ff_market_signal || 'hold';
+  var sigLabels = { cut: 'expects cut', hold: 'expects hold', hike: 'expects hike' };
+  var sigCls    = { cut: 'sig-cut', hold: 'sig-hold', hike: 'sig-hike' };
+
+  el.innerHTML =
+    '<span class="ff-label">Implied FF</span>'
+    + '<span class="ff-rate">' + derived.implied_ff_rate.toFixed(2) + '%</span>'
+    + '<span class="ff-signal ' + (sigCls[sig] || 'sig-hold') + '">' + (sigLabels[sig] || 'hold') + '</span>'
+    + '<span class="ff-src">CME ZQ=F · front month</span>';
 }
 
 
@@ -1423,11 +1479,13 @@ function renderDashboard(data) {
   } catch(e) { console.error('[rate-alerts] render failed:', e); }
 
   // Section 2: Funding & Liquidity
-  renderFunding(data.nyfed, data.fred);
+  renderFunding(data.nyfed, data.fred, data.derived);
 
-  // Carry strip + corridor (from derived data)
+  // Derived data visualizations (carry, corridor, breakevens, FF implied)
   try { renderCarryStrip(data.derived); } catch(e) { console.error('[carry] render failed:', e); }
   try { renderCorridor(data.derived); } catch(e) { console.error('[corridor] render failed:', e); }
+  try { renderFFImplied(data.derived || {}); } catch(e) { console.error('[ff-implied] render failed:', e); }
+  try { renderBreakevens(data.derived || {}); } catch(e) { console.error('[breakevens] render failed:', e); }
 
   // Section 3: FX — Cross Rates + Converter
   renderCrossRates();

@@ -472,6 +472,21 @@ body {
 .sp-pos   { color: var(--green); }
 .sp-neg   { color: var(--red); }
 .sp-inv   { font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 2px; background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); margin-left: 4px; letter-spacing: 0.3px; }
+
+/* === BREAKEVEN INFLATION + REAL YIELDS === */
+.be-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.be-row:empty { display: none; }
+.be-cell {
+  flex: 1; min-width: 100px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px;
+  font-family: var(--mono); cursor: default;
+}
+.be-tenor { display: block; font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; font-weight: 600; }
+.be-be    { display: block; font-size: 14px; color: var(--text); }
+.be-real  { display: block; font-size: 12px; font-weight: 600; margin-top: 2px; }
+.real-pos { color: var(--green); }
+.real-neg { color: var(--red); }
 .leg-item {
   display: flex; align-items: center; gap: 7px;
   font-size: 11px; color: var(--text-2);
@@ -567,6 +582,43 @@ body {
   font-size: 11px; color: var(--text-2); line-height: 1.5;
   font-style: italic;
 }
+
+/* === SOFR VOLUME LIQUIDITY INDICATOR === */
+.sofr-vol {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; margin-top: 4px;
+  font-family: var(--mono);
+}
+.sofr-vol::before {
+  content: ''; display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.vol-low      { color: var(--red); }
+.vol-low::before      { background: var(--red); }
+.vol-normal   { color: var(--text-3); }
+.vol-normal::before   { background: var(--text-3); }
+.vol-elevated { color: var(--green); }
+.vol-elevated::before { background: var(--green); }
+.vol-flag { color: inherit; }
+
+/* === FF FUTURES IMPLIED RATE === */
+.ff-implied-wrap {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; padding: 6px 12px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 6px; font-family: var(--mono);
+}
+.ff-implied-wrap:empty { display: none; }
+.ff-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; font-weight: 600; }
+.ff-rate  { font-size: 16px; font-weight: 600; color: var(--text); }
+.ff-signal {
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.sig-cut  { background: var(--green-bg); color: var(--green); }
+.sig-hold { background: rgba(100,116,139,0.12); color: var(--text-3); }
+.sig-hike { background: var(--red-bg); color: var(--red); }
+.ff-src { font-size: 9px; color: var(--text-3); margin-left: auto; white-space: nowrap; }
 
 /* === CARRY STRIP — T-Bill vs SOFR ON === */
 .carry-strip {

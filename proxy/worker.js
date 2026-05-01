@@ -46,6 +46,8 @@ var YAHOO_SYMBOLS = [
   // Risk indicators
   { key: 'DXY',     symbol: 'DX-Y.NYB',   group: 'risk' },
   { key: 'VIX',     symbol: '%5EVIX',     group: 'risk' },
+  // Fed Funds futures front month (CME ZQ=F)
+  { key: 'FF_FRONT', symbol: 'ZQ%3DF',    group: 'rates' },
 ];
 
 // Lightweight ticker list -- /api/ticker only (10s refresh)
@@ -75,6 +77,9 @@ var FRED_MARKET = [
   { id: 'EFFR',          label: 'EFFR',         extra: '' },
   { id: 'SOFR30DAYAVG',  label: 'SOFR 30D Avg', extra: '' },
   { id: 'IORB',          label: 'Interest on Reserve Balances', extra: '' },
+  { id: 'T5YIE',         label: '5Y Breakeven Inflation',     extra: '' },
+  { id: 'T10YIE',        label: '10Y Breakeven Inflation',    extra: '' },
+  { id: 'DGS5',          label: '5Y UST',                     extra: '' },
 ];
 
 // Short-term yields for grouped bar chart (T-1, T-7, T-14)
@@ -298,6 +303,40 @@ async function handleMarketData(env) {
       corridor.sofr_pct = Math.max(0, Math.min(100, Math.round(((nyfed.sofr.rate - floor) / 0.10) * 100)));
     }
     derived.corridor = corridor;
+  }
+
+  // Breakeven inflation + real yields
+  derived.real_yields = {};
+  [['T5YIE','DGS5','5Y'], ['T10YIE','DGS10','10Y']].forEach(function(r) {
+    var be  = fredMarket[r[0]] && fredMarket[r[0]].current;
+    var nom = fredMarket[r[1]] && fredMarket[r[1]].current;
+    if (be != null && nom != null) {
+      derived.real_yields[r[2]] = {
+        breakeven: be,
+        nominal:   nom,
+        real:      parseFloat((nom - be).toFixed(2))
+      };
+    }
+  });
+
+  // SOFR volume liquidity indicator
+  var sofrVol = nyfed.sofr && nyfed.sofr.volume;
+  if (sofrVol != null) {
+    derived.sofr_vol_bn   = parseFloat(sofrVol.toFixed(0));
+    derived.sofr_vol_flag = sofrVol < 900  ? 'low'      :
+                            sofrVol < 1100 ? 'normal'   : 'elevated';
+  }
+
+  // Fed Funds futures implied rate (CME ZQ=F)
+  var ffFront = yahoo.FF_FRONT && yahoo.FF_FRONT.current;
+  if (ffFront != null && ffFront > 80) {
+    derived.implied_ff_rate = parseFloat((100 - ffFront).toFixed(2));
+    var corrUpper = derived.corridor && derived.corridor.upper;
+    if (corrUpper != null) {
+      var diff = derived.implied_ff_rate - corrUpper;
+      derived.ff_market_signal = diff < -0.05 ? 'cut' :
+                                 diff >  0.05 ? 'hike' : 'hold';
+    }
   }
 
   return jsonResp({

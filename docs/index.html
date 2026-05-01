@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260501">
+  <link rel="stylesheet" href="style.css?v=20260501b">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -87,6 +87,7 @@
       </div>
       <div class="chart-legend" id="chart-legend"></div>
       <div class="yield-spreads" id="yield-spreads"></div>
+      <div id="breakevens-row" class="be-row"></div>
     </section>
 
     <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
@@ -121,6 +122,8 @@
       <div class="fund-anchor" id="fund-anchor"></div>
       <!-- Rate cards -->
       <div class="funding-grid" id="funding-grid"></div>
+      <!-- FF Futures implied rate -->
+      <div id="ff-implied" class="ff-implied-wrap"></div>
       <!-- Carry strip: T-Bill vs SOFR ON -->
       <div class="carry-strip" id="carry-strip"></div>
       <!-- Auto-generated takeaway -->
@@ -329,6 +332,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260501"></script>
+<script src="app.js?v=20260501b"></script>
 </body>
 </html>
