@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260421e">
+  <link rel="stylesheet" href="style.css?v=20260501">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
@@ -33,6 +33,7 @@
       <button id="btn-refresh"   class="action-btn" title="Refresh (R)">&#x21bb;</button>
       <button id="btn-notes"     class="action-btn" title="Notes (J)">&#x270E;</button>
       <button id="btn-shortcuts" class="action-btn" title="Shortcuts (?)">?</button>
+      <button id="btn-thresholds" class="action-btn" title="Alert Settings">&#x2699;</button>
       <button id="btn-about"     class="action-btn action-btn-about" title="About">&#x2139;</button>
     </div>
   </div>
@@ -85,6 +86,7 @@
         <canvas id="yieldsChart"></canvas>
       </div>
       <div class="chart-legend" id="chart-legend"></div>
+      <div class="yield-spreads" id="yield-spreads"></div>
     </section>
 
     <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
@@ -119,6 +121,8 @@
       <div class="fund-anchor" id="fund-anchor"></div>
       <!-- Rate cards -->
       <div class="funding-grid" id="funding-grid"></div>
+      <!-- Carry strip: T-Bill vs SOFR ON -->
+      <div class="carry-strip" id="carry-strip"></div>
       <!-- Auto-generated takeaway -->
       <div class="fund-takeaway" id="fund-takeaway"></div>
     </section>
@@ -252,6 +256,38 @@
   </div>
 </div>
 
+<!-- === THRESHOLD SETTINGS MODAL === -->
+<div id="threshold-modal" class="modal-bg" style="display:none">
+  <div class="modal-card threshold-card">
+    <div class="threshold-hd">
+      <h3>Alert Thresholds</h3>
+      <button id="threshold-close" class="modal-close-x">&#x2715;</button>
+    </div>
+    <div class="threshold-fields">
+      <label class="thr-field">
+        <span class="thr-label">Short-end move (bps)</span>
+        <input type="number" id="thr-short-end" class="thr-input" step="1" min="1" max="50">
+      </label>
+      <label class="thr-field">
+        <span class="thr-label">VIX warning level</span>
+        <input type="number" id="thr-vix" class="thr-input" step="1" min="10" max="80">
+      </label>
+      <label class="thr-field">
+        <span class="thr-label">IG OAS wide (bps)</span>
+        <input type="number" id="thr-ig-oas" class="thr-input" step="5" min="50" max="500">
+      </label>
+      <label class="thr-field">
+        <span class="thr-label">10Y yield high (%)</span>
+        <input type="number" id="thr-10y" class="thr-input" step="0.1" min="2" max="8">
+      </label>
+    </div>
+    <div class="threshold-actions">
+      <button id="thr-save" class="thr-btn thr-btn-save">Save &amp; Apply</button>
+      <button id="thr-cancel" class="thr-btn thr-btn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- === ABOUT MODAL === -->
 <div id="about-modal" class="modal-bg" style="display:none">
   <div class="modal-card about-card">
@@ -293,6 +329,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260421e"></script>
+<script src="app.js?v=20260501"></script>
 </body>
 </html>

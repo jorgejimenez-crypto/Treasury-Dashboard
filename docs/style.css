@@ -451,10 +451,27 @@ body {
 /* Chart legend — bar color swatches */
 .chart-legend {
   display: flex;
-  gap: 18px;
-  margin-bottom: 22px;
+  gap: 14px;
+  margin-bottom: 8px;
   padding-left: 2px;
 }
+
+/* === YIELD SPREAD CELLS === */
+.yield-spreads {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.yield-spreads:empty { display: none; }
+.sp-cell {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 4px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11px;
+}
+.sp-label { color: var(--text-3); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.sp-val   { font-weight: 700; }
+.sp-pos   { color: var(--green); }
+.sp-neg   { color: var(--red); }
+.sp-inv   { font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 2px; background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); margin-left: 4px; letter-spacing: 0.3px; }
 .leg-item {
   display: flex; align-items: center; gap: 7px;
   font-size: 11px; color: var(--text-2);
@@ -550,6 +567,52 @@ body {
   font-size: 11px; color: var(--text-2); line-height: 1.5;
   font-style: italic;
 }
+
+/* === CARRY STRIP — T-Bill vs SOFR ON === */
+.carry-strip {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.carry-strip:empty { display: none; }
+.carry-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 4px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11px;
+}
+.carry-tenor { font-weight: 700; color: var(--text-2); font-size: 10px; text-transform: uppercase; }
+.carry-bps   { font-weight: 700; }
+.carry-action { font-size: 9px; color: var(--text-3); }
+.carry-pos { border-color: rgba(34,197,94,0.25); }
+.carry-neg { border-color: rgba(239,68,68,0.25); }
+.carry-pos .carry-bps { color: var(--green); }
+.carry-neg .carry-bps { color: var(--red); }
+.carry-pos .carry-action { color: var(--green); }
+.carry-neg .carry-action { color: var(--red); }
+
+/* === IORB CORRIDOR TRACK === */
+.corridor-track {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono); font-size: 9px;
+}
+.cor-label { color: var(--text-3); white-space: nowrap; font-weight: 500; }
+.cor-bar {
+  flex: 1; height: 6px; position: relative;
+  background: var(--bg-hover); border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.cor-dot {
+  position: absolute; top: -6px;
+  width: 16px; height: 16px; border-radius: 50%;
+  font-size: 8px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  transform: translateX(-50%);
+}
+.cor-dot-effr { background: var(--amber); color: #000; }
+.cor-dot-sofr { background: var(--blue); color: #fff; }
 
 /* Legacy spread (no longer in header — keep for compat) */
 .sofr-effr-spread {
@@ -961,6 +1024,14 @@ body {
 .news-item:last-child { border-bottom: none; }
 .news-item:hover      { background: rgba(255,255,255,0.025); }
 
+.news-gov-badge {
+  display: inline-block;
+  font-size: 8px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 1px 5px; border-radius: 3px; margin-bottom: 4px; margin-right: 4px;
+  font-family: var(--mono);
+  background: var(--blue-bg); color: var(--blue-lt); border: 1px solid var(--blue-border);
+}
 .news-tag {
   display: inline-block;
   font-size: 9px; font-weight: 700;
@@ -1215,6 +1286,31 @@ body {
 .about-gh-link:hover {
   background:var(--bg-hover); border-color:var(--blue-lt);
 }
+
+/* === THRESHOLD SETTINGS MODAL === */
+.threshold-card { max-width: 360px; min-width: 280px; position: relative; }
+.threshold-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.threshold-hd h3 { font-size: 14px; font-weight: 700; color: var(--text); margin: 0; }
+.threshold-fields { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.thr-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.thr-label { font-size: 11px; color: var(--text-2); font-family: var(--mono); }
+.thr-input {
+  width: 70px; text-align: right;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 8px; border-radius: var(--radius-sm);
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+}
+.thr-input:focus { border-color: var(--blue); outline: none; }
+.threshold-actions { display: flex; gap: 8px; }
+.thr-btn {
+  flex: 1; padding: 8px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: var(--mono); transition: all 0.12s;
+}
+.thr-btn-save { background: var(--blue-bg); border: 1px solid var(--blue-border); color: var(--blue-lt); }
+.thr-btn-save:hover { background: var(--bg-hover); }
+.thr-btn-cancel { background: var(--bg-inset); border: 1px solid var(--border); color: var(--text-3); }
+.thr-btn-cancel:hover { background: var(--bg-hover); color: var(--text); }
 
 /* About button in header */
 .action-btn-about {

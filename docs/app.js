@@ -15,7 +15,7 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
-var APP_VERSION         = '20260430';
+var APP_VERSION         = '20260501';
 
 // Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
 function checkCacheVersion() {
@@ -32,14 +32,26 @@ var TICKER_REFRESH_MS   = 10 * 1000;
 var TICKER_REFRESH_SLOW = 60 * 1000;
 var NEWS_REFRESH_MS     = 30 * 60 * 1000;
 
-// Silent alert thresholds (background risk monitoring — no panel displayed)
-var THRESHOLDS = {
+// Default alert thresholds — overridable via localStorage
+var DEFAULT_THRESHOLDS = {
   commodityPct: 2.0, multiBooksMin: 2,
   vixHigh: 30, vixPctSpike: 15,
   dxyLow: 99, dxyHigh: 105,
   yield10YHigh: 5.0,
-  igOasWide: 150, hyOasWide: 500
+  igOasWide: 150, hyOasWide: 500,
+  shortEndMoveBps: 5,  // rate alert trigger threshold
+  sofrMoveBps: 5
 };
+
+function getThresholds() {
+  try {
+    var saved = localStorage.getItem('ALERT_THRESHOLDS');
+    if (saved) return Object.assign({}, DEFAULT_THRESHOLDS, JSON.parse(saved));
+  } catch(e) {}
+  return Object.assign({}, DEFAULT_THRESHOLDS);
+}
+
+var THRESHOLDS = getThresholds();
 
 // Yield curve (short end: 1M · 3M · 6M)
 var CURVE_KEYS   = ['DGS1MO', 'DGS3MO', 'DGS6MO'];
@@ -255,7 +267,7 @@ function computeRateAlerts(data) {
     var t7 = h && h.t7 != null ? h.t7 : null;
     if (t1 != null && t7 != null) {
       var chg = Math.round((t1 - t7) * 100);
-      if (Math.abs(chg) > 5) {
+      if (Math.abs(chg) > THRESHOLDS.shortEndMoveBps) {
         var dir = chg > 0 ? '↑' : '↓';
         var impact = chg > 0 ? 'funding costs rising' : 'funding costs easing';
         var lvl = Math.abs(chg) > 10 ? 'rate-alert-red' : '';
@@ -354,11 +366,18 @@ function renderYieldsChart(data) {
     formatter: function(v) { return v != null ? v.toFixed(2) + '%' : ''; }
   }; };
 
+  // T-1 line overlay: fred[key].prior = yesterday's FRED close
+  var tPrior = [];
+  for (var pi = 0; pi < keys.length; pi++) {
+    var fl = fred[keys[pi]] || {};
+    tPrior.push(fl.prior != null ? fl.prior : null);
+  }
+
   var datasets = [
     {
-      label: 'T-1 (Latest)',
+      label: 'Today',
       data: t1,
-      backgroundColor: '#3b82f6',             // solid blue — hero
+      backgroundColor: '#3b82f6',
       borderColor: '#2563eb',
       borderWidth: 2,
       borderRadius: 5,
@@ -370,7 +389,7 @@ function renderYieldsChart(data) {
     {
       label: 'T-7',
       data: t7,
-      backgroundColor: 'rgba(234,179,8,0.55)', // warm amber — clearly different
+      backgroundColor: 'rgba(234,179,8,0.55)',
       borderColor: '#ca8a04',
       borderWidth: 1.5,
       borderRadius: 5,
@@ -382,7 +401,7 @@ function renderYieldsChart(data) {
     {
       label: 'T-14',
       data: t14,
-      backgroundColor: 'rgba(148,163,184,0.40)', // cool slate — tertiary
+      backgroundColor: 'rgba(148,163,184,0.40)',
       borderColor: '#64748b',
       borderWidth: 1,
       borderRadius: 5,
@@ -390,13 +409,30 @@ function renderYieldsChart(data) {
       barPercentage: 0.82,
       categoryPercentage: 0.72,
       datalabels: hasDL ? dlConf('#94a3b8', 11) : { display: false }
+    },
+    {
+      // T-1 prior day overlay — dashed line on top of bars
+      type: 'line',
+      label: 'T-1 (Prior)',
+      data: tPrior,
+      borderColor: '#e879f9',
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 4,
+      pointBackgroundColor: '#e879f9',
+      pointBorderColor: '#0f1217',
+      pointBorderWidth: 2,
+      fill: false,
+      tension: 0,
+      datalabels: { display: false }
     }
   ];
 
   // ── 6. Compute smart Y-axis range ─────────────────────────────
   // Zoom into the data range so bps differences are visually obvious.
   // E.g., 3.68–3.74 becomes yMin=3.60, yMax=3.85 (not 0–4).
-  var allVals = t1.concat(t7, t14).filter(function(v) { return v != null; });
+  var allVals = t1.concat(t7, t14, tPrior).filter(function(v) { return v != null; });
   var dataMin = Math.min.apply(null, allVals);
   var dataMax = Math.max.apply(null, allVals);
   var range   = dataMax - dataMin;
@@ -488,12 +524,31 @@ function renderYieldsChart(data) {
   var leg = document.getElementById('chart-legend');
   if (leg) {
     leg.innerHTML =
-      '<span class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>T-1 (Latest)</span>'
+      '<span class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>Today</span>'
       + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(234,179,8,0.55);border:1px solid #ca8a04"></span>T-7</span>'
-      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40);border:1px solid #64748b"></span>T-14</span>';
+      + '<span class="leg-item"><span class="leg-swatch" style="background:rgba(148,163,184,0.40);border:1px solid #64748b"></span>T-14</span>'
+      + '<span class="leg-item"><span class="leg-swatch" style="background:transparent;border:2px dashed #e879f9;height:0"></span>T-1 Prior</span>';
   }
 
-  // ── 9. Spread pill (1M–6M) ────────────────────────────────────
+  // ── 9. Spread cells: 2s10s and 3M10Y ───────────────────────────
+  var spreadsEl = document.getElementById('yield-spreads');
+  if (spreadsEl && data.derived) {
+    var d = data.derived;
+    var cells = '';
+    if (d.spread_2s10s != null) {
+      var bps2s10s = Math.round(d.spread_2s10s * 100);
+      var inv2 = bps2s10s < 0 ? ' <span class="sp-inv">INVERTED</span>' : '';
+      cells += '<div class="sp-cell"><span class="sp-label">2s10s</span><span class="sp-val ' + (bps2s10s < 0 ? 'sp-neg' : 'sp-pos') + '">' + sgn(bps2s10s) + bps2s10s + ' bps' + inv2 + '</span></div>';
+    }
+    if (d.spread_3m10y != null) {
+      var bps3m10y = Math.round(d.spread_3m10y * 100);
+      var inv3 = bps3m10y < 0 ? ' <span class="sp-inv">INVERTED</span>' : '';
+      cells += '<div class="sp-cell"><span class="sp-label">3M–10Y</span><span class="sp-val ' + (bps3m10y < 0 ? 'sp-neg' : 'sp-pos') + '">' + sgn(bps3m10y) + bps3m10y + ' bps' + inv3 + '</span></div>';
+    }
+    spreadsEl.innerHTML = cells;
+  }
+
+  // ── 10. Spread pill (1M–6M) ───────────────────────────────────
   var pill = document.getElementById('yield-spread-pill');
   if (pill && t1[0] != null && t1[2] != null) {
     var sp = Math.round((t1[2] - t1[0]) * 100);
@@ -758,6 +813,51 @@ function renderFunding(nyfed, fred) {
       ? '<span class="ft-text">' + lines.join(' ') + '</span>'
       : '';
   }
+}
+
+
+/* === CARRY STRIP — T-Bill vs SOFR ON ============================= */
+
+function renderCarryStrip(derived) {
+  var el = document.getElementById('carry-strip');
+  if (!el || !derived || !derived.carry) { if (el) el.innerHTML = ''; return; }
+
+  var tenorMap = { DGS1MO: '1M', DGS3MO: '3M', DGS6MO: '6M' };
+  var html = '';
+  ['DGS1MO','DGS3MO','DGS6MO'].forEach(function(k) {
+    var c = derived.carry[k];
+    if (!c) return;
+    var cls = c.is_positive ? 'carry-pos' : 'carry-neg';
+    var action = c.is_positive ? 'Extend &#x25B8;' : 'Stay short';
+    html += '<div class="carry-chip ' + cls + '">'
+      + '<span class="carry-tenor">' + tenorMap[k] + '</span>'
+      + '<span class="carry-bps">' + sgn(c.carry_bps) + c.carry_bps + ' bps</span>'
+      + '<span class="carry-action">' + action + '</span>'
+      + '</div>';
+  });
+  el.innerHTML = html;
+}
+
+/* === IORB CORRIDOR BAR ============================================ */
+
+function renderCorridor(derived) {
+  var el = document.getElementById('fund-anchor');
+  if (!el || !derived || !derived.corridor) return;
+  var c = derived.corridor;
+  // Append corridor track below the existing SOFR-EFFR anchor content
+  var existing = el.querySelector('.corridor-track');
+  if (existing) existing.remove();
+
+  var track = document.createElement('div');
+  track.className = 'corridor-track';
+  track.innerHTML =
+    '<span class="cor-label cor-floor">' + c.floor.toFixed(2) + '% IORB</span>'
+    + '<div class="cor-bar">'
+    + (c.effr_pct != null ? '<span class="cor-dot cor-dot-effr" style="left:' + c.effr_pct + '%" title="EFFR ' + (c.effr_rate || '').toFixed ? c.effr_rate.toFixed(2) + '%' : '' + '">E</span>' : '')
+    + (c.sofr_pct != null ? '<span class="cor-dot cor-dot-sofr" style="left:' + c.sofr_pct + '%" title="SOFR ' + (c.sofr_rate || '').toFixed ? c.sofr_rate.toFixed(2) + '%' : '' + '">S</span>' : '')
+    + '</div>'
+    + '<span class="cor-label cor-upper">' + c.upper.toFixed(2) + '%</span>';
+  el.appendChild(track);
 }
 
 
@@ -1073,9 +1173,19 @@ function renderNews(items) {
   var updLbl  = document.getElementById('news-updated-lbl');
   if (!feed) return;
 
-  // Show all items — WSJ sources sort first, then by date
+  // Show all items — government sources pinned first, then by date
+  var GOV_SOURCES = ['Federal Reserve', 'Fed Banking', 'Fed Other', 'ECB', 'BLS', 'Treasury', 'FOMC'];
   var all = (items || []).filter(function(item) {
     return item && item.title && item.title.trim();
+  });
+
+  // Pin gov/central-bank sources to top regardless of date
+  all.sort(function(a, b) {
+    var aGov = a.isGov || GOV_SOURCES.some(function(g) { return (a.source || '').indexOf(g) !== -1; });
+    var bGov = b.isGov || GOV_SOURCES.some(function(g) { return (b.source || '').indexOf(g) !== -1; });
+    if (aGov && !bGov) return -1;
+    if (!aGov && bGov) return 1;
+    return new Date(b.date || 0) - new Date(a.date || 0);
   });
 
   if (!all.length) {
@@ -1092,6 +1202,15 @@ function renderNews(items) {
   shown.forEach(function(item) {
     var el = document.createElement('article');
     el.className = 'news-item';
+
+    // GOV badge for government/central-bank sources
+    var isGovItem = item.isGov || GOV_SOURCES.some(function(g) { return (item.source || '').indexOf(g) !== -1; });
+    if (isGovItem) {
+      var govBadge = document.createElement('span');
+      govBadge.className = 'news-gov-badge';
+      govBadge.textContent = 'GOV';
+      el.appendChild(govBadge);
+    }
 
     // Tag pill
     if (item.tag) {
@@ -1306,6 +1425,10 @@ function renderDashboard(data) {
   // Section 2: Funding & Liquidity
   renderFunding(data.nyfed, data.fred);
 
+  // Carry strip + corridor (from derived data)
+  try { renderCarryStrip(data.derived); } catch(e) { console.error('[carry] render failed:', e); }
+  try { renderCorridor(data.derived); } catch(e) { console.error('[corridor] render failed:', e); }
+
   // Section 3: FX — Cross Rates + Converter
   renderCrossRates();
   initFxConverter();
@@ -1426,6 +1549,39 @@ function initShortcuts() {
   document.getElementById('btn-shortcuts').addEventListener('click', function(){ var m=document.getElementById('shortcuts-modal'); m.style.display=m.style.display==='none'?'flex':'none'; });
   document.getElementById('modal-close'  ).addEventListener('click', function(){ document.getElementById('shortcuts-modal').style.display='none'; });
   document.getElementById('shortcuts-modal').addEventListener('click', function(e){ if(e.target===this) this.style.display='none'; });
+
+  // === Threshold settings modal ===
+  var thrModal = document.getElementById('threshold-modal');
+  if (thrModal) {
+    document.getElementById('btn-thresholds').addEventListener('click', function() {
+      document.getElementById('thr-short-end').value = THRESHOLDS.shortEndMoveBps;
+      document.getElementById('thr-vix').value = THRESHOLDS.vixHigh;
+      document.getElementById('thr-ig-oas').value = THRESHOLDS.igOasWide;
+      document.getElementById('thr-10y').value = THRESHOLDS.yield10YHigh;
+      thrModal.style.display = 'flex';
+    });
+    document.getElementById('threshold-close').addEventListener('click', function() { thrModal.style.display = 'none'; });
+    document.getElementById('thr-cancel').addEventListener('click', function() { thrModal.style.display = 'none'; });
+    thrModal.addEventListener('click', function(e) { if (e.target === thrModal) thrModal.style.display = 'none'; });
+    document.getElementById('thr-save').addEventListener('click', function() {
+      THRESHOLDS.shortEndMoveBps = parseFloat(document.getElementById('thr-short-end').value) || DEFAULT_THRESHOLDS.shortEndMoveBps;
+      THRESHOLDS.vixHigh = parseFloat(document.getElementById('thr-vix').value) || DEFAULT_THRESHOLDS.vixHigh;
+      THRESHOLDS.igOasWide = parseFloat(document.getElementById('thr-ig-oas').value) || DEFAULT_THRESHOLDS.igOasWide;
+      THRESHOLDS.yield10YHigh = parseFloat(document.getElementById('thr-10y').value) || DEFAULT_THRESHOLDS.yield10YHigh;
+      try { localStorage.setItem('ALERT_THRESHOLDS', JSON.stringify(THRESHOLDS)); } catch(e) {}
+      thrModal.style.display = 'none';
+      // Recompute alerts with new thresholds
+      if (cachedYahoo && cachedFred) {
+        var data = getCachedData('market', 3600000);
+        if (data) {
+          var alerts = computeAlerts(data);
+          renderAlerts(alerts);
+          try { renderRiskPills(data); } catch(e) {}
+          try { var ra = computeRateAlerts(data); renderRateAlerts(ra); } catch(e) {}
+        }
+      }
+    });
+  }
 
   // === About modal ===
   var aboutModal = document.getElementById('about-modal');

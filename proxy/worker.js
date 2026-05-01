@@ -49,20 +49,18 @@ var YAHOO_SYMBOLS = [
 ];
 
 // Lightweight ticker list -- /api/ticker only (10s refresh)
-// Keeps frequent ticker refresh fast: 12 symbols, no FRED/NY Fed overhead
+// Only symbols actually displayed by the frontend ticker strip + FX cross rates.
+// Removed: DOW, NASDAQ, RUSSELL (equity indices — no funding relevance), Silver (unused).
 var TICKER_SYMBOLS_WORKER = [
-  { key: 'SP500',   symbol: '%5EGSPC',  group: 'equities'    },
-  { key: 'DOW',     symbol: '%5EDJI',   group: 'equities'    },
-  { key: 'NASDAQ',  symbol: '%5EIXIC',  group: 'equities'    },
-  { key: 'RUSSELL', symbol: '%5ERUT',   group: 'equities'    },
-  { key: 'WTI',     symbol: 'CL%3DF',   group: 'commodities' },
-  { key: 'Brent',   symbol: 'BZ%3DF',   group: 'commodities' },
-  { key: 'NatGas',  symbol: 'NG%3DF',   group: 'commodities' },
-  { key: 'HeatOil', symbol: 'HO%3DF',   group: 'commodities' },
-  { key: 'Gold',    symbol: 'GC%3DF',   group: 'commodities' },
-  { key: 'Silver',  symbol: 'SI%3DF',   group: 'commodities' },
-  { key: 'VIX',     symbol: '%5EVIX',   group: 'risk'        },
-  { key: 'DXY',     symbol: 'DX-Y.NYB', group: 'risk'        },
+  { key: 'SP500',   symbol: '%5EGSPC',     group: 'equities'    },
+  { key: 'WTI',     symbol: 'CL%3DF',      group: 'commodities' },
+  { key: 'Brent',   symbol: 'BZ%3DF',      group: 'commodities' },
+  { key: 'NatGas',  symbol: 'NG%3DF',      group: 'commodities' },
+  { key: 'HeatOil', symbol: 'HO%3DF',      group: 'commodities' },
+  { key: 'Gold',    symbol: 'GC%3DF',      group: 'commodities' },
+  { key: 'EURUSD',  symbol: 'EURUSD%3DX',  group: 'forex'       },
+  { key: 'VIX',     symbol: '%5EVIX',      group: 'risk'        },
+  { key: 'DXY',     symbol: 'DX-Y.NYB',    group: 'risk'        },
 ];
 
 var FRED_MARKET = [
@@ -76,6 +74,7 @@ var FRED_MARKET = [
   { id: 'SOFR',          label: 'SOFR',         extra: '' },
   { id: 'EFFR',          label: 'EFFR',         extra: '' },
   { id: 'SOFR30DAYAVG',  label: 'SOFR 30D Avg', extra: '' },
+  { id: 'IORB',          label: 'Interest on Reserve Balances', extra: '' },
 ];
 
 // Short-term yields for grouped bar chart (T-1, T-7, T-14)
@@ -250,14 +249,66 @@ async function handleMarketData(env) {
     }
   }
 
+  // ── Derived spread calculations ────────────────────────────────
+  var derived = {};
+
+  // 2s10s spread: DGS10 - DGS2
+  var dgs10 = fredMarket.DGS10 || {};
+  var dgs2  = fredMarket.DGS2  || {};
+  var dgs3m = fredMarket.DGS3MO || {};
+  if (dgs10.current != null && dgs2.current != null) {
+    derived.spread_2s10s = Math.round((dgs10.current - dgs2.current) * 100) / 100;
+  }
+  if (dgs10.prior != null && dgs2.prior != null) {
+    derived.spread_2s10s_prior = Math.round((dgs10.prior - dgs2.prior) * 100) / 100;
+  }
+  // 3M10Y spread: DGS10 - DGS3MO
+  if (dgs10.current != null && dgs3m.current != null) {
+    derived.spread_3m10y = Math.round((dgs10.current - dgs3m.current) * 100) / 100;
+  }
+  if (dgs10.prior != null && dgs3m.prior != null) {
+    derived.spread_3m10y_prior = Math.round((dgs10.prior - dgs3m.prior) * 100) / 100;
+  }
+
+  // Carry strip: T-Bill vs SOFR for 1M/3M/6M
+  var sofrON = nyfed.sofr && nyfed.sofr.rate != null ? nyfed.sofr.rate : null;
+  if (sofrON != null) {
+    derived.carry = {};
+    ['DGS1MO','DGS3MO','DGS6MO'].forEach(function(k) {
+      var tb = fredMarket[k];
+      if (tb && tb.current != null) {
+        var carryBps = Math.round((tb.current - sofrON) * 100);
+        derived.carry[k] = { tbill_rate: tb.current, sofr_rate: sofrON, carry_bps: carryBps, is_positive: carryBps >= 0 };
+      }
+    });
+  }
+
+  // IORB corridor
+  var iorb = fredMarket.IORB;
+  if (iorb && iorb.current != null) {
+    var floor = iorb.current;
+    var upper = floor + 0.10;
+    var corridor = { floor: floor, upper: upper };
+    if (nyfed.effr && nyfed.effr.rate != null) {
+      corridor.effr_rate = nyfed.effr.rate;
+      corridor.effr_pct = Math.max(0, Math.min(100, Math.round(((nyfed.effr.rate - floor) / 0.10) * 100)));
+    }
+    if (nyfed.sofr && nyfed.sofr.rate != null) {
+      corridor.sofr_rate = nyfed.sofr.rate;
+      corridor.sofr_pct = Math.max(0, Math.min(100, Math.round(((nyfed.sofr.rate - floor) / 0.10) * 100)));
+    }
+    derived.corridor = corridor;
+  }
+
   return jsonResp({
     timestamp: now.toISOString(),
-    fred_key_set: !!(fredKey),   // diagnostic: visible in DevTools Network tab
+    fred_key_set: !!(fredKey),
     yahoo: yahoo,
     fred: fredMarket,
     macro: fredMacro,
     nyfed: nyfed,
     yieldsHist: yieldsHist,
+    derived: derived,
     fomc: {
       next: nextFomc,
       daysAway: fomcDays,
