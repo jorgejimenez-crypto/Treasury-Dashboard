@@ -15,7 +15,7 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
-var APP_VERSION         = '20260501b';
+var APP_VERSION         = '20260504';
 
 // Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
 function checkCacheVersion() {
@@ -142,6 +142,14 @@ function sgn(v)         { return (v==null) ? '' : v>=0 ? '+' : ''; }
 function nowET()        { return new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'})); }
 function isOpen()       { var n=nowET(),d=n.getDay(),m=n.getHours()*60+n.getMinutes(); return d>0&&d<6&&m>=570&&m<960; }
 
+// VIX/DXY fallback: prefer Yahoo intraday, fall back to FRED daily
+function getBestRate(yahooObj, fredVal) {
+  var yv = yahooObj && yahooObj.current;
+  if (yv != null && yv !== 0 && !isNaN(yv)) return { value: yv, source: 'Yahoo', isLive: true };
+  if (fredVal != null && !isNaN(fredVal))    return { value: fredVal, source: 'FRED daily', isLive: false };
+  return null;
+}
+
 
 // === SILENT ALERT COMPUTATION ===================================
 // Risk monitoring kept in background even though no Risk panel is shown.
@@ -162,23 +170,23 @@ function computeAlerts(data) {
   else if (sigs.length === 1)
     alerts.push({ level:'yellow', msg:'COMMODITY WATCH: '+sigs[0] });
 
-  // VIX
-  var vix = y.VIX;
-  if (vix && vix.current != null) {
-    if (vix.current > THRESHOLDS.vixHigh)
-      alerts.push({ level:'red',    msg:'VIX '+vix.current.toFixed(1)+' — elevated risk' });
-    else {
-      var vp = pct(vix.current, vix.prior);
+  // VIX (with FRED daily fallback)
+  var der = data.derived || {};
+  var vixBest = getBestRate(y.VIX, der.vix_fred);
+  if (vixBest) {
+    if (vixBest.value > THRESHOLDS.vixHigh)
+      alerts.push({ level:'red',    msg:'VIX '+vixBest.value.toFixed(1)+' — elevated risk' + (vixBest.isLive ? '' : ' (FRED daily)') });
+    else if (y.VIX && y.VIX.prior != null) {
+      var vp = pct(vixBest.value, y.VIX.prior);
       if (vp!=null && Math.abs(vp) > THRESHOLDS.vixPctSpike)
         alerts.push({ level:'yellow', msg:'VIX '+sgn(vp)+vp.toFixed(1)+'% DoD' });
     }
   }
 
-  // DXY
-  var dxy = y.DXY;
-  if (dxy && dxy.current!=null &&
-     (dxy.current < THRESHOLDS.dxyLow || dxy.current > THRESHOLDS.dxyHigh))
-    alerts.push({ level:'yellow', msg:'DXY '+dxy.current.toFixed(2)+' — outside '+THRESHOLDS.dxyLow+'–'+THRESHOLDS.dxyHigh });
+  // DXY (with FRED daily fallback)
+  var dxyBest = getBestRate(y.DXY, der.dxy_fred);
+  if (dxyBest && (dxyBest.value < THRESHOLDS.dxyLow || dxyBest.value > THRESHOLDS.dxyHigh))
+    alerts.push({ level:'yellow', msg:'DXY '+dxyBest.value.toFixed(2)+' — outside '+THRESHOLDS.dxyLow+'–'+THRESHOLDS.dxyHigh + (dxyBest.isLive ? '' : ' (FRED daily)') });
 
   // 10Y yield
   var y10 = data.fred && data.fred.DGS10;
@@ -214,22 +222,25 @@ function renderRiskPills(data) {
   var y = data.yahoo || {}, f = data.fred || {};
   var pills = [];
 
-  // VIX
-  var vix = y.VIX;
-  if (vix && vix.current != null) {
-    var v = vix.current;
+  // VIX (with FRED daily fallback)
+  var der = data.derived || {};
+  var vixBest = getBestRate(y.VIX, der.vix_fred);
+  if (vixBest) {
+    var v = vixBest.value;
     var cls = v > THRESHOLDS.vixHigh ? 'risk-pill-red' : v > 20 ? 'risk-pill-yellow' : 'risk-pill-green';
-    pills.push('<span class="risk-pill '+cls+'"><span class="risk-pill-label">VIX</span>'+v.toFixed(1)+'</span>');
+    pills.push('<span class="risk-pill '+cls+'"><span class="risk-pill-label">VIX</span>'+v.toFixed(1)
+      + (!vixBest.isLive ? '<span class="pill-src"> FRED</span>' : '') + '</span>');
   }
 
-  // DXY
-  var dxy = y.DXY;
-  if (dxy && dxy.current != null) {
-    var d = dxy.current;
+  // DXY (with FRED daily fallback)
+  var dxyBest = getBestRate(y.DXY, der.dxy_fred);
+  if (dxyBest) {
+    var d = dxyBest.value;
     var cls2 = (d < THRESHOLDS.dxyLow || d > THRESHOLDS.dxyHigh) ? 'risk-pill-yellow' : 'risk-pill-green';
-    var dp = pct(d, dxy.prior);
+    var dp = (y.DXY && y.DXY.prior != null) ? pct(d, y.DXY.prior) : null;
     var dpStr = dp != null ? ' ' + (dp >= 0 ? '+' : '') + dp.toFixed(2) + '%' : '';
-    pills.push('<span class="risk-pill '+cls2+'"><span class="risk-pill-label">DXY</span>'+d.toFixed(2)+dpStr+'</span>');
+    pills.push('<span class="risk-pill '+cls2+'"><span class="risk-pill-label">DXY</span>'+d.toFixed(2)+dpStr
+      + (!dxyBest.isLive ? '<span class="pill-src"> FRED</span>' : '') + '</span>');
   }
 
   // IG OAS
@@ -612,7 +623,7 @@ function initEconCalendarWidget() {
 }
 
 
-// === SECTION 2 — FUNDING & LIQUIDITY ============================
+// === SECTION 2 — FUNDING RATES ===================================
 //
 // Treasury decision panel: signal strip + SOFR-EFFR anchor + cards + takeaway.
 // Ordered by treasury relevance: SOFR · EFFR · 1M Bill · 3M Bill · SOFR 30D.
@@ -1478,7 +1489,7 @@ function renderDashboard(data) {
     renderRateAlerts(rateAlerts);
   } catch(e) { console.error('[rate-alerts] render failed:', e); }
 
-  // Section 2: Funding & Liquidity
+  // Section 2: Funding Rates
   renderFunding(data.nyfed, data.fred, data.derived);
 
   // Derived data visualizations (carry, corridor, breakevens, FF implied)
@@ -1494,7 +1505,7 @@ function renderDashboard(data) {
   // Market ticker (top strip)
   renderTicker(data.yahoo, data.fred);
 
-  // Live Catalyst (lazy — injected once)
+  // Bloomberg Live (lazy — injected once)
   initLiveStream();
 
   // News — show cached immediately; live fetch runs on separate timer

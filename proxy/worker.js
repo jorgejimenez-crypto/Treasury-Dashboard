@@ -80,6 +80,8 @@ var FRED_MARKET = [
   { id: 'T5YIE',         label: '5Y Breakeven Inflation',     extra: '' },
   { id: 'T10YIE',        label: '10Y Breakeven Inflation',    extra: '' },
   { id: 'DGS5',          label: '5Y UST',                     extra: '' },
+  { id: 'VIXCLS',        label: 'VIX CBOE Volatility Index (daily)', extra: '' },
+  { id: 'DTWEXBGS',      label: 'USD Trade Weighted Index (daily)',   extra: '' },
 ];
 
 // Short-term yields for grouped bar chart (T-1, T-7, T-14)
@@ -305,6 +307,10 @@ async function handleMarketData(env) {
     derived.corridor = corridor;
   }
 
+  // VIX and DXY FRED daily fallbacks
+  derived.vix_fred = (fredMarket.VIXCLS  && fredMarket.VIXCLS.current  != null) ? fredMarket.VIXCLS.current  : null;
+  derived.dxy_fred = (fredMarket.DTWEXBGS && fredMarket.DTWEXBGS.current != null) ? fredMarket.DTWEXBGS.current : null;
+
   // Breakeven inflation + real yields
   derived.real_yields = {};
   [['T5YIE','DGS5','5Y'], ['T10YIE','DGS10','10Y']].forEach(function(r) {
@@ -390,7 +396,7 @@ async function handleTicker() {
 // ============================================
 
 var NEWS_CACHE_TTL = 420;   // 7 minutes
-var NEWS_CACHE_KEY = 'https://treasury-news-v4.cache/api/news';  // v4: rss2json proxy fix
+var NEWS_CACHE_KEY = 'https://treasury-news-v5.cache/api/news';  // v5: NewsAPI primary, gov always, wire fallback
 
 async function handleNews(env) {
   // ── 1. Check Cloudflare edge cache ──────────────────────────
@@ -410,30 +416,50 @@ async function handleNews(env) {
     }
   } catch (e) { /* cache API unavailable — fall through to fetch */ }
 
-  // ── 2. Fetch all news sources in parallel ───────────────────
+  // ── 2. Fetch news sources by priority ────────────────────────
+  //  PRIMARY: NewsAPI (if key set) — best quality commercial news
+  //  ALWAYS:  Government RSS (Fed, BLS) — pinned regardless
+  //  FALLBACK: WSJ/Google News + wire RSS (only if above yield <5 items)
   var allItems = [];
-
-  // WSJ (Economy · Markets · US News) — primary source per spec
-  try {
-    var wsjItems = await fetchAllWSJ();
-    allItems = allItems.concat(wsjItems);
-  } catch (e) { /* all WSJ failed — continue with other sources */ }
-
-  // Government / wire feeds (Fed, ECB, Reuters, MarketWatch, CNBC, Yahoo)
-  var rssResults = await Promise.all(RSS_FEEDS.map(function(feed) {
-    return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
-  }));
-  for (var i = 0; i < rssResults.length; i++) {
-    allItems = allItems.concat(rssResults[i]);
-  }
-
-  // Optional NewsAPI enhancement (uses NEWSAPI_KEY secret)
   var newsapiKey = env.NEWSAPI_KEY || '';
+  var gotPrimary = false;
+
+  // PRIMARY — NewsAPI
   if (newsapiKey) {
     try {
       var naItems = await fetchNewsAPI(newsapiKey);
-      allItems = allItems.concat(naItems);
-    } catch (e) { /* continue with RSS only */ }
+      if (naItems && naItems.length > 0) {
+        allItems = allItems.concat(naItems);
+        gotPrimary = true;
+        console.log('[news] NewsAPI returned ' + naItems.length + ' items');
+      }
+    } catch (e) { console.error('[news] NewsAPI failed:', e.message); }
+  }
+
+  // ALWAYS — Government RSS feeds (Fed + BLS + ECB)
+  var govFeeds = RSS_FEEDS.filter(function(f) { return f.isGov; });
+  if (govFeeds.length) {
+    var govResults = await Promise.all(govFeeds.map(function(feed) {
+      return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
+    }));
+    for (var gi = 0; gi < govResults.length; gi++) {
+      allItems = allItems.concat(govResults[gi].items || govResults[gi]);
+    }
+  }
+
+  // FALLBACK — Wire RSS + WSJ/Google News (only if primary didn't yield enough)
+  if (!gotPrimary || allItems.length < 5) {
+    var wireFeeds = RSS_FEEDS.filter(function(f) { return !f.isGov; });
+    var wireResults = await Promise.all(wireFeeds.map(function(feed) {
+      return fetchRSS(feed.url, feed.source, feed.tag, feed.isGov);
+    }));
+    for (var wi = 0; wi < wireResults.length; wi++) {
+      allItems = allItems.concat(wireResults[wi].items || wireResults[wi]);
+    }
+    try {
+      var wsjItems = await fetchAllWSJ();
+      allItems = allItems.concat(wsjItems);
+    } catch (e) { /* WSJ fallback failed — continue */ }
   }
 
   // ── 3. Age filter: drop items older than 72 h ───────────────
