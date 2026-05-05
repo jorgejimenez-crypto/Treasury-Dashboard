@@ -1512,6 +1512,10 @@ function renderDashboard(data) {
   var cachedNews = getCachedData('news', 7200000);
   if (cachedNews) renderNews(cachedNews);
 
+  // Maturity ladder / CoF / redeployment — uses stored positions + live derived data
+  window._lastDerived = data.derived;
+  refreshLadder();
+
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
   document.getElementById('dashboard').style.display = 'flex';
@@ -1682,3 +1686,257 @@ tickerTimer  = setTimeout(tickerRefresh, tickerBackoff);
 initShortcuts();
 initNotes();
 setInterval(updateAgo, 10000);
+
+// ============================================================
+// FEATURE 1 — Maturity Ladder  (positions stored in localStorage)
+// ============================================================
+
+var POSITIONS_KEY = 'TREASURY_POSITIONS';
+
+function getPositions() {
+  try { return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+function savePosition(pos) {
+  var positions = getPositions();
+  if (!pos.id) pos.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  var idx = positions.findIndex(function(p) { return p.id === pos.id; });
+  if (idx >= 0) positions[idx] = pos; else positions.push(pos);
+  try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions)); return true; }
+  catch(e) { return false; }
+}
+
+function deletePosition(id) {
+  var positions = getPositions().filter(function(p) { return p.id !== id; });
+  try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions)); } catch(e) {}
+  refreshLadder();
+}
+
+function refreshLadder() {
+  var positions = getPositions();
+  renderMaturityLadder(positions);
+  renderCoFStrip(positions);
+  if (window._lastDerived) renderRedeploymentAnalysis(positions, window._lastDerived);
+}
+
+function daysUntil(dateStr) {
+  var target = new Date(dateStr + 'T00:00:00');
+  var today  = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((target - today) / 86400000);
+}
+
+function fmtM(n) {
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Part B: Maturity ladder renderer ──
+
+function renderMaturityLadder(positions) {
+  var container = document.getElementById('maturity-ladder');
+  if (!container) return;
+
+  var active = positions
+    .map(function(p) { return Object.assign({}, p, { days: daysUntil(p.maturity_date) }); })
+    .filter(function(p) { return p.days > 0; })
+    .sort(function(a,b) { return a.days - b.days; });
+
+  if (active.length === 0) {
+    container.innerHTML =
+      '<div class="ladder-empty">No active positions.' +
+      '<br><button onclick="openPositionForm()">+ Add position</button></div>';
+    return;
+  }
+
+  var buckets = { '0-30':0, '31-60':0, '61-90':0, '91+':0 };
+  active.forEach(function(p) {
+    var b = p.days<=30?'0-30':p.days<=60?'31-60':p.days<=90?'61-90':'91+';
+    buckets[b] += p.notional;
+  });
+
+  var hasUrgent7 = active.some(function(p){ return p.days <= 7; });
+  var bucketDefs = [
+    { key:'0-30',  label:'0–30 days'  },
+    { key:'31-60', label:'31–60 days' },
+    { key:'61-90', label:'61–90 days' },
+    { key:'91+',   label:'91+ days'   }
+  ];
+
+  var timelineHtml = '<div class="ladder-timeline">';
+  bucketDefs.forEach(function(b) {
+    var total = buckets[b.key];
+    var cls   = '';
+    if (b.key==='0-30' && total>0) cls = hasUrgent7 ? ' bucket-critical' : ' bucket-urgent';
+    timelineHtml +=
+      '<div class="ladder-bucket' + cls + '">' +
+        '<div class="bucket-label">' + b.label + '</div>' +
+        '<div class="bucket-amount">' + (total>0 ? fmtM(total) : '—') + '</div>' +
+      '</div>';
+  });
+  timelineHtml += '</div>';
+
+  var tableHtml =
+    '<table class="ladder-table"><thead><tr>' +
+      '<th>Type</th><th>Notional</th><th>Rate</th>' +
+      '<th>Matures</th><th>Days</th><th></th>' +
+    '</tr></thead><tbody>';
+
+  active.slice(0,12).forEach(function(p) {
+    var cls = p.days<=7 ? 'row-urgent' : p.days<=30 ? 'row-near' : '';
+    tableHtml +=
+      '<tr class="' + cls + '">' +
+        '<td>' + escH(p.type) + '</td>' +
+        '<td>' + fmtM(p.notional) + '</td>' +
+        '<td>' + parseFloat(p.rate).toFixed(2) + '%</td>' +
+        '<td>' + p.maturity_date + '</td>' +
+        '<td>' + p.days + 'd' + (p.days<=7?' ⚠':'') + '</td>' +
+        '<td><button class="btn-del-pos" ' +
+          'onclick="deletePosition(\'' + p.id + '\')" ' +
+          'title="Remove">✕</button></td>' +
+      '</tr>';
+    if (p.note) {
+      tableHtml +=
+        '<tr><td colspan="6" class="ladder-note">' + escH(p.note) + '</td></tr>';
+    }
+  });
+
+  if (active.length > 12) {
+    tableHtml +=
+      '<tr><td colspan="6" class="ladder-more">+ ' +
+      (active.length-12) + ' more positions</td></tr>';
+  }
+
+  tableHtml += '</tbody></table>';
+  container.innerHTML = timelineHtml + tableHtml;
+}
+
+// ── Part C: Blended cost of funds ──
+
+function computeBlendedCoF(positions) {
+  var active = positions.filter(function(p) {
+    return daysUntil(p.maturity_date)>0 && p.notional>0 && p.rate>0;
+  });
+  if (!active.length) return null;
+  var totalN    = active.reduce(function(s,p){ return s+p.notional; }, 0);
+  var weightedR = active.reduce(function(s,p){ return s+(p.rate*p.notional); }, 0);
+  return { rate: parseFloat((weightedR/totalN).toFixed(2)), total: totalN, count: active.length };
+}
+
+function renderCoFStrip(positions) {
+  var container = document.getElementById('cof-strip');
+  if (!container) return;
+  var cof = computeBlendedCoF(positions);
+  if (!cof) { container.innerHTML = ''; return; }
+  container.innerHTML =
+    '<div class="cof-item"><div class="cof-label">Blended CoF</div>' +
+      '<div class="cof-val">' + cof.rate.toFixed(2) + '%</div></div>' +
+    '<div class="cof-item"><div class="cof-label">Total managed</div>' +
+      '<div class="cof-val">' + fmtM(cof.total) + '</div></div>' +
+    '<div class="cof-item"><div class="cof-label">Positions</div>' +
+      '<div class="cof-val">' + cof.count + '</div></div>';
+}
+
+// ── Part D: Position entry form ──
+
+function openPositionForm(existing) {
+  var modal = document.getElementById('position-modal');
+  if (!modal) return;
+  document.getElementById('pos-error').textContent = '';
+  document.getElementById('pos-id').value       = existing ? existing.id            : '';
+  document.getElementById('pos-type').value     = existing ? existing.type          : 'T-Bill';
+  document.getElementById('pos-notional').value = existing ? existing.notional      : '';
+  document.getElementById('pos-rate').value     = existing ? existing.rate          : '';
+  document.getElementById('pos-purchase').value = existing ? existing.purchase_date : todayStr();
+  document.getElementById('pos-maturity').value = existing ? existing.maturity_date : '';
+  document.getElementById('pos-note').value     = existing ? (existing.note||'')    : '';
+  modal.style.display = 'flex';
+  setTimeout(function(){ document.getElementById('pos-notional').focus(); }, 50);
+}
+
+function closePositionForm() {
+  var modal = document.getElementById('position-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function submitPositionForm() {
+  var errEl    = document.getElementById('pos-error');
+  var notional = parseFloat(document.getElementById('pos-notional').value);
+  var rate     = parseFloat(document.getElementById('pos-rate').value);
+  var maturity = document.getElementById('pos-maturity').value;
+  if (!notional || notional <= 0)         { errEl.textContent = 'Notional must be a positive number.'; return; }
+  if (!rate || rate <= 0 || rate > 20)    { errEl.textContent = 'Rate must be between 0% and 20%.';   return; }
+  if (!maturity)                          { errEl.textContent = 'Maturity date is required.';          return; }
+  if (daysUntil(maturity) <= 0)           { errEl.textContent = 'Maturity date must be in the future.'; return; }
+  var ok = savePosition({
+    id:            document.getElementById('pos-id').value || null,
+    type:          document.getElementById('pos-type').value,
+    notional:      notional,
+    rate:          rate,
+    purchase_date: document.getElementById('pos-purchase').value || todayStr(),
+    maturity_date: maturity,
+    note:          document.getElementById('pos-note').value.trim()
+  });
+  if (!ok) { errEl.textContent = 'Save failed — localStorage may be full.'; return; }
+  closePositionForm();
+  refreshLadder();
+}
+
+// ============================================================
+// FEATURE 2 — Redeployment analysis
+// NOTE: carry keys in derived are 'DGS1MO','DGS3MO','DGS6MO'
+//       not '1M','3M','6M' — corrected from spec.
+// ============================================================
+
+function renderRedeploymentAnalysis(positions, derived) {
+  var container = document.getElementById('redeploy-panel');
+  if (!container) return;
+  var cof = computeBlendedCoF(positions);
+  if (!cof || !derived || !derived.carry) { container.innerHTML = ''; return; }
+
+  var header = document.createElement('div');
+  header.className   = 'redeploy-header';
+  header.textContent = 'Roll analysis — current CoF ' + cof.rate.toFixed(2) + '%';
+  container.innerHTML = '';
+  container.appendChild(header);
+
+  var strip = document.createElement('div');
+  strip.className = 'redeploy-strip';
+
+  // Worker uses 'DGS1MO','DGS3MO','DGS6MO' as carry keys
+  [
+    { key:'DGS1MO', label:'1M' },
+    { key:'DGS3MO', label:'3M' },
+    { key:'DGS6MO', label:'6M' }
+  ].forEach(function(t) {
+    var c = derived.carry[t.key];
+    if (!c) return;
+    var pickup    = parseFloat((c.tbill_rate - cof.rate).toFixed(2));
+    var pickupBps = Math.round(pickup * 100);
+    var isAccr    = pickup > 0;
+    var cell      = document.createElement('div');
+    cell.className = 'redeploy-cell ' + (isAccr ? 'rd-accretive' : 'rd-dilutive');
+    cell.title =
+      t.label + ' T-Bill: ' + c.tbill_rate.toFixed(2) + '%\n' +
+      'Your CoF: ' + cof.rate.toFixed(2) + '%\n' +
+      'Pickup: ' + (pickupBps>=0?'+':'') + pickupBps + ' bps';
+    cell.innerHTML =
+      '<span class="rd-tenor">' + t.label + ' T-Bill</span>' +
+      '<span class="rd-yield">' + c.tbill_rate.toFixed(2) + '%</span>' +
+      '<span class="rd-pickup">' + (pickupBps>=0?'+':'') + pickupBps + ' bps</span>';
+    strip.appendChild(cell);
+  });
+  container.appendChild(strip);
+}
+
+// ── Bootstrap ladder on page load ──
+refreshLadder();

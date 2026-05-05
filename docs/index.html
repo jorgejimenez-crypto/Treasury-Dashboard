@@ -223,6 +223,20 @@
     </section>
   </div>
 
+  <!-- === ROW 4: Maturity Ladder (full-width) === -->
+  <div class="dash-row dash-row-full">
+    <section class="desk-section dash-cell" id="panel-positions">
+      <h2 class="section-title">Maturity Ladder
+        <button class="panel-action-btn" onclick="openPositionForm()"
+                title="Add position">+ Add</button>
+      </h2>
+      <div id="cof-strip" class="cof-strip"></div>
+      <div id="maturity-ladder"></div>
+      <div id="redeploy-panel" style="margin-top:12px"></div>
+      <div class="panel-source">localStorage · browser only · not synced</div>
+    </section>
+  </div>
+
 </main>
 
 <footer id="app-footer">
@@ -326,6 +340,56 @@
       <span class="about-updated">Last updated: April 2026</span>
       <a class="about-gh-link" href="https://github.com/jorgejimenez-crypto/Treasury-Dashboard"
          target="_blank" rel="noopener">View on GitHub &#x2197;</a>
+    </div>
+  </div>
+</div>
+
+<!-- === POSITION ENTRY MODAL === -->
+<div id="position-modal" style="display:none;position:fixed;inset:0;
+     background:rgba(0,0,0,.6);z-index:9999;align-items:center;
+     justify-content:center;">
+  <div class="position-panel">
+    <h3>Add position</h3>
+    <input type="hidden" id="pos-id">
+    <div class="pos-field">
+      <label>Instrument type</label>
+      <select id="pos-type">
+        <option value="T-Bill">T-Bill (Treasury Bill)</option>
+        <option value="MMF">Money Market Fund</option>
+        <option value="Repo">Repo / Reverse Repo</option>
+        <option value="CP">Commercial Paper</option>
+        <option value="Bank Deposit">Bank Deposit / TCD</option>
+        <option value="Agency">Agency Discount Note</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="pos-field">
+      <label>Notional (USD)</label>
+      <input type="number" id="pos-notional" min="1000" step="100000"
+             placeholder="e.g. 25000000">
+    </div>
+    <div class="pos-field">
+      <label>Yield / Rate (%)</label>
+      <input type="number" id="pos-rate" min="0" max="20" step="0.01"
+             placeholder="e.g. 5.18">
+    </div>
+    <div class="pos-field">
+      <label>Purchase / settlement date</label>
+      <input type="date" id="pos-purchase">
+    </div>
+    <div class="pos-field">
+      <label>Maturity date</label>
+      <input type="date" id="pos-maturity">
+    </div>
+    <div class="pos-field">
+      <label>Note (optional)</label>
+      <input type="text" id="pos-note"
+             placeholder="e.g. 91-day auction, rolled from March">
+    </div>
+    <div class="pos-error" id="pos-error"></div>
+    <div class="pos-actions">
+      <button class="btn-pos-cancel" onclick="closePositionForm()">Cancel</button>
+      <button class="btn-pos-save"   onclick="submitPositionForm()">Save position</button>
     </div>
   </div>
 </div>
