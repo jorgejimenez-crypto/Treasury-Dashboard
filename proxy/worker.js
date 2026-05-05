@@ -46,8 +46,10 @@ var YAHOO_SYMBOLS = [
   // Risk indicators
   { key: 'DXY',     symbol: 'DX-Y.NYB',   group: 'risk' },
   { key: 'VIX',     symbol: '%5EVIX',     group: 'risk' },
-  // Fed Funds futures front month (CME ZQ=F)
-  { key: 'FF_FRONT', symbol: 'ZQ%3DF',    group: 'rates' },
+  // FF_FRONT (ZQ=F) intentionally excluded from Phase-1 batch:
+  // Phase-1 fires 23 Yahoo + 16 FRED_MARKET + 8 FRED_MACRO + 3 NY Fed = 50 concurrent
+  // subrequests — exactly at the free-tier cap. FF_FRONT is fetched in the
+  // handleTicker endpoint (Phase-2, separate call) where budget is not a constraint.
 ];
 
 // Lightweight ticker list -- /api/ticker only (10s refresh)
@@ -63,6 +65,10 @@ var TICKER_SYMBOLS_WORKER = [
   { key: 'EURUSD',  symbol: 'EURUSD%3DX',  group: 'forex'       },
   { key: 'VIX',     symbol: '%5EVIX',      group: 'risk'        },
   { key: 'DXY',     symbol: 'DX-Y.NYB',    group: 'risk'        },
+  // Fed Funds front-month futures (CME ZQ=F) — used for derived.implied_ff_rate
+  // Lives here (lightweight ticker path) rather than Phase-1 market-data batch
+  // to keep Phase-1 concurrent subrequests at exactly the 50 free-tier cap.
+  { key: 'FF_FRONT', symbol: 'ZQ%3DF',     group: 'rates'       },
 ];
 
 var FRED_MARKET = [
