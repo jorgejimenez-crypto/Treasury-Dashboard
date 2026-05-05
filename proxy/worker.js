@@ -39,17 +39,17 @@ var YAHOO_SYMBOLS = [
   { key: 'USDMXN',  symbol: 'USDMXN%3DX', group: 'forex' },
   { key: 'USDBRL',  symbol: 'USDBRL%3DX', group: 'forex' },
   { key: 'USDSGD',  symbol: 'USDSGD%3DX', group: 'forex' },
-  { key: 'USDHKD',  symbol: 'USDHKD%3DX', group: 'forex' },
+  // USDHKD removed — HKD is pegged to USD (7.75–7.85 band), negligible FX risk for treasury
   { key: 'USDINR',  symbol: 'USDINR%3DX', group: 'forex' },
   { key: 'USDSEK',  symbol: 'USDSEK%3DX', group: 'forex' },
   { key: 'USDNOK',  symbol: 'USDNOK%3DX', group: 'forex' },
   // Risk indicators
   { key: 'DXY',     symbol: 'DX-Y.NYB',   group: 'risk' },
   { key: 'VIX',     symbol: '%5EVIX',     group: 'risk' },
-  // FF_FRONT (ZQ=F) intentionally excluded from Phase-1 batch:
-  // Phase-1 fires 23 Yahoo + 16 FRED_MARKET + 8 FRED_MACRO + 3 NY Fed = 50 concurrent
-  // subrequests — exactly at the free-tier cap. FF_FRONT is fetched in the
-  // handleTicker endpoint (Phase-2, separate call) where budget is not a constraint.
+  // Fed Funds front-month futures (CME ZQ=F) — MUST stay in Phase-1 YAHOO_SYMBOLS
+  // so handleMarketData can compute derived.implied_ff_rate from yahoo.FF_FRONT.
+  // Replaces USDHKD (pegged, removed above). Phase-1 stays at 50 subrequests.
+  { key: 'FF_FRONT', symbol: 'ZQ%3DF',   group: 'rates' },
 ];
 
 // Lightweight ticker list -- /api/ticker only (10s refresh)
@@ -65,9 +65,8 @@ var TICKER_SYMBOLS_WORKER = [
   { key: 'EURUSD',  symbol: 'EURUSD%3DX',  group: 'forex'       },
   { key: 'VIX',     symbol: '%5EVIX',      group: 'risk'        },
   { key: 'DXY',     symbol: 'DX-Y.NYB',    group: 'risk'        },
-  // Fed Funds front-month futures (CME ZQ=F) — used for derived.implied_ff_rate
-  // Lives here (lightweight ticker path) rather than Phase-1 market-data batch
-  // to keep Phase-1 concurrent subrequests at exactly the 50 free-tier cap.
+  // Fed Funds front-month futures (CME ZQ=F) — also in YAHOO_SYMBOLS for derived computation.
+  // Kept here too so the ticker strip can display the price directly if needed.
   { key: 'FF_FRONT', symbol: 'ZQ%3DF',     group: 'rates'       },
 ];
 
@@ -113,6 +112,73 @@ var FOMC_2026 = [
   '2026-01-29', '2026-03-19', '2026-04-30', '2026-06-18',
   '2026-07-30', '2026-09-17', '2026-11-05', '2026-12-17',
 ];
+
+// T-Bill settlement dates — sourced from TreasuryDirect 2026 auction calendar.
+// Settlement = auction date + 2 business days (typically Monday auction → Thursday settlement).
+// UPDATE EACH DECEMBER: pull new year schedule from treasurydirect.gov/auctions/announcements-data-results/
+// Last updated: May 2026
+var TBILL_AUCTIONS = {
+  // 4-week bills: auction every Monday, settle every Thursday
+  '4W': [
+    '2026-01-08','2026-01-15','2026-01-22','2026-01-29',
+    '2026-02-05','2026-02-12','2026-02-19','2026-02-26',
+    '2026-03-05','2026-03-12','2026-03-19','2026-03-26',
+    '2026-04-02','2026-04-09','2026-04-16','2026-04-23','2026-04-30',
+    '2026-05-07','2026-05-14','2026-05-21','2026-05-28',
+    '2026-06-04','2026-06-11','2026-06-18','2026-06-25',
+    '2026-07-02','2026-07-09','2026-07-16','2026-07-23','2026-07-30',
+    '2026-08-06','2026-08-13','2026-08-20','2026-08-27',
+    '2026-09-03','2026-09-10','2026-09-17','2026-09-24',
+    '2026-10-01','2026-10-08','2026-10-15','2026-10-22','2026-10-29',
+    '2026-11-05','2026-11-12','2026-11-19','2026-11-25',
+    '2026-12-03','2026-12-10','2026-12-17','2026-12-24',
+  ],
+  // 8-week bills: same Monday auction cycle as 4W (different CUSIP, same settlement)
+  '8W': [
+    '2026-01-08','2026-01-15','2026-01-22','2026-01-29',
+    '2026-02-05','2026-02-12','2026-02-19','2026-02-26',
+    '2026-03-05','2026-03-12','2026-03-19','2026-03-26',
+    '2026-04-02','2026-04-09','2026-04-16','2026-04-23','2026-04-30',
+    '2026-05-07','2026-05-14','2026-05-21','2026-05-28',
+    '2026-06-04','2026-06-11','2026-06-18','2026-06-25',
+    '2026-07-02','2026-07-09','2026-07-16','2026-07-23','2026-07-30',
+    '2026-08-06','2026-08-13','2026-08-20','2026-08-27',
+    '2026-09-03','2026-09-10','2026-09-17','2026-09-24',
+    '2026-10-01','2026-10-08','2026-10-15','2026-10-22','2026-10-29',
+    '2026-11-05','2026-11-12','2026-11-19','2026-11-25',
+    '2026-12-03','2026-12-10','2026-12-17','2026-12-24',
+  ],
+  // 13-week (3-month) bills: auction every Monday, settle every Thursday (weekly)
+  '13W': [
+    '2026-01-08','2026-01-15','2026-01-22','2026-01-29',
+    '2026-02-05','2026-02-12','2026-02-19','2026-02-26',
+    '2026-03-05','2026-03-12','2026-03-19','2026-03-26',
+    '2026-04-02','2026-04-09','2026-04-16','2026-04-23','2026-04-30',
+    '2026-05-07','2026-05-14','2026-05-21','2026-05-28',
+    '2026-06-04','2026-06-11','2026-06-18','2026-06-25',
+    '2026-07-02','2026-07-09','2026-07-16','2026-07-23','2026-07-30',
+    '2026-08-06','2026-08-13','2026-08-20','2026-08-27',
+    '2026-09-03','2026-09-10','2026-09-17','2026-09-24',
+    '2026-10-01','2026-10-08','2026-10-15','2026-10-22','2026-10-29',
+    '2026-11-05','2026-11-12','2026-11-19','2026-11-25',
+    '2026-12-03','2026-12-10','2026-12-17','2026-12-24',
+  ],
+  // 26-week (6-month) bills: auction every Monday, settle every Thursday (weekly)
+  '26W': [
+    '2026-01-08','2026-01-15','2026-01-22','2026-01-29',
+    '2026-02-05','2026-02-12','2026-02-19','2026-02-26',
+    '2026-03-05','2026-03-12','2026-03-19','2026-03-26',
+    '2026-04-02','2026-04-09','2026-04-16','2026-04-23','2026-04-30',
+    '2026-05-07','2026-05-14','2026-05-21','2026-05-28',
+    '2026-06-04','2026-06-11','2026-06-18','2026-06-25',
+    '2026-07-02','2026-07-09','2026-07-16','2026-07-23','2026-07-30',
+    '2026-08-06','2026-08-13','2026-08-20','2026-08-27',
+    '2026-09-03','2026-09-10','2026-09-17','2026-09-24',
+    '2026-10-01','2026-10-08','2026-10-15','2026-10-22','2026-10-29',
+    '2026-11-05','2026-11-12','2026-11-19','2026-11-25',
+    '2026-12-03','2026-12-10','2026-12-17','2026-12-24',
+  ],
+};
 
 // ============================================
 // WSJ RSS FEEDS  (fetched separately via fetchWSJFeed)
@@ -214,30 +280,8 @@ function jsonResp(data, status) {
   });
 }
 
-// ── T-Bill auction date helpers ──────────────────────────────────────────────
-// Generate Thursday settlement dates for weekly or bi-weekly T-Bill auctions.
-// T-Bills auction Monday, settle Thursday (+3 days).
-
-function buildWeeklyThursdays(startStr, endStr) {
-  var dates = [];
-  var d = new Date(startStr + 'T12:00:00Z');
-  // Advance to first Thursday on or after start
-  while (d.getUTCDay() !== 4) d = new Date(d.getTime() + 86400000);
-  var end = new Date(endStr + 'T12:00:00Z');
-  while (d <= end) {
-    dates.push(d.toISOString().split('T')[0]);
-    d = new Date(d.getTime() + 7 * 86400000);
-  }
-  return dates;
-}
-
-function buildBiweeklyThursdays(startStr, endStr) {
-  var all = buildWeeklyThursdays(startStr, endStr);
-  return all.filter(function(_, i) { return i % 2 === 0; });
-}
-
 // ============================================
-// /api/market-data  (original -- untouched)
+// /api/market-data
 // ============================================
 
 async function handleMarketData(env) {
@@ -373,25 +417,18 @@ async function handleMarketData(env) {
     }
   }
 
-  // T-Bill auction schedule — next upcoming settlement date per tenor.
-  // Source: TreasuryDirect 2026 auction calendar (updated annually).
-  // T-Bills settle on the Thursday after each Monday auction.
-  // nextTBillAuction() returns the first settlement date >= today.
+  // T-Bill auction schedule — actual 2026 settlement dates from TreasuryDirect.
+  // Hardcoded because the algorithmic approach (every-other-Thursday) doesn't
+  // account for holiday shifts. Update TBILL_AUCTIONS each December for the new year.
+  // Settlement = Thursday of the week following each Monday auction announcement.
   (function() {
     var todayS = now.toISOString().split('T')[0];
-    // 2026 settlement dates by tenor (every week for 4W/8W, every other for 13W/26W)
-    // Generated from TreasuryDirect auction calendar Jan–Dec 2026
-    var schedules = {
-      '4W':  buildWeeklyThursdays('2026-01-08', '2026-12-31'),
-      '8W':  buildWeeklyThursdays('2026-01-08', '2026-12-31'),
-      '13W': buildBiweeklyThursdays('2026-01-08', '2026-12-31'),
-      '26W': buildBiweeklyThursdays('2026-01-08', '2026-12-31'),
-    };
-    var next = {};
-    Object.keys(schedules).forEach(function(tenor) {
-      var dates = schedules[tenor];
-      var found = dates.filter(function(d) { return d >= todayS; });
-      if (found.length) next[tenor] = found[0];
+    var next   = {};
+    ['4W', '8W', '13W', '26W'].forEach(function(tenor) {
+      var dates = TBILL_AUCTIONS[tenor] || [];
+      for (var i = 0; i < dates.length; i++) {
+        if (dates[i] >= todayS) { next[tenor] = dates[i]; break; }
+      }
     });
     derived.tbill_next_settlement = next;
   })();
