@@ -1532,3 +1532,90 @@ body {
                   border: 1px solid var(--border); border-radius: 5px;
                   font-size: 12px; cursor: pointer; }
 
+
+/* ═══════════════════════════════════════════════════════════
+   TIER 6 — Sparklines, Auction Dates, EFFR-IORB Spread
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Yield sparklines strip ── */
+.spk-strip {
+  display: flex; gap: 8px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.spk-cell {
+  flex: 1; padding: 6px 8px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 5px; cursor: default;
+  transition: border-color .15s;
+}
+.spk-cell:hover { border-color: var(--border-md); }
+.spk-hd {
+  display: flex; align-items: baseline; gap: 5px; margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.spk-tenor {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-2); font-family: var(--mono);
+}
+.spk-val {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  font-family: var(--mono);
+}
+.spk-chg {
+  font-size: 9px; font-weight: 600; font-family: var(--mono);
+  margin-left: auto;
+}
+.spk-up   { color: var(--red);   }   /* yield rose   = funding cost up */
+.spk-dn   { color: var(--green); }   /* yield fell   = easing signal   */
+.spk-flat { color: var(--text-3); }
+.spk-chart { line-height: 0; }
+.spk-na { font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+
+/* ── Auction dates strip ── */
+.auction-dates {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.auc-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-2); margin-bottom: 6px;
+}
+.auc-strip { display: flex; gap: 6px; }
+.auc-cell  {
+  flex: 1; padding: 6px 8px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 5px; text-align: center;
+}
+.auc-tenor { display: block; font-size: 9px; text-transform: uppercase;
+             letter-spacing: .06em; color: var(--text-2); margin-bottom: 2px; }
+.auc-date  { display: block; font-size: 11px; font-weight: 600; color: var(--text);
+             font-family: var(--mono); margin-bottom: 1px; }
+.auc-days  { display: block; font-size: 9px; color: var(--text-3); font-family: var(--mono); }
+.auc-near .auc-days  { color: var(--amber); font-weight: 600; }
+.auc-urgent .auc-days { color: var(--red);   font-weight: 700; }
+.auc-urgent .auc-date { color: var(--red); }
+
+/* ── EFFR minus IORB spread ── */
+.ei-wrap {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-inset); font-family: var(--mono);
+  transition: border-color .2s;
+}
+.ei-label  { font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
+             color: var(--text-2); white-space: nowrap; }
+.ei-val    { font-size: 15px; font-weight: 700; color: var(--text); }
+.ei-src    { font-size: 9px; color: var(--text-3); margin-left: auto; }
+.ei-flag   { font-size: 9px; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .05em; margin-left: auto; }
+.ei-normal { border-color: var(--border); }
+.ei-below  { border-color: rgba(34,211,160,.25); background: rgba(34,211,160,.04); }
+.ei-below  .ei-val { color: var(--green); }
+.ei-stress { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.05); }
+.ei-stress .ei-val  { color: var(--red); }
+.ei-stress .ei-flag { color: var(--red); }
+
+/* ── Print button ── */
+.panel-print-btn { float: right; }
+

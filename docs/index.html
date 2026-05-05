@@ -88,6 +88,7 @@
       <div class="chart-legend" id="chart-legend"></div>
       <div class="yield-spreads" id="yield-spreads"></div>
       <div id="breakevens-row" class="be-row"></div>
+      <div id="yield-sparklines" class="spk-strip"></div>
     </section>
 
     <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
@@ -124,8 +125,12 @@
       <div class="funding-grid" id="funding-grid"></div>
       <!-- FF Futures implied rate -->
       <div id="ff-implied" class="ff-implied-wrap"></div>
+      <!-- EFFR minus IORB spread — reserve pressure indicator -->
+      <div id="effr-iorb-spread"></div>
       <!-- Carry strip: T-Bill vs SOFR ON -->
       <div class="carry-strip" id="carry-strip"></div>
+      <!-- Next T-Bill auction settlement dates -->
+      <div id="auction-dates" class="auction-dates"></div>
       <!-- Auto-generated takeaway -->
       <div class="fund-takeaway" id="fund-takeaway"></div>
     </section>
@@ -229,6 +234,8 @@
       <h2 class="section-title">Maturity Ladder
         <button class="panel-action-btn" onclick="openPositionForm()"
                 title="Add position">+ Add</button>
+        <button class="panel-action-btn panel-print-btn" onclick="printMaturityLadder()"
+                title="Print / export ladder" style="margin-right:6px">&#x1F5A8; Print</button>
       </h2>
       <div id="cof-strip" class="cof-strip"></div>
       <div id="maturity-ladder"></div>

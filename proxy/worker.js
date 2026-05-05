@@ -214,6 +214,28 @@ function jsonResp(data, status) {
   });
 }
 
+// ── T-Bill auction date helpers ──────────────────────────────────────────────
+// Generate Thursday settlement dates for weekly or bi-weekly T-Bill auctions.
+// T-Bills auction Monday, settle Thursday (+3 days).
+
+function buildWeeklyThursdays(startStr, endStr) {
+  var dates = [];
+  var d = new Date(startStr + 'T12:00:00Z');
+  // Advance to first Thursday on or after start
+  while (d.getUTCDay() !== 4) d = new Date(d.getTime() + 86400000);
+  var end = new Date(endStr + 'T12:00:00Z');
+  while (d <= end) {
+    dates.push(d.toISOString().split('T')[0]);
+    d = new Date(d.getTime() + 7 * 86400000);
+  }
+  return dates;
+}
+
+function buildBiweeklyThursdays(startStr, endStr) {
+  var all = buildWeeklyThursdays(startStr, endStr);
+  return all.filter(function(_, i) { return i % 2 === 0; });
+}
+
 // ============================================
 // /api/market-data  (original -- untouched)
 // ============================================
@@ -350,6 +372,29 @@ async function handleMarketData(env) {
                                  diff >  0.05 ? 'hike' : 'hold';
     }
   }
+
+  // T-Bill auction schedule — next upcoming settlement date per tenor.
+  // Source: TreasuryDirect 2026 auction calendar (updated annually).
+  // T-Bills settle on the Thursday after each Monday auction.
+  // nextTBillAuction() returns the first settlement date >= today.
+  (function() {
+    var todayS = now.toISOString().split('T')[0];
+    // 2026 settlement dates by tenor (every week for 4W/8W, every other for 13W/26W)
+    // Generated from TreasuryDirect auction calendar Jan–Dec 2026
+    var schedules = {
+      '4W':  buildWeeklyThursdays('2026-01-08', '2026-12-31'),
+      '8W':  buildWeeklyThursdays('2026-01-08', '2026-12-31'),
+      '13W': buildBiweeklyThursdays('2026-01-08', '2026-12-31'),
+      '26W': buildBiweeklyThursdays('2026-01-08', '2026-12-31'),
+    };
+    var next = {};
+    Object.keys(schedules).forEach(function(tenor) {
+      var dates = schedules[tenor];
+      var found = dates.filter(function(d) { return d >= todayS; });
+      if (found.length) next[tenor] = found[0];
+    });
+    derived.tbill_next_settlement = next;
+  })();
 
   return jsonResp({
     timestamp: now.toISOString(),
@@ -894,6 +939,11 @@ async function fetchFREDYieldSeries(series, apiKey) {
       t1: t1Val, t1Date: t1Date,
       t7: t7 ? parseFloat(t7.value) : null, t7Date: t7 ? t7.date : null,
       t14: t14 ? parseFloat(t14.value) : null, t14Date: t14 ? t14.date : null,
+      // Last 30 obs in chronological order (oldest→newest) for sparklines.
+      // Reversed from the desc-sorted fetch; only {date, value} exposed to keep payload small.
+      history: obs.slice().reverse().map(function(o) {
+        return { d: o.date, v: parseFloat(o.value) };
+      }),
     };
   } catch (e) {
     console.error('[yieldsHist] Exception for ' + series.id + ': ' + e.message);

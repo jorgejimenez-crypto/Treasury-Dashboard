@@ -15,7 +15,7 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
-var APP_VERSION         = '20260504';
+var APP_VERSION         = '20260505';
 
 // Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
 function checkCacheVersion() {
@@ -1948,3 +1948,249 @@ function renderRedeploymentAnalysis(positions, derived) {
 
 // ── Bootstrap ladder on page load ──
 refreshLadder();
+
+// ============================================================
+// TIER 6 — Sparklines, Auction Dates, EFFR-IORB Spread, Print
+// ============================================================
+
+// ── Sparkline renderer (inline SVG, no Chart.js dependency) ──
+//
+// Renders a 60×20 SVG polyline from an array of { d, v } points.
+// Used beneath each yield tenor in the maturity ladder header
+// and in the yield spreads row.
+
+function renderSparkline(points, opts) {
+  opts = opts || {};
+  var W = opts.w || 80;
+  var H = opts.h || 22;
+  var color = opts.color || 'var(--blue)';
+  var strokeW = opts.strokeW || 1.5;
+
+  if (!points || points.length < 2) {
+    return '<svg width="' + W + '" height="' + H + '"></svg>';
+  }
+
+  var vals = points.map(function(p) { return p.v; });
+  var min = Math.min.apply(null, vals);
+  var max = Math.max.apply(null, vals);
+  var range = max - min || 0.01;   // avoid divide-by-zero for flat series
+
+  var pad = 2;
+  var pts = points.map(function(p, i) {
+    var x = pad + (i / (points.length - 1)) * (W - pad * 2);
+    var y = H - pad - ((p.v - min) / range) * (H - pad * 2);
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+
+  // Last point dot
+  var lastIdx = points.length - 1;
+  var lx = (pad + (W - pad * 2)).toFixed(1);
+  var ly = (H - pad - ((vals[lastIdx] - min) / range) * (H - pad * 2)).toFixed(1);
+
+  return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" ' +
+    'xmlns="http://www.w3.org/2000/svg" style="overflow:visible">' +
+    '<polyline points="' + pts + '" fill="none" stroke="' + color + '" ' +
+      'stroke-width="' + strokeW + '" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + lx + '" cy="' + ly + '" r="2" fill="' + color + '"/>' +
+    '</svg>';
+}
+
+
+// ── Yield Sparklines Strip ─────────────────────────────────────
+// Renders three small sparklines (1M / 3M / 6M) beneath the
+// yield spread cells. Reads from data.yieldsHist[key].history.
+
+function renderYieldSparklines(yieldsHist) {
+  var container = document.getElementById('yield-sparklines');
+  if (!container) return;
+
+  var tenors = [
+    { key: 'DGS1MO', label: '1M', color: '#60a5fa' },
+    { key: 'DGS3MO', label: '3M', color: '#a78bfa' },
+    { key: 'DGS6MO', label: '6M', color: '#34d399' },
+  ];
+
+  var html = '';
+  tenors.forEach(function(t) {
+    var hist = yieldsHist && yieldsHist[t.key];
+    var pts  = hist && hist.history;
+    var t1   = hist && hist.t1 != null ? hist.t1.toFixed(2) + '%' : '—';
+
+    var trend = '';
+    if (pts && pts.length >= 5) {
+      var recent = pts[pts.length - 1].v;
+      var older  = pts[pts.length - 5].v;
+      var diff   = parseFloat((recent - older).toFixed(2));
+      var sign   = diff > 0 ? '+' : '';
+      var cls    = diff > 0 ? 'spk-up' : diff < 0 ? 'spk-dn' : 'spk-flat';
+      trend = '<span class="spk-chg ' + cls + '">' + sign + diff + 'bp 5d</span>';
+    }
+
+    html += '<div class="spk-cell">' +
+      '<div class="spk-hd">' +
+        '<span class="spk-tenor">' + t.label + '</span>' +
+        '<span class="spk-val">' + t1 + '</span>' +
+        trend +
+      '</div>' +
+      '<div class="spk-chart">' +
+        renderSparkline(pts, { w: 100, h: 24, color: t.color }) +
+      '</div>' +
+    '</div>';
+  });
+
+  container.innerHTML = html || '<span class="spk-na">History loading&hellip;</span>';
+}
+
+
+// ── T-Bill Auction Countdown ───────────────────────────────────
+// Shows next upcoming settlement date for 4W / 13W / 26W bills.
+// Reads from data.derived.tbill_next_settlement.
+
+function renderAuctionDates(derived) {
+  var container = document.getElementById('auction-dates');
+  if (!container) return;
+
+  var next = derived && derived.tbill_next_settlement;
+  if (!next || !Object.keys(next).length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var tenors = ['4W', '13W', '26W'];  // 8W omitted — same schedule as 4W
+  var cells = tenors.map(function(t) {
+    var dateStr = next[t];
+    if (!dateStr) return '';
+    var d    = new Date(dateStr + 'T00:00:00');
+    var days = Math.ceil((d - today) / 86400000);
+    var cls  = days <= 3  ? 'auc-urgent' :
+               days <= 7  ? 'auc-near'   : '';
+    var label = days === 0 ? 'Today' :
+                days === 1 ? 'Tomorrow' : 'in ' + days + 'd';
+    return '<div class="auc-cell ' + cls + '">' +
+      '<span class="auc-tenor">' + t + ' T-Bill</span>' +
+      '<span class="auc-date">' + dateStr + '</span>' +
+      '<span class="auc-days">' + label + '</span>' +
+    '</div>';
+  }).join('');
+
+  container.innerHTML =
+    '<div class="auc-label">Next Settlements</div>' +
+    '<div class="auc-strip">' + cells + '</div>';
+}
+
+
+// ── EFFR–IORB Spread Trend ────────────────────────────────────
+// Shows EFFR minus IORB in bps. Widens toward 0 when reserves
+// are scarce; a spread > 5 bps is a stress signal.
+
+function renderEffrIorbSpread(nyfed, fred) {
+  var container = document.getElementById('effr-iorb-spread');
+  if (!container) return;
+
+  var effr = nyfed && nyfed.effr && nyfed.effr.rate;
+  var iorb = fred && fred.IORB && fred.IORB.current;
+
+  if (effr == null || iorb == null) {
+    container.innerHTML = '';
+    return;
+  }
+
+  var spread    = parseFloat(((effr - iorb) * 100).toFixed(1));  // in bps
+  var isStress  = spread > 5;
+  var cls       = isStress ? 'ei-stress' : spread < 0 ? 'ei-below' : 'ei-normal';
+
+  container.innerHTML =
+    '<div class="ei-wrap ' + cls + '" ' +
+      'title="EFFR ' + effr.toFixed(2) + '% − IORB ' + iorb.toFixed(2) + '% = ' + spread + ' bps. ' +
+      'Values above 5 bps suggest reserve scarcity.">' +
+      '<span class="ei-label">EFFR − IORB</span>' +
+      '<span class="ei-val">' + (spread >= 0 ? '+' : '') + spread + ' bps</span>' +
+      (isStress
+        ? '<span class="ei-flag">Reserve pressure</span>'
+        : '<span class="ei-src">Normal</span>') +
+    '</div>';
+}
+
+
+// ── Print maturity ladder ──────────────────────────────────────
+// Opens a minimal print view of the maturity ladder table only.
+
+function printMaturityLadder() {
+  var positions = getPositions();
+  var cof = computeBlendedCoF(positions);
+
+  var active = positions
+    .map(function(p) { return Object.assign({}, p, { days: daysUntil(p.maturity_date) }); })
+    .filter(function(p) { return p.days > 0; })
+    .sort(function(a, b) { return a.days - b.days; });
+
+  var rows = active.map(function(p) {
+    return '<tr>' +
+      '<td>' + escH(p.type) + '</td>' +
+      '<td style="text-align:right">' + fmtM(p.notional) + '</td>' +
+      '<td style="text-align:right">' + parseFloat(p.rate).toFixed(2) + '%</td>' +
+      '<td>' + p.maturity_date + '</td>' +
+      '<td style="text-align:right">' + p.days + 'd</td>' +
+      '<td>' + escH(p.note || '') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var cofLine = cof
+    ? 'Blended CoF: ' + cof.rate.toFixed(2) + '% &nbsp;&nbsp; Total: ' + fmtM(cof.total) + ' &nbsp;&nbsp; Positions: ' + cof.count
+    : 'No active positions.';
+
+  var win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(
+    '<!DOCTYPE html><html><head><title>Maturity Ladder</title>' +
+    '<style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px}' +
+    'h2{font-size:15px;margin:0 0 4px}p{margin:0 0 14px;font-size:11px;color:#555}' +
+    'table{width:100%;border-collapse:collapse}' +
+    'th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;' +
+       'border-bottom:2px solid #000;padding:4px 6px}' +
+    'td{padding:5px 6px;border-bottom:1px solid #ddd}' +
+    '.urgent{color:#c00;font-weight:600}' +
+    '@media print{@page{margin:1.5cm}}</style></head><body>' +
+    '<h2>Maturity Ladder &mdash; ' + new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' }) + '</h2>' +
+    '<p>' + cofLine + '</p>' +
+    '<table><thead><tr>' +
+      '<th>Type</th><th>Notional</th><th>Rate</th>' +
+      '<th>Maturity</th><th>Days</th><th>Note</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p style="margin-top:16px;font-size:10px;color:#999">Internal use only &mdash; Treasury Management Dashboard</p>' +
+    '</body></html>'
+  );
+  win.document.close();
+  setTimeout(function() { win.print(); }, 400);
+}
+
+
+// ── Wire Tier 6 renders into renderDashboard ──────────────────
+// Called from the existing renderDashboard hook:
+//   window._lastDerived = data.derived; refreshLadder();
+// We extend refreshLadder to also run the new renders.
+
+var _origRefreshLadder = refreshLadder;
+refreshLadder = function() {
+  _origRefreshLadder();
+  // Auction dates and sparklines need live data — read from last cache
+  var d = getCachedData('market', 3600000);
+  if (d) {
+    renderYieldSparklines(d.yieldsHist || {});
+    renderAuctionDates(d.derived || {});
+    renderEffrIorbSpread(d.nyfed || {}, d.fred || {});
+  }
+};
+
+// Also hook into renderDashboard directly for immediate first-render
+var _t6_origRenderDashboard = renderDashboard;
+renderDashboard = function(data) {
+  _t6_origRenderDashboard(data);
+  renderYieldSparklines(data.yieldsHist || {});
+  renderAuctionDates(data.derived || {});
+  renderEffrIorbSpread(data.nyfed || {}, data.fred || {});
+};
+
+// Bump APP_VERSION to force cache clear on deploy
