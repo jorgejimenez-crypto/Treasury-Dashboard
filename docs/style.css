@@ -1395,6 +1395,111 @@ body {
   .notes-panel  { width: calc(100% - 24px); right: 12px; }
 }
 
+/* === MATURITY LADDER PANEL ====================================== */
+
+.panel-action-btn {
+  font-size: 11px; padding: 3px 10px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); cursor: pointer;
+  font-family: var(--mono);
+}
+.panel-action-btn:hover { border-color: var(--blue); }
+.panel-source { font-size: 9px; color: var(--text-3); margin-top: 10px; font-family: var(--mono); }
+
+/* CoF strip */
+.cof-strip {
+  display: flex; gap: 10px; padding: 10px 12px; margin-bottom: 12px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 6px; font-family: var(--mono);
+}
+.cof-strip:empty { display: none; }
+.cof-item { flex: 1; }
+.cof-label { font-size: 9px; color: var(--text-3); text-transform: uppercase;
+             letter-spacing: .06em; margin-bottom: 3px; }
+.cof-val   { font-size: 18px; font-weight: 600; color: var(--text); }
+
+/* Timeline buckets */
+.ladder-timeline { display: grid; grid-template-columns: repeat(4,1fr);
+                   gap: 6px; margin-bottom: 12px; }
+.ladder-bucket   { background: var(--bg-inset); border: 1px solid var(--border);
+                   border-radius: 6px; padding: 8px 10px; text-align: center; }
+.bucket-urgent   { border-color: var(--amber-border); background: var(--amber-bg); }
+.bucket-critical { border-color: var(--red-border); background: var(--red-bg); }
+.bucket-label    { font-size: 9px; color: var(--text-3); text-transform: uppercase;
+                   letter-spacing: .06em; margin-bottom: 4px; }
+.bucket-amount   { font-size: 16px; font-weight: 600; color: var(--text);
+                   font-family: var(--mono); }
+.bucket-urgent  .bucket-amount { color: var(--amber); }
+.bucket-critical .bucket-amount { color: var(--red); }
+
+/* Maturity table */
+.ladder-table { width: 100%; border-collapse: collapse;
+                font-size: 11px; font-family: var(--mono); margin-bottom: 12px; }
+.ladder-table th { text-align: left; font-size: 9px; text-transform: uppercase;
+                   letter-spacing: .06em; color: var(--text-3);
+                   padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.ladder-table td { padding: 7px 8px; color: var(--text);
+                   border-bottom: 1px solid rgba(30,45,64,.3); }
+.ladder-table tr:last-child td { border-bottom: none; }
+.ladder-table tr:hover td { background: var(--bg-hover); }
+.row-urgent td  { color: var(--red); }
+.row-near   td  { color: var(--amber); }
+.ladder-note    { font-size: 10px; color: var(--text-3); font-style: italic;
+                  padding: 2px 8px 6px !important; }
+.ladder-more    { font-size: 10px; color: var(--text-3);
+                  padding: 8px; text-align: center; }
+.btn-del-pos    { background: transparent; border: 1px solid var(--border);
+                  border-radius: 3px; color: var(--text-3); font-size: 10px;
+                  padding: 2px 6px; cursor: pointer; }
+.btn-del-pos:hover { border-color: var(--red); color: var(--red); }
+.ladder-empty   { text-align: center; padding: 24px; color: var(--text-2);
+                  font-size: 12px; }
+.ladder-empty button { display: inline-block; margin-top: 10px; padding: 6px 14px;
+                       background: var(--bg-inset); border: 1px solid var(--border);
+                       border-radius: 5px; color: var(--text); font-size: 11px;
+                       cursor: pointer; font-family: var(--mono); }
+
+/* Redeployment analysis */
+.redeploy-header { font-size: 10px; color: var(--text-2); text-transform: uppercase;
+                   letter-spacing: .06em; margin-bottom: 8px; }
+.redeploy-strip  { display: flex; gap: 8px; }
+.redeploy-cell   { flex: 1; border: 1px solid var(--border); border-radius: 6px;
+                   padding: 8px 10px; text-align: center; font-family: var(--mono); }
+.rd-accretive    { background: rgba(34,211,160,.05); border-color: rgba(34,211,160,.2); }
+.rd-dilutive     { background: rgba(248,113,113,.04); border-color: rgba(248,113,113,.15); }
+.rd-tenor        { display: block; font-size: 9px; text-transform: uppercase;
+                   letter-spacing: .06em; color: var(--text-3); margin-bottom: 3px; }
+.rd-yield        { display: block; font-size: 15px; font-weight: 600; color: var(--text); }
+.rd-pickup       { display: block; font-size: 11px; font-weight: 600; margin-top: 2px; }
+.rd-accretive .rd-pickup { color: var(--green); }
+.rd-dilutive  .rd-pickup { color: var(--red); }
+
+/* Position entry modal */
+.position-panel { background: var(--bg-raised); border: 1px solid var(--border);
+                  border-radius: var(--card-radius); padding: 24px; width: 380px; max-width: 94vw; }
+.position-panel h3 { font-size: 14px; font-weight: 600; color: var(--text);
+                     margin-bottom: 18px; }
+.pos-field        { margin-bottom: 12px; }
+.pos-field label  { display: block; font-size: 10px; color: var(--text-2);
+                    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.pos-field select,
+.pos-field input[type=number],
+.pos-field input[type=date],
+.pos-field input[type=text]  { width: 100%; background: var(--bg-inset);
+                                border: 1px solid var(--border); border-radius: var(--radius-sm);
+                                color: var(--text); font-family: var(--mono);
+                                font-size: 13px; padding: 7px 10px; outline: none; }
+.pos-field select:focus,
+.pos-field input:focus        { border-color: var(--blue); }
+.pos-error   { font-size: 10px; color: var(--red); margin-top: 10px; min-height: 14px; }
+.pos-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
+.btn-pos-save   { padding: 7px 16px; background: var(--blue); color: #fff;
+                  border: none; border-radius: var(--radius-sm); font-size: 12px;
+                  font-weight: 600; cursor: pointer; }
+.btn-pos-cancel { padding: 7px 14px; background: transparent; color: var(--text-2);
+                  border: 1px solid var(--border); border-radius: var(--radius-sm);
+                  font-size: 12px; cursor: pointer; }
+
 /* Print */
 @media print {
   body { background:#fff; color:#111; font-size:11px; }

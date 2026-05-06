@@ -15,7 +15,10 @@
 // === CONFIG =====================================================
 
 var WORKER_URL          = 'https://treasury-proxy.treasurydashboard.workers.dev';
-var APP_VERSION         = '20260505';
+
+
+var APP_VERSION         = '20260506';
+
 
 // Cache is cleared automatically when APP_VERSION changes — bump APP_VERSION in app.js on each deploy.
 function checkCacheVersion() {
@@ -928,6 +931,215 @@ function renderFFImplied(derived) {
 }
 
 
+/* === MATURITY LADDER + POSITION MANAGEMENT ======================= */
+
+var POSITIONS_KEY = 'TREASURY_POSITIONS';
+
+function getPositions() {
+  try { return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+function savePosition(pos) {
+  var positions = getPositions();
+  if (!pos.id) pos.id = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  var idx = -1;
+  for (var i = 0; i < positions.length; i++) { if (positions[i].id === pos.id) { idx = i; break; } }
+  if (idx >= 0) positions[idx] = pos; else positions.push(pos);
+  try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions)); return true; }
+  catch(e) { return false; }
+}
+
+function deletePosition(id) {
+  var positions = getPositions().filter(function(p) { return p.id !== id; });
+  try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions)); } catch(e) {}
+  refreshLadder();
+}
+
+function refreshLadder() {
+  var positions = getPositions();
+  renderMaturityLadder(positions);
+  renderCoFStrip(positions);
+  if (window._lastDerived) renderRedeploymentAnalysis(positions, window._lastDerived);
+}
+
+function daysUntil(dateStr) {
+  var target = new Date(dateStr + 'T00:00:00');
+  var today  = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((target - today) / 86400000);
+}
+
+function fmtM(n) {
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMaturityLadder(positions) {
+  var container = document.getElementById('maturity-ladder');
+  if (!container) return;
+
+  var active = positions
+    .map(function(p) { return Object.assign({}, p, { days: daysUntil(p.maturity_date) }); })
+    .filter(function(p) { return p.days > 0; })
+    .sort(function(a,b) { return a.days - b.days; });
+
+  if (active.length === 0) {
+    container.innerHTML =
+      '<div class="ladder-empty">No active positions.' +
+      '<br><button onclick="openPositionForm()">+ Add position</button></div>';
+    return;
+  }
+
+  var buckets = { '0-30':0, '31-60':0, '61-90':0, '91+':0 };
+  active.forEach(function(p) {
+    var b = p.days<=30?'0-30':p.days<=60?'31-60':p.days<=90?'61-90':'91+';
+    buckets[b] += p.notional;
+  });
+
+  var hasUrgent7 = active.some(function(p){ return p.days <= 7; });
+  var bucketDefs = [
+    { key:'0-30',  label:'0–30d'  },
+    { key:'31-60', label:'31–60d' },
+    { key:'61-90', label:'61–90d' },
+    { key:'91+',   label:'91+d'   }
+  ];
+
+  var timelineHtml = '<div class="ladder-timeline">';
+  bucketDefs.forEach(function(b) {
+    var total = buckets[b.key];
+    var cls   = '';
+    if (b.key==='0-30' && total>0) cls = hasUrgent7 ? ' bucket-critical' : ' bucket-urgent';
+    timelineHtml +=
+      '<div class="ladder-bucket' + cls + '">' +
+        '<div class="bucket-label">' + b.label + '</div>' +
+        '<div class="bucket-amount">' + (total>0 ? fmtM(total) : '—') + '</div>' +
+      '</div>';
+  });
+  timelineHtml += '</div>';
+
+  var tableHtml =
+    '<table class="ladder-table"><thead><tr>' +
+      '<th>Type</th><th>Notional</th><th>Rate</th>' +
+      '<th>Matures</th><th>Days</th><th></th>' +
+    '</tr></thead><tbody>';
+
+  active.slice(0,12).forEach(function(p) {
+    var cls = p.days<=7 ? 'row-urgent' : p.days<=30 ? 'row-near' : '';
+    tableHtml +=
+      '<tr class="' + cls + '">' +
+        '<td>' + escH(p.type) + '</td>' +
+        '<td>' + fmtM(p.notional) + '</td>' +
+        '<td>' + parseFloat(p.rate).toFixed(2) + '%</td>' +
+        '<td>' + p.maturity_date + '</td>' +
+        '<td>' + p.days + 'd' + (p.days<=7?' ⚠':'') + '</td>' +
+        '<td><button class="btn-del-pos" onclick="deletePosition(\'' + p.id + '\')" title="Remove">✕</button></td>' +
+      '</tr>';
+  });
+
+  if (active.length > 12) {
+    tableHtml += '<tr><td colspan="6" class="ladder-more">+ ' + (active.length-12) + ' more positions</td></tr>';
+  }
+  tableHtml += '</tbody></table>';
+  container.innerHTML = timelineHtml + tableHtml;
+}
+
+function computeBlendedCoF(positions) {
+  var active = positions.filter(function(p) {
+    return daysUntil(p.maturity_date)>0 && p.notional>0 && p.rate>0;
+  });
+  if (!active.length) return null;
+  var totalN    = active.reduce(function(s,p){ return s+p.notional; }, 0);
+  var weightedR = active.reduce(function(s,p){ return s+(p.rate*p.notional); }, 0);
+  return { rate: parseFloat((weightedR/totalN).toFixed(2)), total: totalN, count: active.length };
+}
+
+function renderCoFStrip(positions) {
+  var container = document.getElementById('cof-strip');
+  if (!container) return;
+  var cof = computeBlendedCoF(positions);
+  if (!cof) { container.innerHTML = ''; return; }
+  container.innerHTML =
+    '<div class="cof-item"><div class="cof-label">Blended CoF</div><div class="cof-val">' + cof.rate.toFixed(2) + '%</div></div>' +
+    '<div class="cof-item"><div class="cof-label">Total managed</div><div class="cof-val">' + fmtM(cof.total) + '</div></div>' +
+    '<div class="cof-item"><div class="cof-label">Positions</div><div class="cof-val">' + cof.count + '</div></div>';
+}
+
+function renderRedeploymentAnalysis(positions, derived) {
+  var container = document.getElementById('redeploy-panel');
+  if (!container) return;
+  var cof = computeBlendedCoF(positions);
+  if (!cof || !derived || !derived.carry) { container.innerHTML = ''; return; }
+
+  var html = '<div class="redeploy-header">Roll analysis — current CoF ' + cof.rate.toFixed(2) + '%</div><div class="redeploy-strip">';
+  var tenorMap = { DGS1MO: '1M', DGS3MO: '3M', DGS6MO: '6M' };
+  ['DGS1MO','DGS3MO','DGS6MO'].forEach(function(k) {
+    var c = derived.carry[k];
+    if (!c) return;
+    var pickup    = parseFloat((c.tbill_rate - cof.rate).toFixed(2));
+    var pickupBps = Math.round(pickup * 100);
+    var isAccr    = pickup > 0;
+    html += '<div class="redeploy-cell ' + (isAccr ? 'rd-accretive' : 'rd-dilutive') + '" title="' +
+      tenorMap[k] + ' T-Bill: ' + c.tbill_rate.toFixed(2) + '% · Your CoF: ' + cof.rate.toFixed(2) + '% · Pickup: ' + (pickupBps>=0?'+':'') + pickupBps + ' bps">' +
+      '<span class="rd-tenor">' + tenorMap[k] + ' T-Bill</span>' +
+      '<span class="rd-yield">' + c.tbill_rate.toFixed(2) + '%</span>' +
+      '<span class="rd-pickup">' + (pickupBps>=0?'+':'') + pickupBps + ' bps</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function openPositionForm(existing) {
+  var modal = document.getElementById('position-modal');
+  if (!modal) return;
+  document.getElementById('pos-error').textContent = '';
+  document.getElementById('pos-id').value       = existing ? existing.id            : '';
+  document.getElementById('pos-type').value     = existing ? existing.type          : 'T-Bill';
+  document.getElementById('pos-notional').value = existing ? existing.notional      : '';
+  document.getElementById('pos-rate').value     = existing ? existing.rate          : '';
+  document.getElementById('pos-purchase').value = existing ? existing.purchase_date : todayStr();
+  document.getElementById('pos-maturity').value = existing ? existing.maturity_date : '';
+  document.getElementById('pos-note').value     = existing ? (existing.note||'')    : '';
+  modal.style.display = 'flex';
+  setTimeout(function(){ document.getElementById('pos-notional').focus(); }, 50);
+}
+
+function closePositionForm() {
+  var modal = document.getElementById('position-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function submitPositionForm() {
+  var errEl    = document.getElementById('pos-error');
+  var notional = parseFloat(document.getElementById('pos-notional').value);
+  var rate     = parseFloat(document.getElementById('pos-rate').value);
+  var maturity = document.getElementById('pos-maturity').value;
+  if (!notional || notional <= 0)         { errEl.textContent = 'Notional must be positive.'; return; }
+  if (!rate || rate <= 0 || rate > 20)    { errEl.textContent = 'Rate must be 0–20%.'; return; }
+  if (!maturity)                          { errEl.textContent = 'Maturity date required.'; return; }
+  if (daysUntil(maturity) <= 0)           { errEl.textContent = 'Must be a future date.'; return; }
+  var ok = savePosition({
+    id:            document.getElementById('pos-id').value || null,
+    type:          document.getElementById('pos-type').value,
+    notional:      notional,
+    rate:          rate,
+    purchase_date: document.getElementById('pos-purchase').value || todayStr(),
+    maturity_date: maturity,
+    note:          document.getElementById('pos-note').value.trim()
+  });
+  if (!ok) { errEl.textContent = 'Save failed — localStorage may be full.'; return; }
+  closePositionForm();
+  refreshLadder();
+}
+
+
 // === SECTION 3 — FX CONVERTER ===================================
 //
 // Autocomplete text inputs (fuzzy match code + full name).
@@ -1512,9 +1724,11 @@ function renderDashboard(data) {
   var cachedNews = getCachedData('news', 7200000);
   if (cachedNews) renderNews(cachedNews);
 
-  // Maturity ladder / CoF / redeployment — uses stored positions + live derived data
+
+  // Maturity ladder / CoF / redeployment
   window._lastDerived = data.derived;
-  refreshLadder();
+  try { refreshLadder(); } catch(e) { console.error('[ladder] render failed:', e); }
+
 
   // Show dashboard
   document.getElementById('loading').style.display   = 'none';
