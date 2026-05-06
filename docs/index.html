@@ -7,12 +7,241 @@
   <meta http-equiv="Pragma"        content="no-cache">
   <meta http-equiv="Expires"       content="0">
   <title>Treasury Management</title>
-  <link rel="stylesheet" href="style.css?v=20260504b">
+  <link rel="stylesheet" href="style.css?v=20260506">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
 </head>
 <body>
 
-<!-- ====================== HEADER ===============    </section>
+<!-- ====================== HEADER ======================
+     Minimal sticky bar. Brand · status badges · controls.
+====================================================== -->
+<header id="app-header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <span class="brand-mark">◈</span>
+      <div class="brand-text">
+        <h1>Treasury Management</h1>
+        <span class="brand-sub"><span class="brand-beta">Beta</span> &middot; Short-Term Funding &amp; Rates</span>
+      </div>
+    </div>
+    <div class="header-status">
+      <span id="market-status" class="mkt-badge">--</span>
+      <span id="fomc-badge"    class="fomc-badge" title="Next FOMC">--</span>
+      <span id="header-meta"  class="header-meta"></span>
+    </div>
+    <div class="header-actions">
+      <button id="btn-refresh"   class="action-btn" title="Refresh (R)">&#x21bb;</button>
+      <button id="btn-notes"     class="action-btn" title="Notes (J)">&#x270E;</button>
+      <button id="btn-shortcuts" class="action-btn" title="Shortcuts (?)">?</button>
+      <button id="btn-thresholds" class="action-btn" title="Alert Settings">&#x2699;</button>
+      <button id="btn-about"     class="action-btn action-btn-about" title="About">&#x2139;</button>
+    </div>
+  </div>
+</header>
+
+<!-- ====================== MARKET TICKER ======================
+     Slim scrolling strip. Pauses on hover.
+     SP500 · 2Y · 10Y · DXY · WTI · Gold · EUR/USD · VIX
+============================================================== -->
+<div id="market-ticker" aria-hidden="true" title="Hover to pause">
+  <div id="ticker-content">Loading&hellip;</div>
+</div>
+
+<div id="alert-bar" role="status" aria-live="polite"></div>
+<div id="risk-pills" class="risk-pills" aria-label="Risk summary"></div>
+<div id="rate-alerts" class="rate-alerts" role="status" aria-live="polite"></div>
+
+<div id="setup-banner" class="setup-banner" style="display:none">
+  Worker URL not configured — edit <code>WORKER_URL</code> in <code>app.js</code>.
+</div>
+
+<div id="loading" class="loading-screen" style="display:none">
+  <div class="loading-inner">
+    <div class="spinner"></div>
+    <p>Loading market data&hellip;</p>
+  </div>
+</div>
+
+<!-- ====================== MAIN DASHBOARD ======================
+     Two-column grid layout:
+       Row 1: Yields Chart (left) + Yields Table (right)
+       Row 2: Funding & Liquidity (left) + FX Converter (right)
+       Row 3: Bloomberg Live (left) + News & Intelligence (right)
+============================================================== -->
+<main id="dashboard">
+
+  <!-- === TWO-COLUMN ROW 1: Yields Chart + Yields Table === -->
+  <div class="dash-row">
+    <section class="desk-section dash-cell" id="sec-yields-chart">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Treasury Yields</h2>
+          <span class="section-desc">Grouped Bar &middot; 1M / 3M / 6M</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="spread-pill" id="yield-spread-pill"></span>
+        </div>
+      </div>
+      <div id="yields-chart-wrap" class="yields-chart-wrap">
+        <canvas id="yieldsChart"></canvas>
+      </div>
+      <div class="chart-legend" id="chart-legend"></div>
+      <div class="yield-spreads" id="yield-spreads"></div>
+      <div id="breakevens-row" class="be-row"></div>
+      <div id="yield-sparklines" class="spk-strip"></div>
+    </section>
+
+    <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
+    <section class="desk-section dash-cell" id="sec-econ-calendar">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Economic Calendar</h2>
+          <span class="section-desc">US &middot; High Impact &middot; Live</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="data-source">TradingView</span>
+        </div>
+      </div>
+      <div class="tv-cal-body" id="tv-cal-body">
+        <!-- TradingView widget injected by JS on init -->
+      </div>
+    </section>
+  </div>
+
+  <!-- === TWO-COLUMN ROW 2: Funding + FX Converter === -->
+  <div class="dash-row">
+    <section class="desk-section dash-cell" id="sec-funding">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Funding Rates</h2>
+          <span class="section-desc">NY Fed &middot; FRED &middot; Daily</span>
+        </div>
+      </div>
+      <!-- Signal strip: funding conditions at a glance -->
+      <div class="fund-signals" id="fund-signals"></div>
+      <!-- SOFR–EFFR promoted anchor metric -->
+      <div class="fund-anchor" id="fund-anchor"></div>
+      <!-- Rate cards -->
+      <div class="funding-grid" id="funding-grid"></div>
+      <!-- FF Futures implied rate -->
+      <div id="ff-implied" class="ff-implied-wrap"></div>
+      <!-- EFFR minus IORB spread — reserve pressure indicator -->
+      <div id="effr-iorb-spread"></div>
+      <!-- Carry strip: T-Bill vs SOFR ON -->
+      <div class="carry-strip" id="carry-strip"></div>
+      <!-- Next T-Bill auction settlement dates -->
+      <div id="auction-dates" class="auction-dates"></div>
+      <!-- Auto-generated takeaway -->
+      <div class="fund-takeaway" id="fund-takeaway"></div>
+    </section>
+
+    <!-- === FOREIGN EXCHANGE — UNIFIED PANEL === -->
+    <section class="desk-section dash-cell" id="sec-fx">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Foreign Exchange</h2>
+          <span class="section-desc">USD per unit &middot; Yahoo 15-min</span>
+        </div>
+        <div class="section-hd-right">
+          <span id="fx-rate-trend" class="fx-trend"></span>
+        </div>
+      </div>
+      <!-- SECTION 1: Rate Table -->
+      <table class="fx-cross-table" id="fx-cross-table">
+        <thead><tr>
+          <th class="xr-th-ccy">Currency</th>
+          <th class="xr-th-rate">USD Val</th>
+          <th class="xr-th-chg">Change</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <!-- SECTION 2: Inline Converter -->
+      <div class="fx-conv-inline">
+        <div class="fx-conv-row">
+          <div class="fx-amount-inner fx-conv-amt">
+            <input type="number" id="fx-amount" class="fx-amount"
+                   value="1000000" step="100000" autocomplete="off" placeholder="Amount">
+            <span id="fx-base-badge" class="fx-base-badge">USD</span>
+          </div>
+          <div class="fx-ccy-wrap fx-conv-ccy">
+            <input type="text" id="fx-base" class="fx-ccy-input"
+                   value="USD" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-base-list" class="fx-dropdown"></div>
+          </div>
+          <button id="fx-swap" class="fx-swap" title="Swap">&#x21c4;</button>
+          <div class="fx-ccy-wrap fx-conv-ccy">
+            <input type="text" id="fx-quote" class="fx-ccy-input"
+                   value="EUR" maxlength="3" autocomplete="off" spellcheck="false">
+            <div id="fx-quote-list" class="fx-dropdown"></div>
+          </div>
+          <span class="fx-conv-eq">=</span>
+          <div class="fx-result-main" id="fx-result">--</div>
+          <button class="fx-copy-btn" id="fx-copy-btn" title="Copy">&#x2398;</button>
+        </div>
+        <div class="fx-conv-meta">
+          <span class="fx-rate-fwd" id="fx-rate-line"></span>
+          <span class="fx-rate-sep">&middot;</span>
+          <span class="fx-rate-rev" id="fx-reverse-rate"></span>
+          <span class="fx-rate-sep">&middot;</span>
+          <span id="fx-result-change" class="fx-result-change"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- === TWO-COLUMN ROW 3: Bloomberg Live + News (compact ~320px) === -->
+  <div class="dash-row dash-row-compact">
+    <section class="desk-section dash-cell" id="sec-catalyst">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">Bloomberg Live</h2>
+          <span class="section-desc">Bloomberg Television &middot; Live</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="live-indicator" id="live-dot">
+            <span class="live-pip"></span>LIVE
+          </span>
+          <a class="catalyst-ext-link"
+             href="https://www.youtube.com/@BloombergTelevision/live"
+             target="_blank" rel="noopener" title="Open in new tab">&#x2197;</a>
+        </div>
+      </div>
+      <div class="catalyst-frame-wrap" id="catalyst-frame-wrap">
+        <div class="catalyst-loading">Loading stream&hellip;</div>
+      </div>
+    </section>
+
+    <section class="desk-section dash-cell" id="sec-news">
+      <div class="section-hd">
+        <div class="section-hd-left">
+          <h2 class="section-title">News &amp; Intelligence</h2>
+          <span class="section-desc">Financial Markets &middot; Live</span>
+        </div>
+        <div class="section-hd-right">
+          <span class="news-count-badge" id="news-count"></span>
+          <span class="data-source" id="news-updated-lbl"></span>
+        </div>
+      </div>
+      <div class="news-feed" id="news-list" role="feed" aria-label="News feed">
+        <div class="news-empty">Loading news&hellip;</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- === ROW 4: Maturity Ladder (full-width) === -->
+  <div class="dash-row dash-row-full">
+    <section class="desk-section dash-cell" id="panel-positions">
+      <h2 class="section-title">Maturity Ladder
+        <button class="panel-action-btn" onclick="openPositionForm()"
+                title="Add position">+ Add</button>
+        <button class="panel-action-btn panel-print-btn" onclick="printMaturityLadder()"
+                title="Print / export ladder" style="margin-right:6px">&#x1F5A8; Print</button>
+      </h2>
+      <div id="cof-strip" class="cof-strip"></div>
+      <div id="maturity-ladder"></div>
+      <div id="redeploy-panel" style="margin-top:12px"></div>
+      <div class="panel-source">localStorage · browser only · not synced</div>
+    </section>
   </div>
 
 </main>
@@ -174,6 +403,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
-<script src="app.js?v=20260504b"></script>
+<script src="app.js?v=20260506"></script>
 </body>
 </html>
