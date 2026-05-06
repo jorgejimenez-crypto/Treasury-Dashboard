@@ -34,6 +34,7 @@
       <button id="btn-notes"     class="action-btn" title="Notes (J)">&#x270E;</button>
       <button id="btn-shortcuts" class="action-btn" title="Shortcuts (?)">?</button>
       <button id="btn-thresholds" class="action-btn" title="Alert Settings">&#x2699;</button>
+      <button class="action-btn" onclick="openSettings()" title="Alert settings">&#x2699;</button>
       <button id="btn-about"     class="action-btn action-btn-about" title="About">&#x2139;</button>
     </div>
   </div>
@@ -89,6 +90,7 @@
       <div class="yield-spreads" id="yield-spreads"></div>
       <div id="breakevens-row" class="be-row"></div>
       <div id="yield-sparklines" class="spk-strip"></div>
+      <div id="spreads-row" class="spreads-row"></div>
     </section>
 
     <!-- === ECONOMIC CALENDAR (TradingView Widget) === -->
@@ -127,8 +129,10 @@
       <div id="ff-implied" class="ff-implied-wrap"></div>
       <!-- EFFR minus IORB spread — reserve pressure indicator -->
       <div id="effr-iorb-spread"></div>
-      <!-- Carry strip: T-Bill vs SOFR ON -->
+      <!-- Corridor + carry -->
+      <div id="corridor-bar" class="corridor-wrap"></div>
       <div class="carry-strip" id="carry-strip"></div>
+      <div id="carry-row" class="carry-row"></div>
       <!-- Next T-Bill auction settlement dates -->
       <div id="auction-dates" class="auction-dates"></div>
       <!-- Auto-generated takeaway -->
@@ -397,6 +401,38 @@
     <div class="pos-actions">
       <button class="btn-pos-cancel" onclick="closePositionForm()">Cancel</button>
       <button class="btn-pos-save"   onclick="submitPositionForm()">Save position</button>
+    </div>
+  </div>
+</div>
+
+<!-- === SETTINGS MODAL === -->
+<div id="settings-modal" style="display:none;position:fixed;inset:0;
+     background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
+  <div class="settings-panel">
+    <h3>&#x2699; Alert thresholds</h3>
+    <div class="settings-field">
+      <label for="set-short-end">Short-end move alert (bps vs T-7)</label>
+      <input type="number" id="set-short-end" min="1" max="50" step="1">
+      <div class="settings-hint">Default: 5 bps</div>
+    </div>
+    <div class="settings-field">
+      <label for="set-sofr-bps">SOFR move alert (bps vs prior)</label>
+      <input type="number" id="set-sofr-bps" min="1" max="20" step="1">
+      <div class="settings-hint">Default: 3 bps</div>
+    </div>
+    <div class="settings-field">
+      <label for="set-vix-warn">VIX warning threshold</label>
+      <input type="number" id="set-vix-warn" min="10" max="50" step="1">
+      <div class="settings-hint">Default: 20</div>
+    </div>
+    <div class="settings-field">
+      <label for="set-ig-oas">IG OAS wide threshold (bps)</label>
+      <input type="number" id="set-ig-oas" min="50" max="300" step="5">
+      <div class="settings-hint">Default: 120 bps</div>
+    </div>
+    <div class="settings-actions">
+      <button class="btn-settings-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-settings-save" onclick="saveSettings()">Save</button>
     </div>
   </div>
 </div>
